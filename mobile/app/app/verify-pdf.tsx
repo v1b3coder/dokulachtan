@@ -17,6 +17,7 @@ import {
 import { EuDssApi, EuDssError } from '../src/lib/euDssApi';
 import { levelLabel } from '../src/lib/level';
 import { platformVaultDeps } from '../src/lib/platform';
+import { signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import {
   PdfApi,
   PdfApiError,
@@ -43,6 +44,7 @@ import {
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
 const ERROR_TEXT: Record<string, string> = {
+  invalid_server: 'V Nastavení zadejte HTTPS adresu serveru bez cesty, parametrů a fragmentu.',
   invalid_pdf: 'Soubor není platné PDF.',
   encrypted_pdf: 'Šifrovaná PDF nelze ověřit.',
   file_too_large: 'PDF je příliš velké (max 25 MB).',
@@ -86,12 +88,12 @@ export default function VerifyPdfScreen() {
   }, [shared?.uri]);
 
   const api = useCallback(
-    () => (settings ? new PdfApi(settings.serverUrl, settings.apiToken) : null),
+    () => (settings ? new PdfApi(signingOrigin(settings.serverUrl), settings.apiToken) : null),
     [settings],
   );
 
   const fail = useCallback((err: unknown) => {
-    if (err instanceof PdfApiError || err instanceof EuDssError) {
+    if (err instanceof PdfApiError || err instanceof EuDssError || err instanceof SigningOriginError) {
       setError(err.code);
       setErrorDetail(err.message);
     } else {
@@ -152,19 +154,16 @@ export default function VerifyPdfScreen() {
   }
 
   async function store() {
-    const client = api();
-
-    if (!client || !file) {
-      setError(client ? 'invalid_pdf' : 'not_authenticated');
-
-      return;
-    }
-
     setSaving(true);
     setError(null);
     setErrorDetail(null);
 
     try {
+      const client = api();
+      if (!client || !file) {
+        setError(client ? 'invalid_pdf' : 'not_authenticated');
+        return;
+      }
       setReport(await client.storeVerifiedDocument(file));
     } catch (err) {
       fail(err);

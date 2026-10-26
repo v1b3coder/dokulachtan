@@ -2,9 +2,12 @@
 
 export type QesLevel = 'none' | 'ades' | 'qes';
 
-export interface QesSessionPayload {
+export type QesSessionPayload = QesPendingSessionPayload
+  | (QesCompletedPayload & Partial<Omit<QesPendingSessionPayload, 'state'>>);
+
+export interface QesPendingSessionPayload {
   session_id: number;
-  state: string;
+  state: 'created' | 'app_opened' | 'awaiting_signature' | 'embedding' | 'failed' | 'expired';
   provider: string;
   document_name: string | null;
   signer_name: string | null;
@@ -29,6 +32,8 @@ export interface QesCertificateInfo {
 
 export interface QesCertificatePayload {
   data_to_sign: string;
+  byte_range: [number, number, number, number];
+  document_digest: string;
   hash_algorithm: string;
   digest_algorithm_oid: string;
   signature_algorithm: string;
@@ -47,7 +52,7 @@ export interface QesValidationReport {
 }
 
 export interface QesCompletedPayload {
-  state: string;
+  state: 'completed';
   session_id: number;
   level: QesLevel;
   document_digest: string;
@@ -79,6 +84,8 @@ export interface QesCertificateRequest {
 // implementaci bez změny obřadu.
 export interface SessionSource {
   getSession(): Promise<QesSessionPayload>;
+  getDocument(): Promise<Uint8Array>;
+  postAbort(code: string, message?: string): Promise<{ state: string }>;
   postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload>;
   postComplete(signatureBase64: string): Promise<QesCompletedPayload>;
 }

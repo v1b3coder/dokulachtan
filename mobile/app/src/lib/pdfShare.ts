@@ -8,6 +8,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
+// Náhled před podpisem i otevření po podpisu jdou stejnou cestou (docs/16 S12):
+// chooser nechává na systému, takže nabídka aplikací je v obou případech stejná.
+
 import {
   isNativeShareAvailable,
   openPdf as nativeOpenPdf,
@@ -235,4 +238,33 @@ function folderLabel(uri: string): string {
   const label = segment.includes(':') ? segment.slice(segment.indexOf(':') + 1) : segment;
 
   return label || 'Vybraná složka';
+}
+
+// Každá kontrola má vlastní soubor; žádný další download ani přepis náhledu.
+export async function previewPdf(bytes: Uint8Array): Promise<void> {
+  const directory = new Directory(Paths.cache, 'reviewed-pdf');
+
+  directory.create({ idempotent: true });
+
+  const file = new File(directory, `document-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
+
+  file.create();
+  file.write(bytes);
+
+  if (Platform.OS !== 'android') {
+    if (!(await Sharing.isAvailableAsync())) {
+      throw new PdfActionError('no_pdf_viewer');
+    }
+
+    await Sharing.shareAsync(file.uri, {
+      mimeType: 'application/pdf',
+      UTI: 'com.adobe.pdf',
+      dialogTitle: 'Otevřít dokument ke kontrole',
+    });
+
+    return;
+  }
+
+  // Stejná cesta jako otevření po podpisu — jeden `openPdf` pro obě místa.
+  await openPdf(file.uri);
 }

@@ -8,8 +8,11 @@ import { FakeCardSigner } from '../src/lib/cardSigner';
 import { importCertificate, type VaultDeps } from '../src/lib/crypto/vault';
 import { TEST_P12_BASE64, TEST_P12_PASSWORD } from '../src/lib/testCertificate';
 
+// Lokální testovací harness používá stejné HTTP výjimky jako dev build.
+(globalThis as typeof globalThis & { __DEV__: boolean }).__DEV__ = true;
+
 const token = process.env.QES_E2E_TOKEN ?? process.argv[2];
-const serverUrl = process.env.QES_E2E_SERVER_URL ?? 'http://127.0.0.1:3030';
+const serverUrl = process.env.QES_E2E_SERVER_URL ?? 'http://localhost:3030';
 const fakeCard = process.env.QES_E2E_FAKE_CARD === '1';
 
 if (!token) {
@@ -77,6 +80,8 @@ async function main(): Promise<void> {
     {
       api: new QesApi(serverUrl, token),
       vault: deps,
+      // Automatický souhlas pouze v explicitně spuštěném E2E harnessu.
+      confirmDocument: async () => true,
       cardSigner: fakeCard ? new FakeCardSigner() : undefined,
       configuration: fakeCard
         ? { hasKey: false, hasReader: true, readerReady: true }

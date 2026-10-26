@@ -137,7 +137,7 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   Detail: `docs/15-primy-podpis-pdf.md` § 8.
 - **Testovací APK:** <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> (Fly app
   `dokulachtan-download`, `deploy/apk/`; obsahuje testovací certifikát a stub čtečky).
-  Verze v repu **1.3.6** (versionCode 10306, debug podpis `fac61745…3b9c`; na Fly **1.3.6**) — **přímý podpis PDF
+  Verze v repu **1.3.8** (versionCode 10308, debug podpis `fac61745…3b9c`; na Fly **1.3.8**) — **přímý podpis PDF
   nativním tokem DocuSealu** („Podepsat PDF“ → náhled → klepnutí → podpis → dokument ve složce
   „Direct signing“, „Stáhnout“ (uložit do telefonu, volitelně jinam) / „Otevřít“ / „Sdílet“),
   **sdílení PDF do appky** (Android share sheet „Podepsat PDF“)
@@ -406,6 +406,18 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       99/99, `make qes-app-typecheck` zelené, ručně na emulátoru (maskované → „Tajne123“ viditelné →
       znovu maskované, text zůstal) a na telefonu (S23, APK 1.3.6 nainstalováno přes adb):
       maskované → klepnutí na oko → „ahoj“ viditelné → klepnutí → maskované, text zůstal
+
+- [x] **Refaktor QES orchestrace z upstream verifikátoru (2026-10-26):** `lib/verify_pdf_signature.rb` je
+      **bit-identický s upstreamem** (nulový diff) — veřejné `/api/tools/verify` a webové ověření PDF už
+      nedělají QES HexaPDF průchody navíc (dřív 3–4× parse na anonymním endpointu) ani nezávisí na QES
+      vrstvě; celá orchestrace (TSA trust, hranice změn, `accepted`) je v `Qes::PdfiumTrust.report`
+      s vlastním `Result` a upstream primitivy jen volá. CAdES `trusted` vyžaduje `signing_leaf?`
+      (pečeť padá na `trusted_signature?`). **Opravena regrese API dokončení:** `PUT /api/submitters/:id`
+      zase resolvuje defaulty, vzorce, razítko i datum (`Qes::SigningValues.finalize!`); bez toho vracelo
+      `nil` místo `"Douglas Howell"` (nový spec na původním kódu selže). **DigiCert TSA root**
+      `config/qes/digicert-tsa.pem` (Trusted Root G4) + `QES_TSA_TRUST_ROOTS` v runbooku. Touch surface
+      upstreamu: 20 souborů +487/−41 → 21 souborů +629/−94 (nejvyšší churn `verify_pdf_signature.rb`
+      zůstal na nule); `make qes-test` 624/1 (známý upstream flake), `make qes-test-qes` 365/0
 
 ## Pravidla
 

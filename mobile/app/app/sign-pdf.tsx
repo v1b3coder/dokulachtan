@@ -21,6 +21,7 @@ import {
 import { certificateSummary } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
 import { platformVaultDeps } from '../src/lib/platform';
+import { signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import {
   PdfApi,
   PdfApiError,
@@ -36,6 +37,7 @@ import type { QesLevel } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
 const ERROR_TEXT: Record<string, string> = {
+  invalid_server: 'V Nastavení zadejte HTTPS adresu serveru bez cesty, parametrů a fragmentu.',
   file_too_large: 'PDF je příliš velké (max 25 MB).',
   invalid_pdf: 'Soubor není platné PDF.',
   encrypted_pdf: 'Šifrovaná PDF nejsou podporovaná.',
@@ -111,7 +113,7 @@ export default function SignPdfScreen() {
   }, []);
 
   const fail = useCallback((err: unknown) => {
-    if (err instanceof PdfApiError) {
+    if (err instanceof PdfApiError || err instanceof SigningOriginError) {
       setError(err.code);
       setErrorDetail(err.message);
     } else {
@@ -121,7 +123,7 @@ export default function SignPdfScreen() {
   }, []);
 
   const api = useCallback(
-    () => (settings ? new PdfApi(settings.serverUrl, settings.apiToken) : null),
+    () => (settings ? new PdfApi(signingOrigin(settings.serverUrl), settings.apiToken) : null),
     [settings],
   );
 
@@ -142,19 +144,16 @@ export default function SignPdfScreen() {
   }
 
   async function uploadFile(upload: PdfUpload) {
-    const client = api();
-
-    if (!client) {
-      setError('not_authenticated');
-
-      return;
-    }
-
     setBusy(true);
     setError(null);
     setErrorDetail(null);
 
     try {
+      const client = api();
+      if (!client) {
+        setError('not_authenticated');
+        return;
+      }
       const created = await client.createDocument(upload, { displayName, levelRequired: level });
 
       setFile(upload);
@@ -193,9 +192,7 @@ export default function SignPdfScreen() {
   }, [ready, shared?.uri]);
 
   async function place() {
-    const client = api();
-
-    if (!client || !document || !position) {
+    if (!document || !position) {
       return;
     }
 
@@ -210,6 +207,11 @@ export default function SignPdfScreen() {
     setErrorDetail(null);
 
     try {
+      const client = api();
+      if (!client) {
+        setError('not_authenticated');
+        return;
+      }
       const area = stampArea(position, pageSize, document.stamp);
 
       await client.setStampArea(document, { ...area, page });

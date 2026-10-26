@@ -16,6 +16,9 @@ import java.util.UUID
  */
 class OpenPdfModule : Module() {
   companion object {
+    // Strop pro PDF z cizí aplikace; větší soubor se odmítne, ne aby zaplnil cache.
+    private const val MAX_PDF_BYTES = 50L * 1024 * 1024
+
     private var instance: OpenPdfModule? = null
     private var pending: Map<String, String?>? = null
   }
@@ -100,23 +103,42 @@ class OpenPdfModule : Module() {
   }
 
   private fun copyToCache(uri: Uri, name: String): File? {
+    val context = appContext.reactContext ?: return null
+    val directory = File(context.cacheDir, "opened-pdf").apply { mkdirs() }
+    val safeName = name.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "document.pdf" }
+    val target = File(directory, "${UUID.randomUUID()}-$safeName")
+
     return try {
-      val context = appContext.reactContext ?: return null
-      val directory = File(context.cacheDir, "opened-pdf").apply { mkdirs() }
-      val safeName = name.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "document.pdf" }
-      val target = File(directory, "${UUID.randomUUID()}-$safeName")
       val input = if (uri.scheme == "file") {
-        File(uri.path ?: return null).inputStream()
+        // Cizí aplikace nesmí předat `file://` mimo naši cache (četla by cizí soubory).
+        val source = File(uri.path ?: return null).canonicalFile
+
+        require(source.startsWith(context.cacheDir.canonicalFile)) { "invalid_pdf" }
+
+        source.inputStream()
       } else {
         context.contentResolver.openInputStream(uri) ?: return null
       }
 
       input.use { source ->
-        target.outputStream().use { sink -> source.copyTo(sink) }
+        target.outputStream().use { sink ->
+          val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+          var total = 0L
+          var read = source.read(buffer)
+
+          while (read >= 0) {
+            total += read
+            require(total <= MAX_PDF_BYTES) { "pdf_too_large" }
+            sink.write(buffer, 0, read)
+            read = source.read(buffer)
+          }
+        }
       }
 
       target
     } catch (_: Exception) {
+      target.delete()
+
       null
     }
   }

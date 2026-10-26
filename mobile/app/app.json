@@ -2,7 +2,7 @@
   "expo": {
     "name": "Dokulachtan",
     "slug": "dokulachtan-signer",
-    "version": "1.3.6",
+    "version": "1.3.8",
     "orientation": "portrait",
     "scheme": "dokulachtan",
     "userInterfaceStyle": "automatic",
@@ -37,7 +37,7 @@
           ]
         }
       ],
-      "versionCode": 10306,
+      "versionCode": 10308,
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"

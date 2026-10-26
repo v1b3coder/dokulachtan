@@ -1,4 +1,6 @@
 // Klient QES API (SPEC § 5): token je jen v paměti, nikdy se neukládá.
+import { assertResponseOrigin, signingOrigin } from './signingOrigin';
+
 import type {
   QesAppMetadata,
   QesCertificatePayload,
@@ -20,7 +22,7 @@ export class QesApiError extends Error {
 }
 
 export interface QesApiOptions {
-  serverUrl: string;
+  serverUrl?: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -29,14 +31,30 @@ export class QesApi implements SessionSource {
   private readonly fetchImpl: typeof fetch;
   private readonly token: string;
 
-  constructor(serverUrl: string, token: string, options: QesApiOptions = { serverUrl }) {
-    this.serverUrl = options.serverUrl.replace(/\/+$/, '');
+  constructor(serverUrl: string, token: string, options: QesApiOptions = {}) {
+    this.serverUrl = signingOrigin(options.serverUrl ?? serverUrl);
     this.token = token;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async getSession(): Promise<QesSessionPayload> {
     return this.request<QesSessionPayload>('GET', `/qes/sessions/${encodeURIComponent(this.token)}`);
+  }
+
+  async getDocument(): Promise<Uint8Array> {
+    const response = await this.fetchImpl(
+      `${this.serverUrl}/qes/sessions/${encodeURIComponent(this.token)}/document`,
+      { method: 'GET', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
+    );
+    assertResponseOrigin(response, this.serverUrl);
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new QesApiError(response.status, payload.error ?? 'server_error');
+    }
+    if (response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
+      throw new QesApiError(422, 'document_mismatch');
+    }
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   async postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload> {
@@ -73,6 +91,8 @@ export class QesApi implements SessionSource {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+
+    assertResponseOrigin(response, this.serverUrl);
 
     const text = await response.text();
     const payload = text.length > 0 ? JSON.parse(text) : {};

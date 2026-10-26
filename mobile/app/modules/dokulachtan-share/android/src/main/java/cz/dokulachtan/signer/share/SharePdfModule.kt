@@ -44,10 +44,24 @@ class SharePdfModule : Module() {
       appContext.throwingActivity.startActivity(Intent.createChooser(send, title))
     }.runOnQueue(Queues.MAIN)
 
-    // Otevření uloženého PDF v systémovém prohlížeči (ACTION_VIEW).
+    // Otevření PDF v systémovém prohlížeči (ACTION_VIEW). Jediná cesta pro
+    // náhled před podpisem i otevření po podpisu: chooser nechává na systému,
+    // takže nabídka aplikací je v obou případech stejná (docs/16 S12).
     AsyncFunction("openPdf") { uri: String, mimeType: String ->
+      val context = appContext.reactContext ?: throw ShareFailedException("no react context")
+      val parsed = Uri.parse(uri)
+      // `file://` nesmí ven z appky (Android 7+); FileProvider je nad celým cache.
+      val target = if (parsed.scheme == "file") {
+        FileProvider.getUriForFile(
+          context,
+          "${context.packageName}.DokulachtanShareFileProvider",
+          existingFile(uri)
+        )
+      } else {
+        parsed
+      }
       val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(Uri.parse(uri), mimeType)
+        setDataAndType(target, mimeType)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
       }
 

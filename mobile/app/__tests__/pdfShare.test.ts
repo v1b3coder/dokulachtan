@@ -15,6 +15,7 @@ import {
   loadSaveFolder,
   openPdf,
   PdfActionError,
+  previewPdf,
   rememberSaveFolder,
   SaveCancelled,
   savePdf,
@@ -24,10 +25,12 @@ import {
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android', Version: 36 } }));
 
+const mockWrite = jest.fn();
+
 jest.mock('expo-file-system', () => {
   const downloadFileAsync = jest.fn();
   const pickDirectoryAsync = jest.fn();
-  const write = jest.fn();
+  const create = jest.fn();
   const bytes = jest.fn();
 
   class MockFile {
@@ -39,7 +42,9 @@ jest.mock('expo-file-system', () => {
 
     static downloadFileAsync = downloadFileAsync;
 
-    write = write;
+    write = mockWrite;
+
+    create = create;
 
     bytes = bytes;
   }
@@ -56,6 +61,8 @@ jest.mock('expo-file-system', () => {
     }
 
     static pickDirectoryAsync = pickDirectoryAsync;
+
+    create = jest.fn();
   }
 
   return { File: MockFile, Directory: MockDirectory, Paths: { cache: { uri: 'file:///cache/' } } };
@@ -320,5 +327,23 @@ describe('pdfShare', () => {
 
   it('exposes a code for every action error', () => {
     expect(new PdfActionError('open_failed').code).toBe('open_failed');
+  });
+
+  it('opens the exact bytes from the ceremony in the native PDF viewer', async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
+
+    platform.OS = 'android';
+    nativeOpen.mockResolvedValue(undefined);
+
+    await previewPdf(bytes);
+
+    expect(mockWrite).toHaveBeenCalledWith(bytes);
+    expect(nativeOpen).toHaveBeenCalledWith(expect.any(String), 'application/pdf');
+  });
+
+  it('maps a missing PDF viewer to no_pdf_viewer', async () => {
+    nativeOpen.mockRejectedValue(Object.assign(new Error('No activity found'), { code: 'ERR_NO_PDF_VIEWER' }));
+
+    await expect(previewPdf(new Uint8Array([1]))).rejects.toMatchObject({ code: 'no_pdf_viewer' });
   });
 });

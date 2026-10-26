@@ -28,7 +28,7 @@ export interface ParsedP12 {
   notAfter: string;
   qcStatements: string[];
   level: QesLevel;
-  keyType: 'rsa' | 'ecdsa';
+  keyType: 'rsa';
   keySize: number;
   canSign: boolean;
 }
@@ -52,24 +52,31 @@ export function parseP12(bytes: Uint8Array, password: string, options: ParseP12O
 
   const shroudedKeyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const keyBags = p12.getBags({ bagType: forge.pki.oids.keyBag });
-  const privateKey = (shroudedKeyBags[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [])[0]?.key
-    ?? (keyBags[forge.pki.oids.keyBag] ?? [])[0]?.key;
+  const keyBag = (shroudedKeyBags[forge.pki.oids.pkcs8ShroudedKeyBag] ?? [])[0]
+    ?? (keyBags[forge.pki.oids.keyBag] ?? [])[0];
 
-  if (!privateKey) {
-    throw new P12Error('no_signing_key');
+  if (!keyBag) throw new P12Error('no_signing_key');
+  // Forge u EC klíče vrací jen ASN.1. Odmítneme ho už při importu.
+  const privateKey = keyBag.key;
+  if (!privateKey?.n || !privateKey.e || !privateKey.d) {
+    throw new P12Error('unsupported_key_type');
   }
 
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const certs = (certBags[forge.pki.oids.certBag] ?? [])
-    .map((bag) => bag.cert)
-    .filter((cert): cert is forge.pki.Certificate => Boolean(cert));
+  const certificates = (certBags[forge.pki.oids.certBag] ?? []).map((bag) => {
+    const asn1 = bag.asn1 ?? (bag.cert ? forge.pki.certificateToAsn1(bag.cert) : null);
+    if (!asn1) throw new P12Error('invalid_p12');
+    // DER uchováme i pro CA, jejíž veřejný klíč forge neumí načíst.
+    return { cert: bag.cert, pem: forge.pem.encode({ type: 'CERTIFICATE', body: forge.asn1.toDer(asn1).getBytes() }) };
+  });
+  const signer = certificates.find(({ cert }) => {
+    const key = cert?.publicKey as forge.pki.rsa.PublicKey | undefined;
+    return key?.n?.equals(privateKey.n) && key.e.equals(privateKey.e);
+  });
+  if (!signer?.cert) throw new P12Error('no_signing_key');
 
-  if (certs.length === 0) {
-    throw new P12Error('no_signing_key');
-  }
-
-  const certificate = certs[0];
-  const chain = certs.slice(1);
+  const certificate = signer.cert;
+  const chain = certificates.filter((item) => item !== signer);
   const qcStatements = readQcStatements(certificate);
   const level = levelFromQcStatements(qcStatements);
 
@@ -80,8 +87,8 @@ export function parseP12(bytes: Uint8Array, password: string, options: ParseP12O
 
   return {
     privateKeyPem: forge.pki.privateKeyToPem(privateKey),
-    certificatePem: forge.pki.certificateToPem(certificate),
-    chainPems: chain.map((item) => forge.pki.certificateToPem(item)),
+    certificatePem: signer.pem,
+    chainPems: chain.map((item) => item.pem),
     subject: certificate.subject.getField('CN')?.value ?? certificate.subject.attributes.map((a) => `${a.shortName}=${a.value}`).join(', '),
     issuer: certificate.issuer.getField('CN')?.value ?? certificate.issuer.attributes.map((a) => `${a.shortName}=${a.value}`).join(', '),
     serial: `0x${certificate.serialNumber.toUpperCase()}`,
@@ -89,8 +96,8 @@ export function parseP12(bytes: Uint8Array, password: string, options: ParseP12O
     notAfter: new Date(certificate.validity.notAfter).toISOString(),
     qcStatements,
     level,
-    keyType: privateKey.n ? 'rsa' : 'ecdsa',
-    keySize: privateKey.n ? privateKey.n.bitLength() : 0,
+    keyType: 'rsa',
+    keySize: privateKey.n.bitLength(),
     canSign: canSign(certificate),
   };
 }
@@ -129,9 +136,9 @@ export function readQcStatements(certificate: forge.pki.Certificate): string[] {
 }
 
 function canSign(certificate: forge.pki.Certificate): boolean {
-  const keyUsage = certificate.getExtension('keyUsage') as { digitalSignature?: boolean } | undefined;
+  const keyUsage = certificate.getExtension('keyUsage') as { digitalSignature?: boolean; nonRepudiation?: boolean } | undefined;
 
-  return keyUsage?.digitalSignature !== false;
+  return !keyUsage || keyUsage.digitalSignature === true || keyUsage.nonRepudiation === true;
 }
 
 export function uint8ToBinary(bytes: Uint8Array): string {

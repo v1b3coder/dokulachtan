@@ -1,6 +1,7 @@
 // API přímého podpisu PDF (docs/15 § 5): appka nahrává PDF přes DocuSeal API
 // a používá standardní tok — šablona s polem `qes`, submission a běžný obřad.
 // API token je v SecureStore (nastavení), nikdy se neloguje.
+import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 import type { QesLevel } from './types';
 
 export const PDF_API_SETTINGS_KEY = 'cz.dokulachtan.signer.api';
@@ -37,7 +38,9 @@ export async function loadPdfApiSettings(storage: PdfApiStorage): Promise<PdfApi
   try {
     const parsed = JSON.parse(raw) as PdfApiSettings;
 
-    return parsed.serverUrl && parsed.apiToken ? parsed : null;
+    return typeof parsed.serverUrl === 'string' && parsed.serverUrl.length > 0
+      ? { serverUrl: parsed.serverUrl, apiToken: typeof parsed.apiToken === 'string' ? parsed.apiToken : '' }
+      : null;
   } catch {
     return null;
   }
@@ -164,7 +167,7 @@ export class PdfApi {
   private readonly fetchImpl: typeof fetch;
 
   constructor(serverUrl: string, apiToken: string, options: PdfApiOptions = {}) {
-    this.serverUrl = serverUrl.replace(/\/+$/, '');
+    this.serverUrl = signingOrigin(serverUrl);
     this.apiToken = apiToken;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -257,7 +260,13 @@ export class PdfApi {
 
   // Dokončení submissionu: DocuSeal vygeneruje finální PDF a auditní stránku.
   async completeSubmission(submitterId: number): Promise<void> {
-    await this.request('PUT', `/api/submitters/${submitterId}`, { completed: true });
+    try {
+      await this.request('PUT', `/api/submitters/${submitterId}`, { completed: true });
+    } catch (err) {
+      // Odpověď prvního PUT se mohla ztratit; dokumenty pak načte downloadDocument.
+      if (!(err instanceof PdfApiError) || err.status !== 422
+        || err.code !== 'Submitter has already completed the submission.') throw err;
+    }
   }
 
   // Finální PDF z DocuSealu (podepsané PDF, nikoli auditní stránka).
@@ -308,6 +317,8 @@ export class PdfApi {
       headers: form ? this.headers() : { ...this.headers(), 'Content-Type': 'application/json' },
       body: encoded,
     });
+
+    assertResponseOrigin(response, this.serverUrl);
 
     if (!response.ok) {
       await throwError(response);

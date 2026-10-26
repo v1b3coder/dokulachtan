@@ -7,16 +7,18 @@ import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Vi
 import { certificateSummary } from '../src/lib/crypto/vault';
 import { loadPdfApiSettings, savePdfApiSettings } from '../src/lib/pdfApi';
 import { platformVaultDeps } from '../src/lib/platform';
+import { DEFAULT_SERVER_URL, signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import { importTestCertificate } from '../src/lib/testCertificate';
 import { PrimaryButton, TextButton } from '../src/ui/buttons';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const [serverUrl, setServerUrl] = useState(process.env.EXPO_PUBLIC_API_URL ?? 'https://dokulachtan.fly.dev');
+  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
   const [apiToken, setApiToken] = useState('');
   const [loaded, setLoaded] = useState<{ serverUrl: string; apiToken: string } | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
   const [testCert, setTestCert] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -39,8 +41,17 @@ export default function SettingsScreen() {
   const dirty = !loaded || loaded.serverUrl !== serverUrl || loaded.apiToken !== apiToken;
 
   async function saveApi() {
-    await savePdfApiSettings(platformVaultDeps().storage, { serverUrl, apiToken });
-    setLoaded({ serverUrl, apiToken });
+    setSaveError(null);
+    try {
+      const settings = { serverUrl: signingOrigin(serverUrl), apiToken };
+      await savePdfApiSettings(platformVaultDeps().storage, settings);
+      setServerUrl(settings.serverUrl);
+      setLoaded(settings);
+    } catch (err) {
+      setSaveError(err instanceof SigningOriginError
+        ? 'Zadejte platnou HTTPS adresu serveru bez cesty, parametrů, fragmentu a přihlašovacích údajů.'
+        : 'Nastavení se nepodařilo uložit. Zkuste to znovu.');
+    }
   }
 
   async function importTestCert() {
@@ -76,6 +87,7 @@ export default function SettingsScreen() {
         placeholder="X-Auth-Token"
       />
       <PrimaryButton title={dirty ? 'Uložit' : 'Uloženo'} onPress={saveApi} disabled={!dirty} />
+      {saveError ? <Text style={styles.error} accessibilityRole="alert">{saveError}</Text> : null}
 
       <Text style={styles.section}>Podepisování</Text>
       <TouchableOpacity
@@ -130,6 +142,7 @@ const styles = StyleSheet.create({
   section: { fontSize: 13, fontWeight: '600', color: '#6b7280', marginTop: 16 },
   label: { fontSize: 13, color: '#6b7280', marginTop: 8 },
   muted: { fontSize: 14, color: '#6b7280' },
+  error: { fontSize: 14, color: '#991b1b' },
   input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16 },
   row: {
     flexDirection: 'row',

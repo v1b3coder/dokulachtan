@@ -29,6 +29,7 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
 | `QES_TRUST_ROOTS` | — | cesty k CA certům (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
 | `QES_TSA_URL` | — | RFC 3161 TSA; produkce/staging `http://timestamp.digicert.com` (free, AATL), kvalifikované I.CA/PostSignum |
+| `QES_TSA_TRUST_ROOTS` | — | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token (produkce/staging `true`) |
 | `QES_REQUIRE_LTV` | `false` (testy), `true` (produkce) | vyžadovat revokační data |
 | `QES_LTV_ALLOWED_HOSTS` | — | allowlist hostů pro CRL/OCSP (SSRF ochrana; čárkou oddělené) |
@@ -48,6 +49,15 @@ takže testovací cert je trusted proti test rootu a reálné PostSignum certy p
 Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt`. V CI `QES_TSA_URL` prázdné
 (testy bez TSA); staging/produkce DigiCert free, I.CA test TSA jen lokálně. Tajemství jen přes
 `fly secrets` / `.env`, nikdy do repa.
+
+TSA trust roots: `QES_TSA_TRUST_ROOTS` je **povinné**, kdykoli je `QES_TSA_URL` nastavené —
+bez něj dokončení skončí na `tsa_trust_not_configured`, protože razítko od nedůvěryhodné TSA
+nesmí posunout hranici změn ani dát historický čas (SPEC § 7.6). Pro DigiCert stačí root
+`config/qes/digicert-tsa.pem` (DigiCert Trusted Root G4, self-signed, platný do 2038).
+
+```bash
+QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem   # DigiCert free (AATL), obě prostředí
+```
 
 ## Jak spustit harness
 
@@ -190,6 +200,7 @@ QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
 QES_ANDROID_CERT_SHA256=<sha256 debug keystore appky>  # pro /.well-known/assetlinks.json
 QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
+QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
 QES_TSA_REQUIRED=true
 QES_REQUIRE_LTV=false   # testovací CRL DP (127.0.0.1:8765) není ze stagingu dostupné
 
@@ -199,6 +210,7 @@ QES_TRUST_ROOTS=/app/config/qes/postsignum.pem   # jen reálné PostSignum CA, b
 QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu
 QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
+QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
 QES_TSA_REQUIRED=true
 QES_REQUIRE_LTV=true     # CRL se stahují a vkládají do CMS; ověřeno 2026-10-18
 ```

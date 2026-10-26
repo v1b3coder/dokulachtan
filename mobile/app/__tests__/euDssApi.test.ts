@@ -303,3 +303,33 @@ describe('EuDssApi', () => {
     });
   });
 });
+
+
+it.each([
+  ['TOTAL_PASSED', undefined, 'good'],
+  ['INDETERMINATE', 'TRY_LATER', 'unknown'],
+  ['TOTAL_FAILED', 'REVOKED', 'revoked'],
+  ['INDETERMINATE', 'REVOKED_NO_POE', 'revoked'],
+  ['INDETERMINATE', 'REVOKED_CA_NO_POE', 'revoked'],
+  ['TOTAL_FAILED', 'HASH_FAILURE', 'unknown'],
+])('aggregates passed + %s/%s as %s regardless of order', async (indication, subIndication, expected) => {
+  const signatures = [dssSignature(), dssSignature({ signedBy: 'Partner', indication, subIndication })];
+  for (const entries of [signatures, [...signatures].reverse()]) {
+    const api = new EuDssApi({
+      fetchImpl: jest.fn().mockResolvedValue(jsonResponse(report(entries))),
+      readBase64: async () => PDF_BASE64,
+    });
+    expect((await api.verifyDocument(upload())).revocation).toBe(expected);
+  }
+});
+
+it('gives revocation precedence over unknown status', async () => {
+  const api = new EuDssApi({
+    fetchImpl: jest.fn().mockResolvedValue(jsonResponse(report([
+      dssSignature({ indication: 'INDETERMINATE', subIndication: 'TRY_LATER' }),
+      dssSignature({ signedBy: 'Partner', indication: 'TOTAL_FAILED', subIndication: 'REVOKED' }),
+    ]))),
+    readBase64: async () => PDF_BASE64,
+  });
+  expect((await api.verifyDocument(upload())).revocation).toBe('revoked');
+});

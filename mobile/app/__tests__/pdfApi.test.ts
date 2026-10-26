@@ -23,15 +23,26 @@ const document = {
   document: {
     uuid: 'doc-1',
     filename: 'contract.pdf',
-    pages: [{ index: 0, width: 595, height: 842, preview_url: 'http://server/file/0.png' }],
+    pages: [{ index: 0, width: 595, height: 842, preview_url: 'https://server/file/0.png' }],
   },
   stamp: { width: 150, height: 44 },
 };
 
 describe('PdfApi', () => {
+  it.each([
+    [422, 'Signed field values cannot be changed'],
+    [401, 'Submitter has already completed the submission.'],
+    [500, 'Submitter has already completed the submission.'],
+  ])('preserves unrelated completion errors (%s, %s)', async (status, error) => {
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse({ error }, status));
+    const api = new PdfApi('https://server', 'token', { fetchImpl });
+    await expect(api.completeSubmission(42)).rejects.toMatchObject({ status, code: error });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('uploads the PDF with the API token and returns the template', async () => {
     const calls: { url: string; token: string | null; body: BodyInit | null | undefined }[] = [];
-    const api = new PdfApi('http://server/', 'secret', {
+    const api = new PdfApi('https://server/', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push({
           url: String(url),
@@ -49,14 +60,14 @@ describe('PdfApi', () => {
     );
 
     expect(created.template_id).toBe(7);
-    expect(calls[0].url).toBe('http://server/api/qes/documents');
+    expect(calls[0].url).toBe('https://server/api/qes/documents');
     expect(calls[0].token).toBe('secret');
     expect(calls[0].body).toBeInstanceOf(FormData);
   });
 
   it('sets the stamp area as a template field', async () => {
     const calls: { url: string; method: string | undefined; body: string }[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push({ url: String(url), method: init?.method, body: String(init?.body) });
 
@@ -68,7 +79,7 @@ describe('PdfApi', () => {
 
     const body = JSON.parse(calls[0].body);
 
-    expect(calls[0].url).toBe('http://server/api/templates/7');
+    expect(calls[0].url).toBe('https://server/api/templates/7');
     expect(calls[0].method).toBe('PATCH');
     expect(body.fields[0].uuid).toBe('field-1');
     expect(body.fields[0].areas[0]).toEqual({
@@ -83,7 +94,7 @@ describe('PdfApi', () => {
 
   it('creates the submission and returns the submitter', async () => {
     const calls: { url: string; body: string }[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push({ url: String(url), body: String(init?.body) });
 
@@ -96,14 +107,14 @@ describe('PdfApi', () => {
 
     expect(submitter.id).toBe(11);
     expect(submitter.slug).toBe('abc');
-    expect(calls[0].url).toBe('http://server/api/templates/7/submissions');
+    expect(calls[0].url).toBe('https://server/api/templates/7/submissions');
     expect(body.send_email).toBe(false);
     expect(body.submitters[0].role).toBe('Jan Novák');
   });
 
   it('starts the ceremony through the signing form endpoint', async () => {
     const calls: string[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push(`${init?.method ?? 'GET'} ${url}`);
 
@@ -114,19 +125,19 @@ describe('PdfApi', () => {
     const session = await api.startSession('abc', 'field-1');
 
     expect(session.token).toBe('tok');
-    expect(calls).toEqual(['POST http://server/s/abc/qes_sessions']);
+    expect(calls).toEqual(['POST https://server/s/abc/qes_sessions']);
   });
 
   it('completes the submission and returns the final PDF URL', async () => {
     const calls: string[] = [];
     const bodies: (string | undefined)[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push(`${init?.method ?? 'GET'} ${url}`);
         bodies.push(init?.body === undefined ? undefined : String(init.body));
 
         if (String(url).includes('/api/submitters/11')) {
-          return jsonResponse({ documents: [{ name: 'contract', url: 'http://server/file/contract.pdf' }] });
+          return jsonResponse({ documents: [{ name: 'contract', url: 'https://server/file/contract.pdf' }] });
         }
 
         return jsonResponse({});
@@ -136,10 +147,10 @@ describe('PdfApi', () => {
     await api.completeSubmission(11);
     const url = await api.documentUrl(11);
 
-    expect(url).toBe('http://server/file/contract.pdf');
+    expect(url).toBe('https://server/file/contract.pdf');
     expect(calls).toEqual([
-      'PUT http://server/api/submitters/11',
-      'GET http://server/api/submitters/11',
+      'PUT https://server/api/submitters/11',
+      'GET https://server/api/submitters/11',
     ]);
 
     expect(bodies[0]).toBe('{"completed":true}');
@@ -148,7 +159,7 @@ describe('PdfApi', () => {
 
   it('verifies a PDF and returns the server report', async () => {
     const calls: { url: string; body: BodyInit | null | undefined }[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url, init) => {
         calls.push({ url: String(url), body: init?.body });
 
@@ -166,13 +177,13 @@ describe('PdfApi', () => {
     expect(report.provider).toBe('local');
     expect(report.provider_name).toBe('DocuSeal');
     expect(report.provider_url).toBeNull();
-    expect(calls[0].url).toBe('http://server/api/qes/verify');
+    expect(calls[0].url).toBe('https://server/api/qes/verify');
     expect(calls[0].body).toBeInstanceOf(FormData);
   });
 
   it('stores a verified PDF in the Verified documents folder', async () => {
     const calls: string[] = [];
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async (url) => {
         calls.push(String(url));
 
@@ -189,11 +200,11 @@ describe('PdfApi', () => {
     expect(report.stored).toBe(true);
     expect(report.template_id).toBe(42);
     expect(report.provider).toBe('local');
-    expect(calls).toEqual(['http://server/api/qes/verified_documents']);
+    expect(calls).toEqual(['https://server/api/qes/verified_documents']);
   });
 
   it('normalizes the unauthenticated error code', async () => {
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async () =>
         jsonResponse({ error: 'Not authenticated' }, 401)) as typeof fetch,
     });
@@ -207,7 +218,7 @@ describe('PdfApi', () => {
   });
 
   it('maps a 422 error code to a typed error', async () => {
-    const api = new PdfApi('http://server', 'secret', {
+    const api = new PdfApi('https://server', 'secret', {
       fetchImpl: (async () =>
         jsonResponse({ error: 'encrypted_pdf', message: 'nope' }, 422)) as typeof fetch,
     });

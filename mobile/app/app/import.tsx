@@ -18,6 +18,7 @@ const ERROR_TEXT: Record<string, string> = {
   wrong_password: 'Nesprávné heslo.',
   no_signing_key: 'Soubor neobsahuje podpisový klíč.',
   qscd_certificate: 'Tento certifikát patří čipu, v telefonu ho použít nelze.',
+  unsupported_key_type: 'Tento typ podpisového klíče není podporovaný. Použijte certifikát s klíčem RSA.',
   unsupported_certificate: 'Certifikát nepodporuje podepisování.',
   biometry_rejected: 'Biometrické ověření bylo zrušeno.',
   biometry_unavailable: 'V telefonu není dostupná biometrie.',

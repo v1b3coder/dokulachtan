@@ -322,11 +322,11 @@ function revocationFor(signatures: DssSignature[]): PdfVerification['revocation'
     return 'not_checked';
   }
 
-  if (signatures.some((signature) => signature.SubIndication === 'REVOKED')) {
+  if (signatures.some((signature) => ['REVOKED', 'REVOKED_NO_POE', 'REVOKED_CA_NO_POE'].includes(signature.SubIndication ?? ''))) {
     return 'revoked';
   }
 
-  if (signatures.some((signature) => signature.Indication === 'TOTAL_PASSED')) {
+  if (signatures.every((signature) => signature.Indication === 'TOTAL_PASSED')) {
     return 'good';
   }
 
