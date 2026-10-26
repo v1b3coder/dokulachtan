@@ -427,7 +427,11 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       (jinak by se PDF mohlo sdílet/otevřít před dokončením zápisu). Ověřeno: `make qes-app-test` 194/0,
       `make qes-app-typecheck` zelené, `npx expo-doctor` 20/20, `expo prebuild` + `gradlew assembleDebug`
       i `assembleRelease` zelené (R8 nově default), na emulátoru (Android 15) start, S14, dokument picker,
-      share intent „Podepsat PDF“ i open intent „Ověřit PDF“. Nový APK zatím **nenasazen** na Fly.
+      share intent „Podepsat PDF“ i open intent „Ověřit PDF“. **Expo fetch v SDK 58 neumí**
+      multipart s RN tvarem `{uri, name, type}` („Unsupported FormDataPart implementation“) →
+      `PdfApi.toBlob` posílá objekt s `bytes()` (obsah z `File`) a jménem/MIME z `PdfUpload`;
+      ověřeno na emulátoru proti stagingu (signed PDF → „Podpis je platný (AdES)“).
+      Nový APK zatím **nenasazen** na Fly.
 
 ## Pravidla
 
