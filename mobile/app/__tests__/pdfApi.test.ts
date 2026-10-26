@@ -74,11 +74,11 @@ describe('PdfApi', () => {
     pdf.create({ overwrite: true });
     await pdf.write(new Uint8Array([1, 2, 3]));
 
-    const part = (api as unknown as { toBlob(file: PdfUpload): unknown }).toBlob({
+    const part = (await (api as unknown as { toBlob(file: PdfUpload): Promise<unknown> }).toBlob({
       uri: pdf.uri,
       name: 'contract.pdf',
       type: 'application/pdf',
-    }) as { uri?: string; name?: string; type?: string; bytes?: () => Promise<Uint8Array> };
+    })) as { uri?: string; name?: string; type?: string; bytes?: () => Promise<Uint8Array> };
 
     // Expo fetch (SDK 58) umí jen `bytes`, ne RN tvar `{uri, name, type}`.
     expect(part.uri).toBeUndefined();

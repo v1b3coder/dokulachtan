@@ -12,7 +12,7 @@ export class SigningOriginError extends Error {
 export function signingOrigin(value: string, dev = typeof __DEV__ !== 'undefined' && __DEV__): string {
   try {
     const url = new URL(value);
-    const local = ['localhost', '10.0.2.2'].includes(url.hostname);
+    const local = ['localhost', '127.0.0.1', '10.0.2.2'].includes(url.hostname);
 
     if ((url.protocol !== 'https:' && !(dev && local && url.protocol === 'http:'))
       || url.username || url.password || url.search || url.hash || url.pathname !== '/') {

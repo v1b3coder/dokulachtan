@@ -100,6 +100,7 @@ def start_app() -> None:
         "-e", "QES_TRUST_ROOTS=/qes-test/certs/pki/root.crt",
         "-e", "QES_TSA_URL=http://timestamp.digicert.com",
         "-e", "QES_TSA_REQUIRED=true",
+        "-e", "QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem",
         "-e", "QES_REQUIRE_LTV=true",
         # SSRF allowlist (SPEC § 7.4): testovací CRL server na 127.0.0.1
         "-e", "QES_LTV_ALLOWED_HOSTS=127.0.0.1",

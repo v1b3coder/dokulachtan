@@ -116,3 +116,29 @@ it('rejects a document response with the wrong media type', async () => {
   });
   await expect(api.getDocument()).rejects.toMatchObject({ code: 'document_mismatch' });
 });
+
+it('maps an HTML error page to a typed error instead of a JSON parse crash', async () => {
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: (async () =>
+      new Response('<html><body>404</body></html>', {
+        status: 404,
+        headers: { 'Content-Type': 'text/html' },
+      })) as typeof fetch,
+  });
+
+  await expect(api.getDocument()).rejects.toMatchObject({ status: 404, code: 'server_error' });
+});
+
+it('maps an HTML 200 response to invalid_response', async () => {
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: (async () =>
+      new Response('<html><body>login</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      })) as typeof fetch,
+  });
+
+  await expect(api.getSession()).rejects.toMatchObject({ status: 200, code: 'invalid_response' });
+});

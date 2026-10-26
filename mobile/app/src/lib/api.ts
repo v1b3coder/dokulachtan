@@ -48,7 +48,7 @@ export class QesApi implements SessionSource {
     );
     assertResponseOrigin(response, this.serverUrl);
     if (!response.ok) {
-      const payload = await response.json();
+      const payload = await readErrorPayload(response);
       throw new QesApiError(response.status, payload.error ?? 'server_error');
     }
     if (response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
@@ -94,13 +94,40 @@ export class QesApi implements SessionSource {
 
     assertResponseOrigin(response, this.serverUrl);
 
-    const text = await response.text();
-    const payload = text.length > 0 ? JSON.parse(text) : {};
+    const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
 
     if (!response.ok) {
       throw new QesApiError(response.status, payload.error ?? 'server_error', payload.message);
     }
 
-    return payload as T;
+    return payload;
+  }
+}
+
+// Chybová odpověď může být HTML (404/500 stránka), ne jen JSON; `response.json()`
+// by jinak shodilo celý obřad na „Unexpected character: <“.
+async function readErrorPayload(response: Response): Promise<{ error?: string }> {
+  const text = await response.text();
+
+  try {
+    const parsed = text.length > 0 ? JSON.parse(text) : {};
+
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function readJsonPayload<T>(response: Response): Promise<T> {
+  const text = await response.text();
+
+  if (text.length === 0) {
+    return {} as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new QesApiError(response.status, 'invalid_response');
   }
 }

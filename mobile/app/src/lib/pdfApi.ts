@@ -1,8 +1,6 @@
 // API přímého podpisu PDF (docs/15 § 5): appka nahrává PDF přes DocuSeal API
 // a používá standardní tok — šablona s polem `qes`, submission a běžný obřad.
 // API token je v SecureStore (nastavení), nikdy se neloguje.
-import { File } from 'expo-file-system';
-
 import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 import type { QesLevel } from './types';
 
@@ -186,7 +184,7 @@ export class PdfApi {
   ): Promise<PdfDocument> {
     const form = new FormData();
 
-    form.append('file', this.toBlob(file));
+    form.append('file', await this.toBlob(file));
 
     if (params.displayName) {
       form.append('display_name', params.displayName);
@@ -291,17 +289,21 @@ export class PdfApi {
   private async postPdf<T>(path: string, file: PdfUpload): Promise<T> {
     const form = new FormData();
 
-    form.append('file', this.toBlob(file));
+    form.append('file', await this.toBlob(file));
 
     return this.request<T>('POST', path, form);
   }
 
-  private toBlob(file: PdfUpload): Blob {
+  private async toBlob(file: PdfUpload): Promise<Blob> {
     // Expo fetch (SDK 58) neumí RN tvar `{uri, name, type}` („Unsupported
     // FormDataPart implementation“); potřebuje objekt s `bytes()`. `File` z
     // expo-file-system ho má, ale jeho `name` je název v cache (DocumentPicker
     // dává UUID), takže jméno a MIME bereme z `PdfUpload`.
     if (file.uri) {
+      // Import až tady: e2e harness (tsx/esbuild) načítá pdfApi kvůli
+      // signingOrigin, ale expo-file-system v Node nemá.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { File } = require('expo-file-system') as typeof import('expo-file-system');
       const source = new File(file.uri);
 
       return {

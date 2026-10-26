@@ -37,7 +37,7 @@ it.each(['http://company.test', 'https://user:pass@company.test', 'file:///file'
   expect(() => signingOrigin(url)).toThrow('invalid_server');
 });
 
-it.each(['localhost', '10.0.2.2'])('allows HTTP %s only in development', (host) => {
+it.each(['localhost', '127.0.0.1', '10.0.2.2'])('allows HTTP %s only in development', (host) => {
   expect(signingOrigin(`http://${host}:3000`, true)).toBe(`http://${host}:3000`);
   expect(() => signingOrigin(`http://${host}:3000`, false)).toThrow('invalid_server');
 });

@@ -433,6 +433,21 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       ověřeno na emulátoru proti stagingu (signed PDF → „Podpis je platný (AdES)“).
       Nový APK zatím **nenasazen** na Fly.
 
+- [x] **Audit upgradu Expo SDK 54 → 58 (2026-10-26):** prošlé všechny dotčené cesty. Nálezy a opravy:
+      **A1** Expo fetch v SDK 58 neumí multipart s RN tvarem `{uri, name, type}` → `PdfApi.toBlob`
+      posílá objekt s `bytes()` (líný `require('expo-file-system')`, aby e2e harness v Node nepadal);
+      **A2** `File.write()` je async → `await` v `platform.ts`/`pdfShare.ts`; **A3** `pdfApi` importoval
+      `expo-file-system` i v e2e → líný import až ve `toBlob`; **A4** `QesApi` na HTML chybové stránce
+      spadl na `JSON.parse` → `readErrorPayload`/`readJsonPayload` a `QesApiError`; **A5** lokální e2e
+      `http://127.0.0.1:3030` neprošel `signingOrigin` → `127.0.0.1` v dev allowlistu; **A6** lokální
+      e2e neměl `QES_TSA_TRUST_ROOTS` → doplněno do `scripts/qes_e2e.py`. Ověřeno: `make qes-app-test`
+      198/0, `make qes-app-typecheck`, `make qes-e2e` (lokální fork, podpis i validace), na emulátoru
+      ověření PDF proti stagingu (upload → `Podpis je platný (AdES)`, správný název souboru), import
+      testovacího certifikátu (SecureStore + `File.write` + biometrie), share/open intent, custom scheme
+      i App Link `/qes/sign`. **Nález bez opravy:** staging image (v15) nemá route
+      `GET /qes/sessions/:token/document` (produkce v42 ji má) → `make qes-staging-e2e-pdf` končí
+      `server_error`; chce to redeploy stagingu z aktuálního forku.
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.
