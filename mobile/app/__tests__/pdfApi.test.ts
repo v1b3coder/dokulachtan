@@ -1,4 +1,6 @@
-import { PdfApi, PdfApiError, stampArea, stampOutline, tapToPosition } from '../src/lib/pdfApi';
+import { File, Paths } from 'expo-file-system';
+
+import { PdfApi, PdfApiError, type PdfUpload, stampArea, stampOutline, tapToPosition } from '../src/lib/pdfApi';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -63,6 +65,27 @@ describe('PdfApi', () => {
     expect(calls[0].url).toBe('https://server/api/qes/documents');
     expect(calls[0].token).toBe('secret');
     expect(calls[0].body).toBeInstanceOf(FormData);
+  });
+
+  it('sends a picked PDF as expo-file-system File (Expo fetch neumí RN {uri})', async () => {
+    const api = new PdfApi('https://server', 'secret', { fetchImpl: jest.fn() as unknown as typeof fetch });
+    const pdf = new File(Paths.cache, 'contract.pdf');
+
+    pdf.create({ overwrite: true });
+    await pdf.write(new Uint8Array([1, 2, 3]));
+
+    const part = (api as unknown as { toBlob(file: PdfUpload): unknown }).toBlob({
+      uri: pdf.uri,
+      name: 'contract.pdf',
+      type: 'application/pdf',
+    }) as { uri?: string; name?: string; type?: string; bytes?: () => Promise<Uint8Array> };
+
+    // Expo fetch (SDK 58) umí jen `bytes`, ne RN tvar `{uri, name, type}`.
+    expect(part.uri).toBeUndefined();
+    expect(part.name).toBe('contract.pdf');
+    expect(part.type).toBe('application/pdf');
+    expect(typeof part.bytes).toBe('function');
+    expect(Array.from(await part.bytes!())).toEqual([1, 2, 3]);
   });
 
   it('sets the stamp area as a template field', async () => {

@@ -1,6 +1,8 @@
 // API přímého podpisu PDF (docs/15 § 5): appka nahrává PDF přes DocuSeal API
 // a používá standardní tok — šablona s polem `qes`, submission a běžný obřad.
 // API token je v SecureStore (nastavení), nikdy se neloguje.
+import { File } from 'expo-file-system';
+
 import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 import type { QesLevel } from './types';
 
@@ -295,10 +297,18 @@ export class PdfApi {
   }
 
   private toBlob(file: PdfUpload): Blob {
-    // React Native bere `{uri, name, type}` v multipartu jako soubor; `bytes`
-    // používají jen testy a e2e v Node.
+    // Expo fetch (SDK 58) neumí RN tvar `{uri, name, type}` („Unsupported
+    // FormDataPart implementation“); potřebuje objekt s `bytes()`. `File` z
+    // expo-file-system ho má, ale jeho `name` je název v cache (DocumentPicker
+    // dává UUID), takže jméno a MIME bereme z `PdfUpload`.
     if (file.uri) {
-      return { uri: file.uri, name: file.name, type: file.type } as unknown as Blob;
+      const source = new File(file.uri);
+
+      return {
+        name: file.name,
+        type: file.type,
+        bytes: () => source.bytes(),
+      } as unknown as Blob;
     }
 
     return new Blob([new Uint8Array(file.bytes ?? new Uint8Array())], { type: file.type });
