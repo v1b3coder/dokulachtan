@@ -448,6 +448,17 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `GET /qes/sessions/:token/document` (produkce v42 ji má) → `make qes-staging-e2e-pdf` končí
       `server_error`; chce to redeploy stagingu z aktuálního forku.
 
+- [x] **Deploy SDK 58 + fork refactor na staging a produkci (2026-10-26):** staging **v17**
+      (`dokulachtan-staging:deployment-01M5X6BGC92WVXZAVG1TXMKT5W`), produkce **v43**
+      (`dokulachtan:deployment-01M5X6GXQ2W3A6C2Y6G2Y2HG59`), obě z forku `b2150a10`. Staging dostal
+      chybějící `QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem`; `/up` 200, `document` route na
+      obou, produkce má 6 PostSignum rootů + 1 TSA root a `QES_REQUIRE_LTV=true`, staging 7 rootů
+      (test + PostSignum) + 1 TSA root a `QES_REQUIRE_LTV=false`; `POST /api/qes/verify` a
+      `/api/qes/documents` na produkci vrací 401. **Nález:** `make qes-staging-e2e-pdf` po refaktoru končí
+      `No CRL could be fetched` — test cert má CRL DP `127.0.0.1:8765`, který staging nevidí, a refaktor
+      je fail-closed i při `QES_REQUIRE_LTV=false` (spec to vyžaduje); produkce s reálným PostSignum certem
+      CRL dosáhne. Staging test cert by potřeboval CRL sidecar nebo variantu bez CRL DP.
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.
