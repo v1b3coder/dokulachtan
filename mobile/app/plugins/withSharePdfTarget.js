@@ -4,7 +4,7 @@
 //    původního souboru, bez re-exportu z PDF editoru.
 // Aliasy míří na MainActivity, takže intent převezme expo-share-intent
 // (SEND) nebo vlastní OpenPdfModule (VIEW). Plugin je idempotentní.
-const { withAndroidManifest } = require('@expo/config-plugins');
+const { withAndroidManifest } = require('expo/config-plugins');
 
 const SHARE_ALIAS = '.SharePdfAlias';
 const SHARE_LABEL = 'Podepsat PDF';

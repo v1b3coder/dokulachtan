@@ -46,7 +46,7 @@ export function platformVaultDeps(): VaultDeps {
           file.create({ intermediates: true, overwrite: true });
         }
 
-        file.write(value);
+        await file.write(value);
       },
       deleteItem: async (key) => {
         const file = dataFile(key);

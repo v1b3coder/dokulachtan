@@ -128,7 +128,7 @@ export async function savePdf(
       const directory = picked as unknown as Directory;
       const target = directory.createFile(fileName, 'application/pdf');
 
-      target.write(await file.bytes());
+      await target.write(await file.bytes());
 
       return {
         uri: target.uri,
@@ -215,7 +215,7 @@ async function saveToAndroidFolder(
     'application/pdf',
   );
 
-  new File(uri).write(await file.bytes());
+  await new File(uri).write(await file.bytes());
 
   return { uri, label: `${folder.label}/${fileName}`, folder };
 }
@@ -249,7 +249,7 @@ export async function previewPdf(bytes: Uint8Array): Promise<void> {
   const file = new File(directory, `document-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
 
   file.create();
-  file.write(bytes);
+  await file.write(bytes);
 
   if (Platform.OS !== 'android') {
     if (!(await Sharing.isAvailableAsync())) {

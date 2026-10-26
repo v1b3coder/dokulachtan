@@ -419,6 +419,16 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       upstreamu: 20 souborů +487/−41 → 21 souborů +629/−94 (nejvyšší churn `verify_pdf_signature.rb`
       zůstal na nule); `make qes-test` 624/1 (známý upstream flake), `make qes-test-qes` 365/0
 
+- [x] **Expo SDK 54 → 58 (2026-10-26):** `mobile/app` na **SDK 58** (expo 58.0.19, React Native 0.88.0,
+      React 19.3.0, expo-router 58, expo-share-intent 9.0.0, jest-expo 58, TypeScript 6). `app.json` bez
+      zrušených polí (`newArchEnabled`, `android.minSdkVersion`, `splash` → plugin `expo-splash-screen`);
+      `plugins/withSharePdfTarget.js` importuje `expo/config-plugins` (SDK 58 už `@expo/config-plugins`
+      nehoistuje). **`File.write()` je v SDK 58 async** → `await` v `platform.ts` a `pdfShare.ts`
+      (jinak by se PDF mohlo sdílet/otevřít před dokončením zápisu). Ověřeno: `make qes-app-test` 194/0,
+      `make qes-app-typecheck` zelené, `npx expo-doctor` 20/20, `expo prebuild` + `gradlew assembleDebug`
+      i `assembleRelease` zelené (R8 nově default), na emulátoru (Android 15) start, S14, dokument picker,
+      share intent „Podepsat PDF“ i open intent „Ověřit PDF“. Nový APK zatím **nenasazen** na Fly.
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.

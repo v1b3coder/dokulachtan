@@ -6,20 +6,13 @@
     "orientation": "portrait",
     "scheme": "dokulachtan",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "android": {
       "package": "cz.dokulachtan.signer",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "minSdkVersion": 24,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -70,7 +63,15 @@
           "disableAndroid": true
         }
       ],
-      "./plugins/withSharePdfTarget.js"
+      "./plugins/withSharePdfTarget.js",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

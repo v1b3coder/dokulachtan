@@ -1820,7 +1820,7 @@ použijí anglicky (fallback).
 | Joby | Sidekiq embedovaný v Pumě (single-tenant); joby krátké a idempotentní (§ 7.10) |
 | Timeouty | `POST /complete` max 15 s (Puma default 30 s); TSA/OCSP v jobu, ne v requestu |
 | Prohlížeče | Chrome/Edge/Safari/Firefox (poslední 2 verze); QR + WebShare API jen jako progressive enhancement |
-| Expo | SDK 54+ (dev build pro A), `minSdkVersion 24`; MOI AAR vyžaduje `compileSdk 35` |
+| Expo | SDK 58 (dev build pro A), `minSdkVersion 24`; MOI AAR vyžaduje `compileSdk 35+` (SDK 58 staví s `compileSdk 37`) |
 | Android | 8.0+ (API 26) pro BLE čtečky; **v1 = Android** (App Links ověřené); iOS až F2 (AASA + `QES_IOS_TEAM_ID` je příprava, § 6.6) |
 | Rebase | po každém rebase upstreamu spustit `make qes-test` + `make qes-e2e`; hooky jsou malé (§ 7.7) |
 | Produkce | Postgres + S3 + SMTP + vlastní doména (universal links) + zálohy (§ 11) |
