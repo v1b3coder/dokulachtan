@@ -213,6 +213,10 @@ export function verifyPreparedDocument(
     throw new Error('signed attributes mismatch');
   }
 
+  if (!['rsa_pkcs1v15', 'ecdsa'].includes(prepared.signature_algorithm)) {
+    throw new Error('signature algorithm');
+  }
+
   verifySigningCertificate(attributes, certificateDer);
   verifySigningTime(attributes);
   verifyCertificateInfo(prepared, certificateIdentity);

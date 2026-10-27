@@ -520,7 +520,7 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `certificate_info`, `document_digest` a po stažení finálního PDF i `final_pdf_sha256` + reviewed prefix/suffix;
       dále `202 embedded` polling, `X-QES-Protocol`, mapování nových chyb, `needs_reader`/`needs_qes_key` do S10,
       místní kontrola PDF před uploadem, `source_sha256`, reuse submission a `reviewOpened` **zůstává** (rozhodnutí
-      uživatele). Ověřeno: `make qes-app-test` 208/0, `make qes-app-typecheck`, `make qes-test-qes` 401/0,
+      uživatele). Ověřeno: `make qes-app-test` 209/0, `make qes-app-typecheck`, `make qes-test-qes` 401/0,
       `make qes-e2e`, `make qes-e2e-two`, `make qes-e2e-pdf`; plná sada SQLite 646/2 a Postgres 650/1 mají
       jen upstream/system flaky (`signing_form_spec.rb:1253` a `:253`), QES vrstva je zelená.
 

@@ -120,3 +120,12 @@ it('rejects certificate_info that does not match the local certificate', () => {
     certificate_info: { ...prepared.certificate_info, serial: '0xDEADBEEF' },
   }, 'sha256', certificateDer, identity)).toThrow('certificate info');
 });
+
+it('rejects an unsupported signature algorithm', () => {
+  const { bytes, prepared, certificateDer, identity } = preparedPdf('sha256');
+
+  expect(() => verify(bytes, {
+    ...prepared,
+    signature_algorithm: 'ed25519',
+  }, 'sha256', certificateDer, identity)).toThrow('signature algorithm');
+});
