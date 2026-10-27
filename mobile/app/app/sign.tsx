@@ -178,7 +178,9 @@ export default function SignScreen() {
   const needsSetup = error ? needsSetupError(error) : false;
   const terminal = error === 'document_mismatch' || error === 'used_token'
     || error === 'expired_token' || error === 'unknown_token'
-    || error === 'failed' || error === 'cancelled';
+    || error === 'failed' || error === 'cancelled'
+    || error === 'values_changed' || error === 'document_set_changed'
+    || error === 'signing_context_mismatch';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
   // Klient pro stažení finálního PDF (docs/15 § 5).
