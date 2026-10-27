@@ -433,7 +433,7 @@ export default function SignScreen() {
   }, [session, pdfApi, done?.finalPdfSha256, reviewPdf]);
 
   const failAction = useCallback((err: unknown) => {
-    if (err instanceof PdfActionError || err instanceof PdfApiError) {
+    if (err instanceof PdfActionError || err instanceof PdfApiError || err instanceof SigningOriginError) {
       setActionError(ERROR_TEXT[err.code] ?? err.code);
     } else {
       setActionError(ERROR_TEXT.network);
