@@ -322,7 +322,7 @@ Po rozhodnutí „CMS LTV pryč" (`feat(qes): DocTS + DSS VRI, CMS LTV pryč`) z
 | `app/lib/qes/ltv.rb:76–81` | `etsi_revocation_values_der` (volá jen `call`/`values`) |
 | `app/lib/qes/ltv.rb:83–88` | `adobe_revocation_info` (volá jen `values`) |
 | `app/lib/qes/cms_builder.rb:32,38–40` | `revocation_values:` v `complete` (nikdo nepředává) |
-| `app/lib/qes/cms_builder.rb:58,63–65` | `revocation_values:` v `estimate_size` (nikdo nepředává) |
+| `app/lib/qes/cms_builder.rb:58,63–65` | `revocation_values:` v `estimate_size` (nikdo nepředává) — **`estimate_size` odstraněn 2026-10-27** (pevná rezerva `QES_SIGNATURE_RESERVE`, viz audit 21) |
 | `app/lib/qes/placeholder_signed_data_creator.rb:12–13,16–17,37–48` | `REVOCATION_VALUES_OID`, `ADOBE_REVOCATION_INFO_OID`, `revocation_values_der`, `adobe_revocation_info_der`, `create_unsigned_attrs`, `add_unsigned_attr` |
 
 **Důkaz:** `grep -rn "Qes::Ltv\." app lib` najde jen `fetch_crls` a `check_revoked!`;

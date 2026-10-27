@@ -740,9 +740,9 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
    a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, datum) na pozici pole `qes`.
-3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva = horní odhad finálního CMS
-   (`Qes::CmsBuilder.estimate_size`) + `QES_SIGNATURE_SIZE_MARGIN`, minimálně `QES_SIGNATURE_SIZE`
-   (default 20 000 B); pole je neviditelné (`Rect: [0, 0, 0, 0]`).
+3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
+   `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože TBS se staví **před**
+   certifikátem (§ 5.1a); pole je neviditelné (`Rect: [0, 0, 0, 0]`).
 4. Zapíše **inkrementálně** (`HexaPDF::Document#sign` s `external_signing`), takže všechny předchozí revize
    zůstanou nedotčené a TBS PDF je jen nová revize.
 5. Stránky se mapují **globálně** (`page_offsets` dle `submission.schema_documents` a metadat
@@ -767,10 +767,9 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
 4. `signing_time` **MUSÍ** být explicitní (`Time.now.utc`) a v obou fázích identický.
 5. Server uloží `signed_attrs_der` a vrátí appce base64.
 
-**Odhad rezervy:** `Qes::CmsBuilder.estimate_size` (stejné argumenty jako `prepare`) vrátí horní odhad
-DER finálního CMS: placeholder signatury má velikost `QES_SIGNATURE_SIZE`, takže skutečná kratší signatura
-se vejde; rezerva se počítá až po přijetí certifikátu (§ 7.1). LTV revokační data jdou do DSS (§ 7.4),
-ne do CMS, takže odhad je neobsahuje.
+**Rezerva:** `QES_SIGNATURE_RESERVE` (default 65 536 B) je pevná a nezávislá na certifikátu, protože TBS
+se staví **před** jeho přijetím (§ 5.1a). Finální CMS se do ní musí vejít; jinak `signature_size_exceeded`
+(nikdy nezkracovat). LTV revokační data jdou do DSS (§ 7.4), ne do CMS.
 
 **Vlastnosti CMS, které server MUSÍ dodržet:**
 - `SubFilter = ETSI.CAdES.detached` (`type: :pades`, `signature_type: :pades`),
@@ -1234,10 +1233,11 @@ Inicializér `config/initializers/qes.rb` načítá:
 | ENV | Default | Význam |
 |---|---|---|
 | `QES_ENABLED` | `false` | vypínač QES (staging/produkce) |
-| `QES_SESSION_TTL` | `600` | platnost session [s] |
-| `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury (rezerva `/Contents`) [B] |
-| `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` [B] |
-| `QES_SIGNATURE_SIZE_MARGIN` | `16384` | marže nad odhad CMS (TSA token, změna CRL) [B] |
+| `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
+| `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
+| `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
+| `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
+| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
 | `QES_TRUST_ROOTS` | — | cesty k rootům (PEM) pro validaci |
@@ -1540,7 +1540,7 @@ Oba dokumenty teď musí být v souladu; případný další rozpor je chyba, kt
 | 19 | Upload ověřuje `content_type` a `level_required` | docs/15 § 5.1 žádá obojí; SPEC to nezmiňoval | SPEC § 5.8.1 (`422 invalid_pdf` / `422 invalid_level`) |
 | 20 | Analýza nahraného PDF (`Qes::PdfSource`) | docs/15 § 6 uváděl jen `page_preview.rb`; normalizace rotace a validace patří do jednoho místa | SPEC § 4.8 (`Qes::PdfSource`) |
 | 21 | Vlastní tabulka `qes_pdf_sessions` a vlastní pipeline pro přímý podpis | **Zamítnuto 2026-10-18** (rozhodnutí uživatele: minimum vlastního kódu) — přímý podpis jede standardním DocuSeal tokem: šablona s polem `qes`, submission, běžný obřad; fork přidává jen nahrání PDF a API token pro spuštění obřadu | docs/15, SPEC § 4.8 a § 5.8 |
-| 22 | TBS PDF a `document_digest` v `GET /qes/sessions/:token` | **Opraveno 2026-10-22**: pevná rezerva 20 000 B nestačila na reálný CMS — CRL PostSignum Qualified CA 4 má 812 863 B a do CMS jde 2× (ETSI + Adobe), tj. ~1,63 MB; reálný certifikát končil `signature_size_exceeded` | TBS se staví až po přijetí certifikátu, rezerva = `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN`; `document_digest` se počítá tamtéž (§ 7.1, § 11) |
+| 22 | TBS PDF a `document_digest` v `GET /qes/sessions/:token` | **Opraveno 2026-10-22**: pevná rezerva 20 000 B nestačila na reálný CMS — CRL PostSignum Qualified CA 4 má 812 863 B a do CMS jde 2× (ETSI + Adobe), tj. ~1,63 MB; reálný certifikát končil `signature_size_exceeded` | TBS se staví až po přijetí certifikátu, rezerva = `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN`; `document_digest` se počítá tamtéž (§ 7.1, § 11). **Od 2026-10-27** nahrazeno pevnou rezervou `QES_SIGNATURE_RESERVE` a TBS se staví **před** certifikátem (§ 5.1a); `estimate_size`/`SIGNATURE_SIZE_MARGIN` odstraněny. |
 | 23 | LTV v CMS (ETSI `RevocationValues` + Adobe `RevocationInfoArchival`) | **Změněno 2026-10-22**: pyHanko unsigned atributy nečte (čte DSS a signed Adobe revinfo); CRL v CMS byl 2× ~813 kB a zvětšoval PDF; Adobe LTV používá DSS VRI | Revokační data jen v DSS s VRI, krytá DocTS (§ 7.4, § 7.6) |
 
 Kde je co v DESIGN.md opravené (řetěz DESIGN → SPEC):

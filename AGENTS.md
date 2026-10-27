@@ -320,7 +320,9 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       byla pevně 20 000 B. TBS se teď staví až po přijetí certifikátu a rezerva je
       `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN` (default 16 384 B);
       `document_digest` se počítá tamtéž a v `GET /qes/sessions/:token` už není
-      (SPEC § 7.1, § 11, § 16 #22).
+      (SPEC § 7.1, § 11, § 16 #22). **Od 2026-10-27** je to nahrazeno pevnou rezervou
+      `QES_SIGNATURE_RESERVE` (64 KB), TBS se staví **před** certifikátem (`GET /document`)
+      a `estimate_size`/`SIGNATURE_SIZE_MARGIN` byly odstraněny; viz audit 21.
 - [x] **DocTS + DSS VRI, CMS LTV pryč (2026-10-22):** pyHanko unsigned CMS atributy nečte (čte DSS
       a signed Adobe revinfo), CMS LTV jen zvětšoval PDF. Revokační data jdou do DSS s VRI (SHA-1
       `/Contents` podpisu) a po pečeti se přidá **DocTS** (DigiCert TSA, `ETSI.RFC3161`), který DSS kryje;
