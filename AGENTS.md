@@ -504,6 +504,15 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `make qes-test-qes` 383/0, `make qes-e2e` zelené; test CRL má platnost 10 let (do 2036). **Poznámka:** `SharePdfModule.openPdf` nabízí
       v chooseru i vlastní `Ověřit PDF` alias (pre-existing UX, ne B).
 
+- [x] **Velikost APK: release jen arm64 + deflate (2026-10-27):** SDK 58 zvětšil APK z 66,0 na 91,7 MB — nativní knihovny
+      +27,6 MiB ve 4 ABI (RN 0.88 nová architektura, reanimated 4 + worklets, `zstd-kmp`), dex naopak −4,2 MiB díky R8.
+      Nový plugin `mobile/app/plugins/withApkSize.js` při prebuildu nastaví `expo.useLegacyPackaging=true` (deflate
+      `.so`), `android.enableShrinkResourcesInReleaseBuilds=true` a výchozí ABI `x86_64` (emulátor a testy); release
+      pro telefony se staví s `-PreactNativeArchitectures=arm64-v8a` (CI i `deploy/android-release/README.md`) a release
+      build bez arm64 spadne, aby se nevydal APK, který na telefon nejde nainstalovat. Změřeno: univerzální build 91,65 MB,
+      release arm64 + deflate + shrinkResources **14,06 MB**; ověřeno na emulátoru (debug x86_64, `extractNativeLibs=true`,
+      nativní moduly z `/data/app/…/lib/x86_64/`, home screen s certem) i na telefonu (release arm64 z předchozího dne).
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.

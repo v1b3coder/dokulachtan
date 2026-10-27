@@ -234,9 +234,14 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
 **<https://dokulachtan-download.fly.dev/dokulachtan-signer.apk>**
 
 - `deploy/apk/` obsahuje nginx image s APK (build se negituje, `deploy/apk/*.apk` je v `.gitignore`).
-- Build: `cd mobile/app && npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`
-  (bez `ANDROID_KEYSTORE_PATH` = debug keystore pro lokální build; release v CI viz
-  `deploy/android-release/README.md`).
+- Build pro telefon: `cd mobile/app && npx expo prebuild --platform android && cd android &&
+  ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a` (bez `ANDROID_KEYSTORE_PATH` = debug keystore
+  pro lokální build; release v CI viz `deploy/android-release/README.md`).
+  `mobile/app/plugins/withApkSize.js` při prebuildu nastaví komprimované `.so` (`expo.useLegacyPackaging`),
+  `shrinkResources` a výchozí ABI `x86_64` pro emulátor; release build bez `arm64-v8a` spadne
+  s chybou, aby se nevydal APK, který na telefon nejde nainstalovat.
+- Velikost APK: univerzální build se 4 ABI a nekomprimovanými `.so` má ~92 MB; release jen arm64
+  s deflate a `shrinkResources` ~14 MB (emulátor/testy jedou na x86_64 debug buildu).
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release
   s přiloženým APK (verze z tagu se zapíše do `app.json`); podpis ověří proti
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.

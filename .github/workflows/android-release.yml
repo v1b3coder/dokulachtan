@@ -6,6 +6,8 @@ name: Android APK release
 # mezi `gh` (GitHub) a REST API Gitea, protože `gh` s Giteou neumí mluvit.
 # Podpis: release keystore z CI secrets; lokální buildy používají debug keystore.
 # Keystore se generuje mimo repo (deploy/android-release/, gitignored).
+# ABI: release jen arm64-v8a (telefony) — x86_64 je pro emulátor a testy, viz
+# mobile/app/plugins/withApkSize.js; build bez arm64 na release úkolu spadne.
 
 on:
   push:
@@ -89,7 +91,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
       - name: Připravit APK
         run: |

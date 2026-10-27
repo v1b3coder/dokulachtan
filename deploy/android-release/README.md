@@ -57,6 +57,11 @@ stejnými názvy.
    `ANDROID_RELEASE_CERT_SHA256`; když otisk nesedí, release se nevytvoří.
 4. Lokální `./gradlew assembleRelease` bez těchto proměnných použije debug
    keystore — to je záměr, ne produkce.
+5. `mobile/app/plugins/withApkSize.js` při prebuildu nastaví velikost APK: komprimované
+   `.so` (`expo.useLegacyPackaging=true`), `shrinkResources` a výchozí ABI `x86_64` pro
+   emulátor a testy. Release APK pro telefony je jen `arm64-v8a` (`-PreactNativeArchitectures=arm64-v8a`,
+   v CI to dělá workflow); release build bez `arm64-v8a` spadne, aby se nevydal APK,
+   který na telefon nejde nainstalovat. Výsledek: ~14 MB místo ~92 MB univerzálního buildu.
 
 ## Nasazení a migrace
 
@@ -76,9 +81,13 @@ stejnými názvy.
 
 ```bash
 cd mobile/app/android
-./gradlew assembleRelease --no-daemon
+./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 # bez ANDROID_KEYSTORE_PATH → debug keystore
 ```
+
+Bez `-PreactNativeArchitectures=arm64-v8a` release build spadne — výchozí ABI je
+`x86_64` (emulátor a testy). Pro emulátor stačí `./gradlew assembleDebug` nebo
+`npx expo run:android`.
 
 Pro ověření release podpisu lokálně:
 
@@ -87,7 +96,7 @@ set -a
 . ../../deploy/android-release/release.properties
 set +a
 export ANDROID_KEYSTORE_PATH="$PWD/../../deploy/android-release/dokulachtan-release.jks"
-./gradlew assembleRelease --no-daemon
+./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 ```
 
 ## Bezpečnost
