@@ -348,6 +348,7 @@ Server ověří token (existuje, neexpirovaný, ne v terminálním stavu), sessi
 ```json
 {
   "session_id": 42,
+  "submitter_id": 7,
   "state": "app_opened",
   "provider": "mobile_app",
   "document_name": "Pracovní smlouva",
@@ -439,6 +440,7 @@ Server **MUSÍ**:
 ```json
 {
   "state": "completed",
+  "submitter_id": 7,
   "level": "qes",
   "document_digest": "<hex SHA-256 ByteRange>",
   "signed_pdf_sha256": "<hex>",
@@ -458,6 +460,14 @@ Appka **MUSÍ** pollovat max. 30 s, pak zobrazí „Dokončuji na serveru…" s 
 (session se dokončí i bez appky — výsledek je v DocuSealu).
 
 Chyby: `409 wrong_state`, `410 expired_token`, `422 signature_invalid`, `422 signature_size`.
+
+### 5.3.1 `POST /qes/sessions/:token/complete_submission` — dokončení submissionu
+
+Po `completed` session appka **MUSÍ** dokončit submission přes tento endpoint, ne přes
+`PUT /api/submitters/:id` s plným API tokenem účtu. Server dokončí **jen submittera vázaného
+na session token**; `submitter` z deep linku se ignoruje. Endpoint je idempotentní a vrací
+`{ "state": "completed", "submitter_id": 7, "completed": true }`.
+Dokončený token platí 24 h po `completed_at`, pak `410 expired_token` (§ 5.1).
 
 ### 5.4 `POST /qes/sessions/:token/abort` — chyba na straně appky
 
@@ -491,6 +501,7 @@ App                                   Server
 | 404 | `unknown_token` | token neexistuje | „Vyžádejte nový odkaz" |
 | 410 | `expired_token` | TTL vypršel | totéž |
 | 410 | `used_token` | token už byl použit | „Podpis už byl dokončen" |
+| 410 | `expired_token` | dokončený token po 24 h | „Vyžádejte nový odkaz" |
 | 409 | `wrong_state` | operace neodpovídá stavu | znovu načíst payload |
 | 422 | `invalid_certificate` | cert nejde načíst / chybí klíč | „Zkontrolujte certifikát" |
 | 422 | `certificate_expired` | mimo platnost | „Certifikát vypršel" |
@@ -498,6 +509,7 @@ App                                   Server
 | 422 | `level_mismatch` | QcSSCD u klíče v telefonu | „Vyberte certifikát z karty" |
 | 422 | `qes_required_qscd` | pole vyžaduje QES, cert bez QcSSCD | „Vyžaduje se kvalifikovaný certifikát" |
 | 422 | `signature_invalid` | signatura neodpovídá | retry podpisu |
+| 422 | `completion_failed` | submission po podpisu nejde dokončit | znovu načíst stav |
 | 422 | `signing_context_mismatch` | podepsané atributy fáze 2 se liší od fáze 1 | znovu načíst stav |
 | 422 | `not_trusted` | certifikát nevede řetězem k trust rootu | „Použijte kvalifikovaný certifikát (I.CA/PostSignum)" |
 | 422 | `revoked` | certifikát je v CRL revokovaný | „Certifikát byl revokován" |
@@ -898,7 +910,8 @@ nezapsala dvě různé signatury.
 Plánování expirace: fork nemá `sidekiq-cron` ani jiný plánovač a SPEC § 22 zakazuje nové závislosti,
 proto **MUSÍ** `Qes::ExpireSessionsJob` fungovat jako samo-plánující se smyčka: inicializér při bootu
 zařadí první běh a job na konci přeplánuje sám sebe přes `perform_in(QES_EXPIRY_JOB_INTERVAL)`.
-Duplicitní smyčky po restartu **MUSÍ** být vyloučeny idempotentním klíčem `qes_expire_sessions` přes `LockEvent`.
+Duplicitní smyčky po restartu **MUSÍ** být vyloučeny atomickým cache lockem
+`qes_expire_sessions` (`Rails.cache.write(..., unless_exist: true)`), ne oknem `LockEvent`.
 
 ### 7.9 Logging, redakce a observabilita
 
@@ -1824,7 +1837,7 @@ použijí anglicky (fallback).
 | Android | 8.0+ (API 26) pro BLE čtečky; **v1 = Android** (App Links ověřené); iOS až F2 (AASA + `QES_IOS_TEAM_ID` je příprava, § 6.6) |
 | Rebase | po každém rebase upstreamu spustit `make qes-test` + `make qes-e2e`; hooky jsou malé (§ 7.7) |
 | Produkce | Postgres + S3 + SMTP + vlastní doména (universal links) + zálohy (§ 11) |
-| Test harness | `make qes-test` = **SQLite** (parita se stagingem) + test image s Ruby 4.0.5 a `libpdfium.so`; `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada). `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3` (POZOR: `DATABASE_URL=sqlite3:…` neprojde — `database.yml` `production:` sekce je pro sqlite URL prázdná), `SCHEMA=tmp/qes-test-schema.rb` chrání `db/schema.rb` (gem default `dump_schema_after_migration = true`, DocuSeal ho vypíná jen v `production.rb:127`); na SQLite nelze `db:schema:load` (Postgres dump s `btree_gin`/`tsvector`/`using: :gin`), jen `db:migrate`. Změřeno: SQLite 243/1 (upstream flake), Postgres 247/0 — `test/qes/README.md` |
+| Test harness | `make qes-test` = **SQLite** (parita se stagingem) + test image s Ruby 4.0.5 a `libpdfium.so`; `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada). `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3` (POZOR: `DATABASE_URL=sqlite3:…` neprojde — `database.yml` `production:` sekce je pro sqlite URL prázdná), `SCHEMA=tmp/qes-test-schema.rb` chrání `db/schema.rb` (gem default `dump_schema_after_migration = true`, DocuSeal ho vypíná jen v `production.rb:127`); na SQLite nelze `db:schema:load` (Postgres dump s `btree_gin`/`tsvector`/`using: :gin`), jen `db:migrate`. Změřeno 2026-10-27: SQLite 646/1 (známý upstream flake), Postgres 650/0 — `test/qes/README.md` |
 | SQLite v testech | **Primární** (staging = SQLite; § 22 vyžaduje DB-agnostický kód): 3 Postgres-specific migrace mají `return unless adapter_name == 'PostgreSQL'`, `LockEvent` používá `unique: connection.supports_partial_index?` → idempotence funguje i na SQLite. Jediný spec závislý na Postgresu: `spec/system/dashboard_spec.rb:53` (fulltext) → vyloučit `--exclude-pattern`, ověřit v `qes-test-postgres` |
 | Assety v testech | `make qes-test-assets` zkopíruje `public/packs` z produkčního image → `public/packs-test` (pro `spec/system`); `chromium` jen v system image, `libpdfium.so` v obou (pro `VerifyPdfSignature`) |
-| Plánování jobů | bez `sidekiq-cron`: samo-plánující smyčka `perform_in` + idempotentní klíč přes `LockEvent` (§ 7.8) |
+| Plánování jobů | bez `sidekiq-cron`: samo-plánující smyčka `perform_in` + atomický cache lock `unless_exist` (§ 7.8) |
