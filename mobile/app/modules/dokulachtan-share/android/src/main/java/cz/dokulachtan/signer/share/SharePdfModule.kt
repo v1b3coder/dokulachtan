@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
@@ -15,6 +14,13 @@ import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
+
+// Vlastní appka a její PDF aliasy se nesmí nabídnout jako prohlížeč (N4).
+internal fun excludedViewerClassNames(packageName: String): List<String> = listOf(
+  "$packageName.MainActivity",
+  "$packageName.SharePdfAlias",
+  "$packageName.OpenPdfAlias"
+)
 
 class SharePdfFileProvider : FileProvider()
 
@@ -70,11 +76,9 @@ class SharePdfModule : Module() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
           putExtra(
             Intent.EXTRA_EXCLUDE_COMPONENTS,
-            arrayOf(
-              ComponentName(context.packageName, "${context.packageName}.MainActivity"),
-              ComponentName(context.packageName, "${context.packageName}.SharePdfAlias"),
-              ComponentName(context.packageName, "${context.packageName}.OpenPdfAlias")
-            )
+            excludedViewerClassNames(context.packageName)
+              .map { ComponentName(context.packageName, it) }
+              .toTypedArray()
           )
         }
       }
