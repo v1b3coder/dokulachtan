@@ -462,11 +462,11 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `QES_TEST_CRL_PATH` nastavená (produkce bez env → 404). Staging secrets:
       `QES_TEST_CRL_PATH=/app/config/qes/test-root.crl`,
       `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev`.
-      Staging **v19** (`deployment-01M5XCRFH7Q6TCN2023NJEW4QF`), produkce **v44**
-      (`dokulachtan:deployment-01M5XD1TX0V2317QNF708KXGD3`, test CRL route 404); `make qes-staging-e2e` i `qes-staging-e2e-pdf`
+      Staging **v20** (`deployment-01M5XDK3BEHXGM7QZFTW6AC319`), produkce **v45**
+      (`dokulachtan:deployment-01M5XDPSMXX2QSEAQ4B2DJZNSS`, test CRL route 404); `make qes-staging-e2e` i `qes-staging-e2e-pdf`
       zelené (podpis appky TRUSTED, pečeť DocuSealu UNTRUSTED — test trust list). Test cert v appce
       přegenerován (`TEST_P12_BASE64`/`TEST_QSCD_P12_BASE64`), `make qes-app-test` 198/0,
-      `make qes-test-qes` 383/0, `make qes-e2e` zelené. **Poznámka:** `SharePdfModule.openPdf` nabízí
+      `make qes-test-qes` 383/0, `make qes-e2e` zelené; test CRL má platnost 10 let (do 2036). **Poznámka:** `SharePdfModule.openPdf` nabízí
       v chooseru i vlastní `Ověřit PDF` alias (pre-existing UX, ne B).
 
 ## Pravidla
