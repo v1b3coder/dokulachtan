@@ -84,6 +84,13 @@ signatura zůstávají v telefonu. Server nikdy nevidí klíč ani PIN/QPIN.
 Nic dalšího se nemění: `qes_sessions`, `qes` pole, kreslení pečeti (`Qes::TbsDocument#draw_stamp`), auditní stránka
 i úklid dokumentů jsou upstream.
 
+## LTV/LTA — co je a co není
+
+- DSS obsahuje CRL a certifikáty **podepisujícího**; DocTS kryje DSS i pečeť.
+- **TSA revokace se neověřuje** a v DSS nejsou certy TSA, pečeti ani DocTS.
+- Offline ověření proto neslibuje úplné PAdES-LTA; UI a dokumentace mluví o LTV datech pro podepisujícího, ne o kvalifikovaném LTA.
+- DigiCert TSA je free/AATL, **ne kvalifikované** časové razítko.
+
 ## 5. API kontrakty
 
 ### 5.1 `POST /api/qes/documents` — nahrání PDF (nový endpoint)
