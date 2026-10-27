@@ -41,8 +41,8 @@ plná sada patří k PR/release, ne k každému commitu.
 |---|---|---|---|---|
 | **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | 404/0 za 43 s |
 | **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | 404/0 za **25 s** |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 513/0 za 75 s |
-| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 513/0 za ~35 s |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 511/0 za 81 s |
+| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 511/0 za 43 s |
 | **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | 647/0 za 3 min 20 s |
 | **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | 647/0 za **90 s** |
 | **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | 651/0 za 3 min 37 s |

@@ -422,7 +422,7 @@ Naměřeno (2026-10-27, 404 examples v QES vrstvě):
 | QES paralelně 4 workery | — | **25 s** | **4,0×** |
 | T1 bez `spec/system` | 157 s | **81 s** | 1,9× |
 | T1 paralelně 4 workery | — | **43 s** | 3,7× |
-| T2 celá sada | **211–384 s** | **205 s** | 1,8× |
+| T2 celá sada | **211–384 s** | **205 s** | ~1,0× (dominují system specy) |
 | T2 paralelně 4 workery | — | **90 s** | **2,3×** |
 
 Konkrétní dopad (run_time per soubor, stejný stroj):

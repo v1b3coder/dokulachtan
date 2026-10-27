@@ -272,11 +272,11 @@ nemodifikuje.
 | **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 404 ex, **25 s** |
 | **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 511 ex, 81 s |
 | **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 511 ex, 43 s |
-| **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 647 ex, 3,5 min |
+| **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 647 ex, 3 min 20 s |
 | **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 647 ex, **90 s** |
-| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 651 ex, ~5 min |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 651 ex, 3 min 37 s |
 | — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` (jinak v T0) | 33 ex, 0,2 s |
-| — | `make qes-app-test` | Jest testy appky | po změně appky | 202 ex, 20 s |
+| — | `make qes-app-test` | Jest testy appky | po změně appky | 212 ex, 13 s |
 | — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
 | — | `make qes-e2e` / `qes-e2e-two` / `qes-e2e-pdf` / `qes-verify-e2e` | E2E s reálným podpisem | před PR, když se mění signing flow | — |
 | — | `make qes-staging-e2e*` | E2E proti stagingu | po nasazení na staging | — |
