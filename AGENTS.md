@@ -74,6 +74,24 @@ na server. Výsledkem je upravený DocuSeal (fork) + mobilní appka.
 Konfigurace v parent repu: `deploy/docuseal/fly.toml` = produkce, `fly.staging.toml` = staging;
 do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-staging`).
 
+### Android podpisy vs. certifikáty — nepřekrývat
+
+V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
+
+| Co | K čemu | Debug/test build | Produkce |
+|---|---|---|---|
+| **Android signing key** (podpis APK) | integrita APK, App Links, aktualizace | `debug.keystore`, fingerprint `FA:C6:17:45:…:3B:9C` | release keystore `deploy/android-release/dokulachtan-release.jks`, fingerprint `80:DC:86:EF:…:C3:E0`; jen CI/distribuce |
+| **Certifikát pro podpis dokumentů** (AdES/QES) | podpis PDF, trust roots na serveru | testovací cert v APK pro E2E; uživatel jinak importuje vlastní `.p12` | uživatel importuje **PostSignum** `.p12` nebo použije čtečku; server má jen PostSignum trust roots |
+
+- **Testovací APK** na `dokulachtan-download.fly.dev` = Gradle `release` varianta **s debug Android podpisem** (standalone JS bundle, `arm64-v8a`, testovací dokumentový cert + stub čtečky). Není to produkční APK.
+- **Produkční APK** = `assembleRelease` s `ANDROID_KEYSTORE_PATH` + `deploy/android-release/release.properties`, podepsaný release keystorem; jen CI/distribuce, nikdy testovací APK.
+- **Gradle `release` varianta ≠ produkční podpis.** Rozhoduje `ANDROID_KEYSTORE_PATH`, ne název varianty.
+- **PostSignum certy** s Android podpisem APK nesouvisí: produkce má `QES_TRUST_ROOTS` jen PostSignum, staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
+- `QES_ANDROID_CERT_SHA256` na Fly = fingerprint **Android podpisu testovacího APK** (nyní debug `FA:C6:…:9C`), ne cert dokumentu. Při nasazení produkčního APK z CI se přepne na `80:DC:…:E0`.
+- Testovací telefon s debug-signed APK **nejde** aktualizovat produkčním APK přes `adb install -r` (jiný podpis); vyžaduje uninstall a nový import `.p12`.
+
+**Pravidlo pro texty:** vždy piš „Android podpis APK“ nebo „certifikát pro podpis dokumentů“; samotné „certifikát“ nebo „produkční certifikát“ je zakázané, protože oba významy se pletou.
+
 | Prostředí | App / URL | Volume | Trust roots | LTV |
 |---|---|---|---|---|
 | **Produkce** | `dokulachtan` / <https://dokulachtan.fly.dev/> | `dokulachtan_prod_data` | jen PostSignum CA | `true` |
@@ -91,17 +109,10 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   kvalifikované TSA zatím nekupujeme).
 - healthcheck `/up` = 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
   `SECRET_KEY_BASE` + `docuseal.env` + SQLite na volume.
-- Testovací APK na produkci App Links teď otevře, protože `QES_ANDROID_CERT_SHA256` je nastavený
-  na **debug** fingerprint (prostředí používá lokální bleeding-edge debug build). Release APK z CI
-  by vyžadoval release fingerprint.
-- **Release podpis (2026-10-27):** release APK se podepisuje vlastním keystorem z CI secrets
-  (`deploy/android-release/`, gitignored); lokální buildy bez `ANDROID_KEYSTORE_PATH` používají debug
-  keystore. Release cert SHA-256 `80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
-  je v CI `ANDROID_RELEASE_CERT_SHA256`. Fly (staging i produkce) má `QES_ANDROID_CERT_SHA256`
-  nastavený na **debug** fingerprint `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`,
-  protože prostředí používají lokální bleeding-edge debug build; při nasazení release APK je
-  potřeba přepnout na release fingerprint. Stávající debug instalace zůstávají použitelné; přechod
-  na release APK vyžaduje reinstalaci a nový import `.p12`.
+- **Fly `QES_ANDROID_CERT_SHA256`** je fingerprint Android podpisu testovacího APK (nyní debug
+  `FA:C6:…:9C`), ne certifikátu dokumentu; při nasazení produkčního APK z CI se přepne na
+  `80:DC:…:E0`. Podrobnosti a důsledky pro App Links/reinstalaci viz tabulka
+  „Android podpisy vs. certifikáty“ výše.
 - Ověřeno 2026-10-18: `trusted_roots` = 6× PostSignum, test cert `trusted=false`, `require_ltv=true`,
   reálný CRL fetch z produkce OK (`PostSignum Qualified CA 4`, 22 510 revoked).
 - První účet (setup) vytváří uživatel v prohlížeči; SMTP nastaveno (Brevo, `SMTP_FROM=<SMTP_FROM>`,
@@ -145,8 +156,10 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   validace intact/trusted/coverage full.
   Detail: `docs/15-primy-podpis-pdf.md` § 8.
 - **Testovací APK:** <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> (Fly app
-  `dokulachtan-download`, `deploy/apk/`; obsahuje testovací certifikát a stub čtečky).
-  Verze v repu **1.3.9** (versionCode 10309, debug podpis `fac61745…3b9c`; na Fly **1.3.8**) — **přímý podpis PDF
+  `dokulachtan-download`, `deploy/apk/`). Je to **debug-signed** Android build (`fac61745…3b9c`)
+  s **testovacím certifikátem pro podpis dokumentů** (E2E) a stub čtečky; **produkční PostSignum cert
+  se do APK nepeče** — uživatel ho importuje jako `.p12`, nebo použije čtečku.
+  Verze v repu **1.3.9** (versionCode 10309; na Fly **1.3.8**) — **přímý podpis PDF
   nativním tokem DocuSealu** („Podepsat PDF“ → náhled → klepnutí → podpis → dokument ve složce
   „Direct signing“, „Stáhnout“ (uložit do telefonu, volitelně jinam) / „Otevřít“ / „Sdílet“),
   **sdílení PDF do appky** (Android share sheet „Podepsat PDF“)
