@@ -5,7 +5,10 @@ a PKCS#12. Jsou to **jen testovací** materiály — neplatí pro produkci a nes
 se použít s reálnými daty.
 
 - `ica/*.pem` — veřejné I.CA testovací root/qualified certy.
-- `pki/*.crt`, `*.crl`, `revoked-serial.txt` — veřejné certy a CRL.
+- `pki/*.crt`, `*.crl`, `revoked-serial.txt` — veřejné certy a CRL. Listové certy mají
+  CRL DP na `http://127.0.0.1:8765/root.crl` (lokální e2e) i na
+  `https://dokulachtan-staging.fly.dev/qes-test/root.crl` (staging); staging CRL
+  vystavuje fork z `config/qes/test-root.crl`.
 - `pki/*.key`, `pki/*.p12`, `signer.key.pem`, `signer.p12` — testovací
   listové klíče a identity (heslo `test`); potřebné pro `make fixtures`,
   `make negative` a fork specs.

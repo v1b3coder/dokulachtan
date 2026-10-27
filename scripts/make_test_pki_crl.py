@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Vygeneruje lokální testovací PKI pro negativní scénáře:
 
-- root CA (RSA 3072) s CRL Distribution Point na http://127.0.0.1:8765/root.crl
+- root CA (RSA 3072) s CRL Distribution Points na 127.0.0.1:8765 a staging hostu
 - signer AdES (QCStatements: QcCompliance, bez QcSSCD)  -> AdES
 - signer QSCD (QCStatements: QcCompliance + QcSSCD)    -> QES-capable
 - signer expirovaný (validita v minulosti)               -> EXPIRED
@@ -28,7 +28,10 @@ P12_PASSWORD = b"test"
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "test" / "certs" / "pki"
 PRIVATE = Path(os.environ.get("TEST_PKI_DIR", ROOT / "test" / "certs-private"))
-CRL_DP = "http://127.0.0.1:8765/root.crl"
+CRL_DPS = [
+    "http://127.0.0.1:8765/root.crl",
+    "https://dokulachtan-staging.fly.dev/qes-test/root.crl",
+]
 QC_STATEMENTS_OID = ObjectIdentifier("1.3.6.1.5.5.7.1.3")
 
 # QCStatements = SEQUENCE OF QCStatement; QCStatement = SEQUENCE { statementId OID }
@@ -97,7 +100,7 @@ def build_cert(
             x509.CRLDistributionPoints(
                 [
                     x509.DistributionPoint(
-                        full_name=[x509.UniformResourceIdentifier(CRL_DP)],
+                        full_name=[x509.UniformResourceIdentifier(url) for url in CRL_DPS],
                         relative_name=None,
                         reasons=None,
                         crl_issuer=None,

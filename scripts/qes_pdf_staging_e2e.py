@@ -297,8 +297,8 @@ def main() -> int:
             raise SystemExit(f"Některá signatura není INTACT: {lines}")
         if not any("INTACT" in line for line in lines):
             raise SystemExit(f"Podpis appky není INTACT: {lines}")
-        log("- podpis appky: INTACT (pokrytí celého dokumentu; na stagingu je řetěz UNTRUSTED,")
-        log("  protože chybí LTV/revokační data — CRL DP test certů = 127.0.0.1:8765)")
+        log("- podpis appky: INTACT:TRUSTED (test root + CRL ze stagingu); pečeť DocuSealu je")
+        log("  UNTRUSTED, protože test trust list neobsahuje cert pečeti.")
 
         log(f"\n## Pečeť v místě klepnutí ({check['field_area']})")
         log(f"- inkoust v místě pečeti: {check['stamp_ink']}, mimo pečeť: {check['other_ink']}")
@@ -309,8 +309,8 @@ def main() -> int:
             raise SystemExit(f"Pokrytí není plné: {check['validation']}")
         log("- pokrytí celého dokumentu: full")
         log(f"- auditní stránka: {check['audit']}")
-        log("- poznámka: LTV/revokační data na stagingu chybí (CRL DP = 127.0.0.1:8765),")
-        log("  proto pyHanko označí řetěz jako UNTRUSTED; podpis je INTACT a pokrytí full.")
+        log("- poznámka: test cert má CRL DP na staging host; CRL je dostupné,")
+        log("  podpis appky je TRUSTED; pečeť DocuSealu zůstává UNTRUSTED (test trust list).")
     finally:
         log("\n## Úklid (smazání API tokenu)")
         cleanup = fly_runner("qes_pdf_staging_bootstrap.rb",

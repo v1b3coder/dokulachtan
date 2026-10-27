@@ -171,8 +171,8 @@ def main() -> int:
     verify = subprocess.run(["openssl", "verify", "-CAfile", str(trust), str(PKI / "signer-ades.crt")],
                             capture_output=True, text=True)
     log(f"- openssl verify (test cert vs test root): {(verify.stdout + verify.stderr).strip()}")
-    log("- poznámka: LTV/revokační data na stagingu chybí (CRL DP = 127.0.0.1:8765),")
-    log("  proto pyHanko označí řetěz jako UNTRUSTED; lokální e2e s CRL serverem je TRUSTED.")
+    log("- poznámka: test cert má CRL DP na staging host; CRL je dostupné a podpis je TRUSTED;")
+    log("  pečeť DocuSealu zůstává UNTRUSTED (test trust list neobsahuje její cert).")
 
     for index, signer in enumerate(submitters, start=1):
         path = OUT / f"qes-staging-{signer['slug']}-final.pdf"

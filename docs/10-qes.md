@@ -33,6 +33,7 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token (produkce/staging `true`) |
 | `QES_REQUIRE_LTV` | `false` (testy), `true` (produkce) | vyžadovat revokační data |
 | `QES_LTV_ALLOWED_HOSTS` | — | allowlist hostů pro CRL/OCSP (SSRF ochrana; čárkou oddělené) |
+| `QES_TEST_CRL_PATH` | — | cesta k testovacímu CRL, které fork vystaví na `/qes-test/root.crl` (jen staging) |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro `assetlinks.json` |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
@@ -202,7 +203,10 @@ QES_ANDROID_CERT_SHA256=<sha256 debug keystore appky>  # pro /.well-known/assetl
 QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
 QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
 QES_TSA_REQUIRED=true
-QES_REQUIRE_LTV=false   # testovací CRL DP (127.0.0.1:8765) není ze stagingu dostupné
+QES_REQUIRE_LTV=false
+QES_TEST_CRL_PATH=/app/config/qes/test-root.crl
+QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev
+#   test cert má CRL DP na staging host → staging CRL je dostupné; 127.0.0.1 se ignoruje
 
 # produkce (deploy/docuseal/fly.toml, APP=dokulachtan)
 QES_ENABLED=true
