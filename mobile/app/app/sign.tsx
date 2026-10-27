@@ -38,7 +38,7 @@ const ERROR_TEXT: Record<string, string> = {
   foreign_server: 'Odkaz patří jinému serveru než tomu v Nastavení. Podpis byl odmítnut.',
   invalid_server: 'V Nastavení zadejte platnou HTTPS adresu serveru.',
   expired_token: 'Platnost odkazu vypršela. Vyžádejte nový.',
-  used_token: 'Podpis už byl dokončen.',
+  used_token: 'Odkaz už byl použit nebo podpis zrušen. Vyžádejte nový.',
   unknown_token: 'Neplatný odkaz. Vyžádejte nový.',
   network: 'Chyba připojení. Zkuste to znovu.',
   certificate_missing: 'Certifikát chybí nebo vypršel. Importujte nový.',
