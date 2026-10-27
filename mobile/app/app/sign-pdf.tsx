@@ -230,7 +230,6 @@ export default function SignPdfScreen() {
           token: session.token,
           server: settings?.serverUrl ?? '',
           flow: 'pdf',
-          submitter: String(submitter.id),
         },
       });
     } catch (err) {

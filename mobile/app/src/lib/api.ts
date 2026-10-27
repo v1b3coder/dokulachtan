@@ -73,6 +73,12 @@ export class QesApi implements SessionSource {
     );
   }
 
+  // Dokončení submissionu je vázané na session token, ne na submitter
+  // z odkazu a plný API token účtu (S1).
+  async completeSubmission(): Promise<{ state: string; submitter_id: number; completed: boolean }> {
+    return this.request('POST', `/qes/sessions/${encodeURIComponent(this.token)}/complete_submission`);
+  }
+
   async postAbort(code: string, message?: string): Promise<{ state: string }> {
     return this.request<{ state: string }>(
       'POST',

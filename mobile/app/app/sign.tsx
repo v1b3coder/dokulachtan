@@ -69,11 +69,10 @@ const ERROR_TEXT: Record<string, string> = {
 };
 
 export default function SignScreen() {
-  const { token, server, flow, submitter } = useLocalSearchParams<{
+  const { token, server, flow } = useLocalSearchParams<{
     token?: string;
     server?: string;
     flow?: string;
-    submitter?: string;
   }>();
   const [session, setSession] = useState<QesSessionPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,19 +144,24 @@ export default function SignScreen() {
   // Bez certifikátu nebo podepisujícího vede primární akce do wizardu S10 (docs/17).
   const needsSetup = error === 'certificate_missing' || error === 'vault_decrypt_failed'
     || error === 'key_invalidated' || error === 'no_signer';
-  const submitterId = typeof submitter === 'string' && submitter.length > 0 ? Number(submitter) : null;
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
-  // Klient pro dokončení submissionu a stažení finálního PDF (docs/15 § 5).
+  // Klient pro stažení finálního PDF (docs/15 § 5).
   const pdfApi = useCallback(async () => {
     const settings = await loadPdfApiSettings(platformVaultDeps().storage);
 
     return new PdfApi(await resolveSigningOrigin(platformVaultDeps().storage, server), settings?.apiToken ?? '');
   }, [server]);
 
-  const finishSubmission = useCallback(async () => {
+  const qesApi = useCallback(async () => {
+    const origin = serverUrl ?? await resolveSigningOrigin(platformVaultDeps().storage, server);
+
+    return new QesApi(origin, token ?? '');
+  }, [serverUrl, server, token]);
+
+  const finishSubmission = useCallback(async (submitterId = session?.submitter_id) => {
     if (submissionLock.current) return;
-    if (!submitterId || !Number.isSafeInteger(submitterId) || submitterId <= 0) {
+    if (!submitterId) {
       setSubmissionError('invalid_submission');
       return;
     }
@@ -166,17 +170,22 @@ export default function SignScreen() {
     setSavingSubmission(true);
     setSubmissionError(null);
     try {
-      await (await pdfApi()).completeSubmission(submitterId);
+      await (await qesApi()).completeSubmission();
       if (currentGeneration === generation.current) setSubmissionCompleted(true);
     } catch (err) {
       if (currentGeneration === generation.current) {
-        setSubmissionError(err instanceof PdfApiError || err instanceof SigningOriginError ? err.code : 'network');
+        setSubmissionError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
       }
     } finally {
       submissionLock.current = false;
       setSavingSubmission(false);
     }
-  }, [submitterId, pdfApi]);
+  }, [session?.submitter_id, qesApi]);
+
+  const finishSubmissionRef = useRef(finishSubmission);
+  useEffect(() => {
+    finishSubmissionRef.current = finishSubmission;
+  }, [finishSubmission]);
 
   useEffect(() => {
     if (!token) {
@@ -201,7 +210,7 @@ export default function SignScreen() {
           setSession(payload);
           if (payload.state === 'completed') {
             setDone({ level: payload.level, digest: payload.document_digest });
-            if (isPdfFlow) void finishSubmission();
+            if (isPdfFlow) void finishSubmissionRef.current(payload.submitter_id);
           }
         }
       })
@@ -211,7 +220,7 @@ export default function SignScreen() {
         setErrorDetail(err instanceof Error ? err.message : null);
       });
     return () => { active = false; };
-  }, [token, server, isPdfFlow, finishSubmission]);
+  }, [token, server, isPdfFlow]);
 
   // Po návratu z wizardu S10 je chyba „chybí certifikát“ vyřešená nebo zastaralá —
   // obrazovka nabídne znovu „Podepsat“ (docs/17).
@@ -287,15 +296,15 @@ export default function SignScreen() {
 
   // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
   const finalPdf = useCallback(async () => {
-    if (!submitterId) {
+    if (!session?.submitter_id) {
       throw new PdfActionError('download_failed');
     }
 
-    const url = await (await pdfApi()).documentUrl(submitterId);
+    const url = await (await pdfApi()).documentUrl(session.submitter_id);
     const name = `${(session?.document_name ?? 'document').replace(/\.pdf$/i, '')}-signed.pdf`;
 
     return { file: await downloadPdf(url, name), name };
-  }, [submitterId, session, pdfApi]);
+  }, [session, pdfApi]);
 
   const failAction = useCallback((err: unknown) => {
     if (err instanceof PdfActionError || err instanceof PdfApiError) {
@@ -399,7 +408,7 @@ export default function SignScreen() {
           <Text style={styles.title}>Podpis je hotový, zbývá dokončit uložení</Text>
           <Text style={styles.muted}>Podpis se nebude opakovat. Dokončete uložení dokumentu do DocuSealu.</Text>
           {submissionError ? <Text style={styles.error}>{ERROR_TEXT[submissionError] ?? submissionError}</Text> : null}
-          <PrimaryButton title={savingSubmission ? 'Dokončuji uložení…' : 'Dokončit uložení'} onPress={finishSubmission} disabled={savingSubmission} />
+          <PrimaryButton title={savingSubmission ? 'Dokončuji uložení…' : 'Dokončit uložení'} onPress={() => finishSubmission()} disabled={savingSubmission} />
           <TextButton title="Zavřít" onPress={() => router.replace('/')} />
         </>
       ) : done ? (

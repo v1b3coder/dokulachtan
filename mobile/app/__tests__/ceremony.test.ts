@@ -16,7 +16,8 @@ function setup(algorithm = 'sha256') {
     postCertificate: jest.fn().mockResolvedValue(fixture.prepared),
     getDocument: jest.fn().mockResolvedValue(fixture.bytes),
     postAbort: jest.fn().mockResolvedValue({ state: 'failed' }),
-    postComplete: jest.fn().mockResolvedValue({ state: 'completed', level: 'ades', document_digest: fixture.prepared.document_digest }),
+    postComplete: jest.fn().mockResolvedValue({ state: 'completed', level: 'ades', document_digest: fixture.prepared.document_digest, submitter_id: 42 }),
+    completeSubmission: jest.fn().mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true }),
   };
   const confirmDocument = jest.fn().mockResolvedValue(true);
   const deps: CeremonyDeps = { api, vault: {} as VaultDeps, confirmDocument };
@@ -98,7 +99,7 @@ it('preserves mismatch error even if abort cannot reach the server', async () =>
 
 it('resumes a completed session without touching the key, certificate or review', async () => {
   const { deps, api, confirmDocument } = setup();
-  const completed = { state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, signed_pdf_sha256: 'hash' };
+  const completed = { state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, submitter_id: 42, signed_pdf_sha256: 'hash' };
   api.getSession.mockResolvedValue(completed);
   deps.configuration = { hasKey: false, hasReader: false, readerReady: false };
   await expect(runSigningCeremony(deps, 'ades')).resolves.toMatchObject({
@@ -114,7 +115,7 @@ it('resumes a completed session without touching the key, certificate or review'
 it('recovers a lost completion response with no second signature or unlock', async () => {
   const { deps, api } = setup();
   api.postComplete.mockImplementationOnce(async () => {
-    api.getSession.mockResolvedValue({ state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, signed_pdf_sha256: 'hash' });
+    api.getSession.mockResolvedValue({ state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, submitter_id: 42, signed_pdf_sha256: 'hash' });
     throw new Error('lost response');
   });
   await expect(runSigningCeremony(deps, 'ades')).rejects.toThrow('lost response');

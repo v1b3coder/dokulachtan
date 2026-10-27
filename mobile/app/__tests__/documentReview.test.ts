@@ -23,7 +23,7 @@ jest.mock('../src/lib/ceremony', () => ({
 
 it('requires opening the exact downloaded PDF and a separate explicit confirmation', async () => {
   jest.spyOn(QesApi.prototype, 'getSession').mockResolvedValue({
-    state: 'app_opened', session_id: 1, provider: 'app', document_name: 'Contract', signer_name: 'Signer',
+    state: 'app_opened', session_id: 1, submitter_id: 42, provider: 'app', document_name: 'Contract', signer_name: 'Signer',
     hash_algorithm: 'sha256', level_required: 'ades', requires_certificate: true, server_url: 'https://server', expires_at: null,
   });
   const bytes = new Uint8Array([37, 80, 68, 70, 45]);
@@ -31,7 +31,7 @@ it('requires opening the exact downloaded PDF and a separate explicit confirmati
   jest.mocked(runSigningCeremony).mockImplementation(async (deps: CeremonyDeps) => {
     if (!await deps.confirmDocument(bytes)) throw new Error('cancelled');
     signature();
-    return { completed: { state: 'completed', session_id: 1, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash' },
+    return { completed: { state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash' },
       level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1 };
   });
   let screen: ReturnType<typeof create>;

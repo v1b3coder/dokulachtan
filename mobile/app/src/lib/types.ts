@@ -7,6 +7,7 @@ export type QesSessionPayload = QesPendingSessionPayload
 
 export interface QesPendingSessionPayload {
   session_id: number;
+  submitter_id: number;
   state: 'created' | 'app_opened' | 'awaiting_signature' | 'embedding' | 'failed' | 'expired';
   provider: string;
   document_name: string | null;
@@ -54,6 +55,7 @@ export interface QesValidationReport {
 export interface QesCompletedPayload {
   state: 'completed';
   session_id: number;
+  submitter_id: number;
   level: QesLevel;
   document_digest: string;
   signed_pdf_sha256: string;
@@ -88,6 +90,7 @@ export interface SessionSource {
   postAbort(code: string, message?: string): Promise<{ state: string }>;
   postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload>;
   postComplete(signatureBase64: string): Promise<QesCompletedPayload>;
+  completeSubmission(): Promise<{ state: string; submitter_id: number; completed: boolean }>;
 }
 
 export interface QesApiErrorBody {
