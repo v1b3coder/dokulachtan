@@ -32,6 +32,9 @@ Kontrolované větve: fork `dokulachtan`, parent `main`; stav před opravami
 - `make qes-app-test` → 203/0.
 - `make qes-app-typecheck` → čisté.
 - `make qes-js-test` → 33/0.
+- `:dokulachtan-share:testDebugUnitTest` → zelené.
+- `make qes-negative` → N1–N17 OK.
+- `make qes-e2e`, `make qes-e2e-two`, `make qes-e2e-pdf` → OK.
 
 ## Poznámky
 
