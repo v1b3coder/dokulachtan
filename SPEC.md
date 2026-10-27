@@ -1654,7 +1654,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 6. `complete` bez LTV → CMS neobsahuje `id-aa-ets-revocationValues`; CRL jde do DSS (§ 7.4).
 
 **`spec/lib/qes/tbs_document_spec.rb`**
-1. PDF obsahuje pole `Sig1` s rezervou `QES_SIGNATURE_SIZE`.
+1. PDF obsahuje pole `Sig1` s rezervou `QES_SIGNATURE_RESERVE` (nebo `QES_SIGNATURE_MIN_SIZE` při přímém volání bez certifikátu).
 2. `/ByteRange` pokrývá celý soubor kromě `/Contents`.
 3. víc dokumentů v šabloně → stránky v pořadí šablony, jeden podpis.
 4. `qes` pole se nevykresluje (žádný text `qes:` v obsahu).
