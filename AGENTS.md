@@ -526,6 +526,12 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `make qes-e2e`, `make qes-e2e-two`, `make qes-e2e-pdf`; plná sada SQLite 646/2 a Postgres 650/1 mají
       jen upstream/system flaky (`signing_form_spec.rb:1253`, `:253` a `notifications_settings_spec.rb:73`), QES vrstva je zelená.
 
+- [x] **Nasazení audit fixes na produkci (2026-10-27):** release **v47**, image
+      `deployment-01M5YTS7HE1Z54VY5P1G6V6KTF`, fork `b1c672e7`; `/up` 200, `/qes/sessions/unknown/document`
+      404 `unknown_token`, `Qes::SessionsController#document` v logu, `Qes::Config` ověřeno na stroji:
+      `enabled=true`, `signature_reserve=65536`, `review_ttl=900`, `session_ttl=600`, trust roots 6,
+      TSA roots 1, `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`, `tsa_required=true`.
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.
