@@ -124,6 +124,19 @@ def new_session(slug: str, field_uuid: str) -> str:
     return created["token"]
 
 
+def new_submission(data: dict) -> tuple[str, str]:
+    status, created = api_request("POST", f"/api/templates/{data['template_id']}/submissions", data["token"],
+                                  {"send_email": False,
+                                   "submitters": [{"role": data["submitters"][0]["name"],
+                                                    "name": "N9 signer",
+                                                    "email": "n9@example.com"}]})
+    if status != 200:
+        raise SystemExit(f"N9: nová submission selhala: HTTP {status} {created}")
+    submitter = created[0] if isinstance(created, list) else created["submitters"][0]
+
+    return submitter["slug"], data["submitters"][0]["field_uuid"]
+
+
 def check(name: str, status: int, payload: dict, expected_status: int, expected_error: str) -> None:
     ok = status == expected_status and payload.get("error") == expected_error
     log(f"- {name}: HTTP {status} {payload.get('error')} -> {'OK' if ok else 'FAIL'}")
@@ -205,7 +218,8 @@ def main() -> int:
     check("N8", status, payload, 410, "used_token")
 
     log("\n## N9: přepis finálního PDF po vložení")
-    token = new_session(slug, field_uuid)
+    n9_slug, n9_field_uuid = new_submission(data)
+    token = new_session(n9_slug, n9_field_uuid)
     status, prepared = post_certificate(token, "signer-ades.p12")
     if status != 200:
         raise SystemExit(f"N9: certifikát selhal: {prepared}")
