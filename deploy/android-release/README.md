@@ -60,8 +60,11 @@ stejnými názvy.
 
 ## Nasazení a migrace
 
-- `assetlinks.json` na serveru musí mít **release** SHA-256:
-  `QES_ANDROID_CERT_SHA256=80:DC:...:E0` (staging i produkce).
+- Fly (staging i produkce) má `QES_ANDROID_CERT_SHA256` nastavený na **debug** fingerprint
+  `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`,
+  protože prostředí používají lokální bleeding-edge debug build.
+- Pokud na Fly nasadíš release APK z CI, přepni `QES_ANDROID_CERT_SHA256` na release fingerprint
+  `80:DC:...:E0`; jinak App Links nebudou fungovat.
 - Stávající instalace s debug podpisem **nepůjde aktualizovat** release APK.
   Je potřeba odinstalovat, nainstalovat novou verzi a znovu importovat `.p12`
   (klíč se v telefonu neuchovává mimo aplikaci).

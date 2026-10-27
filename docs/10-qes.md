@@ -199,7 +199,7 @@ QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 #   root.crt = testovací root (testovací APK), postsignum.pem = reálné PostSignum CA
 #   (Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1 + Qualified ECC R1 CA1/CA3)
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
-QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0  # release keystore; lokální debug build má jiný
+QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; lokální bleeding-edge build
 QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
 QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
 QES_TSA_REQUIRED=true
@@ -240,9 +240,9 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release
   s přiloženým APK (verze z tagu se zapíše do `app.json`); podpis ověří proti
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
-- `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **release** podpisu (`deploy/android-release/`);
-  lokální debug build má jiný otisk, proto `assetlinks.json` na stagingu sedí jen pro release APK.
-  Testovací APK na `dokulachtan-download.fly.dev` je debug a App Links na produkci neotevře.
+- `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **debug** podpisu (lokální bleeding-edge build);
+  release APK z CI by vyžadoval release fingerprint (`deploy/android-release/`).
+  Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkci teď sedí.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…"`
   → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
 

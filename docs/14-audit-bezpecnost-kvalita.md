@@ -234,10 +234,13 @@ debug pro lokální build. CI `.github/workflows/android-release.yml` dekóduje
 
 Release certifikát má SHA-256
 `80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`.
-Na stagingu i produkci je potřeba nastavit `QES_ANDROID_CERT_SHA256` na tento otisk.
-Testovací APK na `dokulachtan-download.fly.dev` zůstává debug (samostatný účel).
-Stávající debug instalace vyžadují reinstalaci a nový import `.p12` — jiný podpis nejde
-aktualizovat.
+Na Fly (staging i produkce) je `QES_ANDROID_CERT_SHA256` nastavený na **debug** fingerprint
+`FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C` —
+prostředí používá lokální bleeding-edge debug build. Release APK z CI by vyžadoval release
+fingerprint; při jeho nasazení na Fly je potřeba `QES_ANDROID_CERT_SHA256` přepnout.
+Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkci teď sedí.
+Stávající debug instalace zůstávají použitelné; přechod na release APK vyžaduje reinstalaci a nový
+import `.p12`.
 
 Důsledky původního stavu:
 1. App Links (autoVerify) pro distribuovaný APK **nefungovaly** — primární `https://…/qes/sign` se neotevřel,
@@ -387,8 +390,9 @@ akceptovat s vysvětlením.
 4. **K4** — opravit ASN.1 `crlVals [1]` (+ OCSP `[0]`); offline test `trusted=True`; `make qes-e2e`
    rozšířit na kontrolu `TRUSTED`.
 5. **M1** — odstranit `server` z deep linku, použít `server_url` z payloadu + allowlist; test.
-6. **M2** — ✅ release keystore v `deploy/android-release/` + CI secrets; zbývá nastavit
-   `QES_ANDROID_CERT_SHA256` na stagingu/produkci a počítat s reinstalací stávajících debug instalací.
+6. **M2** — ✅ release keystore v `deploy/android-release/` + CI secrets; Fly má **debug**
+   fingerprint pro lokální bleeding-edge build; při nasazení release APK přepnout
+   `QES_ANDROID_CERT_SHA256` na release fingerprint a počítat s reinstalací.
 7. **M3** — testovací PKCS#12 jen v dev buildu; odstranit tlačítka z produkčního UI.
 8. **K5/K6** — `with_lock` + `LockEvent` + 409 při jiné signatuře.
 9. **M4/M5** — biometrie pro import/smazání, `disableDeviceFallback`, `biometricsSecurityLevel: 'strong'`.

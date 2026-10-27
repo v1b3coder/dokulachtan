@@ -64,8 +64,9 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
   (nový prázdný volume; starý `dokulachtan_data` s testovacími daty zůstává odpojený)
 - `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA, bez test rootu)
 - `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=false`, `QES_ENABLED=true`
-- `QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
-  (release APK; testovací APK na `dokulachtan-download` má debug podpis a App Links neotevře)
+- `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
+  (debug fingerprint; prostředí používá lokální bleeding-edge debug build. Release APK z CI by
+  vyžadoval release fingerprint.)
 - healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet)
 - migrace proběhly automaticky při startu; `SECRET_KEY_BASE` a `docuseal.env` na volume
 - SMTP zatím nenastaveno (`deploy/smtp.env` neexistuje)
@@ -79,8 +80,9 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
   (testovací klíče fungují, reálné PostSignum certy také)
 - `QES_REQUIRE_LTV=false` (testovací CRL DP `127.0.0.1:8765` není dostupné)
 - `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`
-- `QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
-  (release keystore z `deploy/android-release/`; lokální debug build má jiný otisk)
+- `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
+  (debug fingerprint; lokální bleeding-edge debug build. Release APK z CI by vyžadoval release
+  fingerprint z `deploy/android-release/`.)
 
 ## Konkrétní kroky (až se bude nasazovat)
 
