@@ -204,6 +204,8 @@ docs/           průzkum, návrh, e2e testy, fork workflow, deployment
  17-ui-hierarchie-akci.md  hierarchie akcí v appce (audit a návrh tlačítek)
  18-audit-fork-vs-upstream.md  audit forku: kvalita, dead code, duplicity, doteky, cena rebase
  19-overeni-pdf-externi.md  externí ověření PDF přes EU DSS (jen appka, volba providera)
+ 20-audit-2026-10-27-opravy.md  audit druhého kola: nálezy N1–N8, S1–S7 + opravy
+ 21-audit-testu.md       audit testů: naměřené časy, zastaralé testy, sleep/wait, paralelizace
 DESIGN.md       aplikační design (co a proč)
 SPEC.md         detailní specifikace odvozená z DESIGN (model, API, obrazovky, testy)
 PLAN.md         implementační plán (fáze P0–P8 s verifikací)
@@ -438,6 +440,19 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       se ukázal nespolehlivý).
       Ověřeno: QES 401/0, SQLite 646/1 (známý upstream flake), Postgres 650/0,
       app 203/0, typecheck a JS testy zelené.
+
+- [x] **Audit testů a plán zrychlení (2026-10-27):** `docs/21-audit-testu.md` — naměřeno
+      (SQLite harness, JSON `run_time`): 69 % času full sady jde na **upstream specy, které fork
+      nemodifikuje** (243 ex / 265,7 s z 384,1 s); `spec/system/signing_form_spec.rb` sám = **133 s
+      (35 %)**, čistě upstream, drží podlahu plného paralelního běhu; `make qes-test-qes` je 98–144 s,
+      z toho **~80 s je `build_qes_submission` (279× × 288 ms)** a **97 % ceny `create(:template)`
+      je generování PNG náhledů** (218–644 ms → 16,9 ms bez nich; ověřeno 401 ex, 1 failure = spec,
+      který náhledy testuje, 71 s). Explicitní `sleep` v specách jsou jen 2 (`0,1 s`, oba oprávněné),
+      E2E skripty pollují s limitem (žádný fixed sleep); mrtvé testy nejsou (ověřeno proti `docs/18`
+      a `docs/20`). Paralelizace 4 workerů = 4 kontejnery s vlastní SQLite = **2,0× QES / 2,5× system**
+      (CRL port 8765 ani Capybara Puma nekolidují — jiný netns; round-robin dělení dá jen 1,15×).
+      Doporučení: tiering (`qes-test-qes` per-commit, plná sada per-PR), `previews: false` v QES
+      šablonách, paralelní shell runner bez `parallel_tests` gemu; kombinace = QES 98 s → ~30 s.
 
 - [x] **Expo SDK 54 → 58 (2026-10-26):** `mobile/app` na **SDK 58** (expo 58.0.19, React Native 0.88.0,
       React 19.3.0, expo-router 58, expo-share-intent 9.0.0, jest-expo 58, TypeScript 6). `app.json` bez
