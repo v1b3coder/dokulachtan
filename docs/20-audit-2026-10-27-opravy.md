@@ -11,7 +11,7 @@ Kontrolované větve: fork `dokulachtan`, parent `main`; stav před opravami
 | N1 | Povinné QES pole ze snapshotu `submission.template_fields`; API `required: false` je nesmí vypnout; deep_dup při sloučení rolí | `0a44224a` |
 | N2 | `issuingDistributionPoint`: `[1]` = user certs, `[2]` = CA certs; explicitní FALSE se dekóduje | `e215852b` |
 | N3 | `redirect: 'error'` v transportu (`expo/fetch`), prázdné `response.url` odmítnuto | `68029c0` |
-| N4 | `EXTRA_EXCLUDE_COMPONENTS` pro vlastní appku; `reviewOpened` až po návratu z prohlížeče | `f243708` |
+| N4 | `EXTRA_EXCLUDE_COMPONENTS` pro vlastní appku (best-effort); `reviewOpened` zůstává po `startActivity` — AppState se ukázal nespolehlivý | `f243708`, `472005e` |
 | N5 | Web i API verifikace používají `Qes::PdfiumTrust.report` při zapnutém QES | `25659689` |
 | N6 | `form_sessions#show` vrací zmrazené `values` | `d7bf9664` |
 | N7 | Dokončený token expiruje 24 h po `completed_at`; payload bez `values` | `101a6118` |

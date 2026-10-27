@@ -430,10 +430,12 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
 
 - [x] **Audit druhého kola a opravy (2026-10-27):** nálezy N1–N8 a S1–S7
       z druhé kontroly (docs/20-audit-2026-10-27-opravy.md) — QES snapshot polí,
-      CRL scope, transport redirecty, PDF prohlížeč, DocTS verifikace, values
-      v prohlížeči, 24h TTL dokončeného tokenu, session-token dokončení,
-      revokace nad store chain, atomické přechody, `valid_unqualified`,
-      DNS chyby a QES hooky při vypnutém QES; S4 release keystore už hotový.
+      CRL scope, transport redirecty, vyloučení vlastní appky z PDF chooseru,
+      DocTS verifikace, values v prohlížeči, 24h TTL dokončeného tokenu,
+      session-token dokončení, revokace nad store chain, atomické přechody,
+      `valid_unqualified`, DNS chyby a QES hooky při vypnutém QES; S4 release
+      keystore už hotový; `reviewOpened` po `startActivity` zůstal (AppState
+      se ukázal nespolehlivý).
       Ověřeno: QES 401/0, SQLite 646/1 (známý upstream flake), Postgres 650/0,
       app 203/0, typecheck a JS testy zelené.
 
