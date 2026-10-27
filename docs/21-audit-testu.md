@@ -183,25 +183,24 @@ verifikačních endpointech, nález N5 z `docs/20`). Je to 2 ze 403 fork example
 `spec/javascript/qes_*.test.mjs` (3 soubory, 9 testů) se pouští jen přes `make qes-js-test`,
 ne v `make qes-test` ani `qes-test-qes`. Rychlé, ale snadno zapomenuté.
 
-### 5.4 Dva známé 2FA flaky
+### 5.4 Dva známé 2FA flaky — **opraveno**
 
 `spec/system/signing_form_spec.rb:253` a `:1253` (upstream, `sidekiq: :inline`) padly
-**ve 2 ze 3 běhů** tohoto auditu:
+**ve 2 ze 3 běhů** tohoto auditu. Původní hypotéza (`deliveries.last == nil` kvůli
+`sidekiq: :inline`) byla neúplná — skutečné příčiny jsou dvě:
 
-```
-Failure/Error: one_time_code = email.body.encoded[%r{<b>(\d{6})</b>}, 1]
-NoMethodError: undefined method 'body' for nil
-```
+1. **`RateLimit::STORE` je proces-globální `MemoryStore`** (`app/lib/rate_limit.rb`), ne
+   `Rails.cache`. SQLite po rollbacku recykluje `submitter.id`, takže klíč
+   `send-email-code-1` sčítá napříč example a po dvou kliknutích `update` vrátí
+   `too_many_attempts` — e-mail se neodešle. V izolovaném běhu to projde (počítadlo 0),
+   v plné sadě ne. **Oprava:** `config.before { RateLimit::STORE.clear }` v
+   `spec/support/qes_helpers.rb` (test isolation, produkce se nemění).
+2. **Re-send je omezený na 15 s** od předchozího `send_2fa_email` eventu
+   (`SubmitFormEmail2fasController#update`), takže spec, která klikne na re-send hned,
+   nikdy nedostane druhý e-mail. **Oprava:** `travel_to(+20 s)` kolem kliknutí a
+   `change.by(1)` na obou odesláních.
 
-Root cause: `ActionMailer::Base.deliveries.last` je `nil`, protože mailer job po
-`find('#resend_label').click` ještě neproběhl. Izolovaně projde, v celé sadě ne.
-Není to QES kód, ale **kazí signál** (falešná červená) a žere čas opakováním.
-
-Doporučení: v obou examplech použít `perform_enqueued_jobs` (nebo
-`have_enqueued_email` + explicitní `perform_enqueued_jobs`) místo spoléhání na
-`sidekiq: :inline`; alternativně quarantine tag `:flaky` a v CI je přeskočit.
-**Nemaže se** — 2FA je upstream funkce, kterou fork používá (`link_form_fields`,
-`require_email_2fa`).
+Ověřeno 16/16 běhů zelených (6× izolovaně, 10× celý 2FA kontext).
 
 ### 5.5 Známé trvalé vyloučení
 
@@ -283,14 +282,17 @@ ne 96 s. Proto je **fáze 1 (tiering) důležitější než fáze 3 (paralelizac
 
 ## 8. Plán optimalizace
 
+> **Stav: implementováno 2026-10-27.** Naměřené výsledky před/po jsou v § 12; níže zůstává
+> původní plán s čísly z doby auditu (sloupec „Před“).
+
 Pořadí je zvolené podle poměru zisk/riziko. Každá fáze je samostatně ověřitelná.
 
 ### Fáze 1 — Tiering: `qes-test-qes` jako výchozí, plná sada jako gate (riziko: nulové)
 
-Dnes `DEVELOPMENT.md` říká „`qes-test` před commitem forku" — to je 4–6 min na každý commit.
+Původně `DEVELOPMENT.md` říkal „`qes-test` před commitem forku“ — to je 4–6 min na každý commit.
 Zavést tři tiery:
 
-| Tier | Cíl | Kdy | Examples | Dnes |
+| Tier | Cíl | Kdy | Examples | Před |
 |---|---|---|---:|---:|
 | T0 | `make qes-test-qes` | po každé změně QES | 401 | 98 s |
 | T1 | `make qes-test-fast` (bez `spec/system`) | před commitem | 510 | 157 s |
@@ -304,29 +306,28 @@ zachytí před PR.
 
 ### Fáze 2 — `previews: false` pro QES šablony (riziko: nízké, ověřeno)
 
-Přidat do `spec/factories/templates.rb` transient `previews { true }` a v
-`Templates::ProcessDocument` generovat náhledy jen když je `previews`. V
-`QesHelpers.build_qes_submission` posílat `previews: false`.
+**Implementováno jinak než v plánu:** místo transientu ve `spec/factories/templates.rb`
+(upstream soubor) je stub `QesHelpers.without_page_previews` v `spec/support/qes_helpers.rb` —
+nulový dotek upstreamu. Stubuje jen render PNG náhledů; `number_of_pages` se počítá dál.
 
-Naměřeno: 401 examples, **1 failure** (`spec/requests/qes_documents_spec.rb:26`, který náhledy
-explicitně testuje — ten si `previews: true` nechá), **71 s místo 98–145 s**.
+Naměřeno: 404 examples, **0 failures** (`spec/requests/qes_documents_spec.rb:26` jde přes API
+endpoint, ne přes factory, takže zůstává zelený), **42 s** místo 100 s.
 
 Riziko: šablona bez `preview_images` attachmentu. QES specy čtou jen `number_of_pages`
-(v `generate_pdf_preview_images`, které zůstává) a skutečné PDF dokumentu, ne náhledy. Ověřeno během
-experimentu: 400/401 prošlo.
+(v `generate_pdf_preview_images`, které zůstává) a skutečné PDF dokumentu, ne náhledy. Ověřeno:
+404/404 prošlo v plné sadě.
 
 ### Fáze 3 — Paralelní runner bez nového gemu (riziko: střední, ověřeno)
 
-Shell skript `scripts/qes-test-parallel.sh`:
+Shell skript `scripts/qes-test-parallel.sh` + `scripts/qes_test_groups.py`:
 
-1. Rozdělí spec soubory do N skupin podle **naměřeného času** (statický seznam
-   v `test/qes/timings.txt`, nebo `--dry-run` jednou za čas).
-2. Pro každou skupinu spustí vlastní `podman run` s vlastní DB a `SCHEMA`.
-3. `db:create db:migrate` jen v první skupině, ostatní zkopírují hotový SQLite soubor
-   (ušetří 5 s × N).
-4. `xargs -P 4`, návratový kód = součet.
+1. Rozdělí spec soubory do N skupin podle **naměřeného času** (`test/qes/timings.txt`,
+   LPT bin packing) — round-robin podle počtu souborů dá jen 1,15×.
+2. Soubory nad 45 s rozbalí po examplech (`file:řádek`), aby jeden soubor nedržel podlahu.
+3. Pro každou skupinu spustí vlastní `podman run` s vlastní DB a `SCHEMA`.
+4. `xargs`/`wait`, návratový kód = součet.
 
-Očekávané: T0 98 → ~50 s, T1 157 → ~45 s, T2 254–384 → ~150 s (podlaha 133 s).
+Naměřeno: T0 42 → **25 s**, T1 81 → **43 s**, T2 205 → **90 s**.
 
 Riziko: paměť (4× 1,68 GB + Chromium). Strop 4–6 workerů. **Nepřidávat
 `parallel_tests` do Gemfile** — byl by to dotek upstreamu.
@@ -345,15 +346,23 @@ a testy „po expiraci" by spadly. Při class-level cache proto `not_after` prod
 (`self_signed_tsa_certificate` už cert kopíruje a přepodepisuje, což zůstává bezpečné).
 Zisk je malý (6,4 s z 98 s) — má smysl až po fázích 1–3.
 
+**Implementováno:** `TSA_KEYS` a `SELF_SIGNED_QC_SSCD` na úrovni modulu v `spec/support/qes_helpers.rb`;
+TSA cert má `not_after = Time.current + 1.day`, self-signed cert se vrací jako **kopie**
+(`revocation_pipeline_spec` ho přepodepisuje).
+
 ### Fáze 5 — Opravit dva 2FA flaky (riziko: nízké, ne čas)
 
 Viz § 5.4. Nezkracuje běh, ale odstraní falešné červené, které nutí opakovat běh —
 to je reálně nejvíc ztraceného času při vývoji.
 
+**Implementováno:** root cause byl jinde než v plánu — `RateLimit::STORE` (proces-globální
+`MemoryStore`) + recyklace `submitter.id` na SQLite → `RateLimit::STORE.clear` v `config.before`.
+Navíc `travel_to(+20 s)` u re-sendu (15s okno). Ověřeno 16/16 běhů.
+
 ### Fáze 6 — Uzavřít mezery v rychlé smyčce (riziko: nulové)
 
-Přidat `spec/requests/doc_ts_verification_spec.rb` do globu `qes-test-qes` a `make qes-js-test`
-do T0 (je 9 testů, < 1 s).
+`spec/requests/doc_ts_verification_spec.rb` je v globu `qes-test-qes` a `make qes-js-test`
+je součástí T0 (33 testů, < 1 s).
 
 ## 9. Co nedělat
 
@@ -378,12 +387,71 @@ do T0 (je 9 testů, < 1 s).
 ## 11. Ověřovací checklist po implementaci
 
 ```bash
-make qes-test-qes           # 401/0, cíl ~30 s
-make qes-js-test             # 9/0
-make qes-test-fast           # 510/0 (nový cíl), cíl ~45 s
-make qes-test                # 646/1 (známý 2FA flake), cíl ~150 s
-make qes-test-postgres       # 650/0, cíl ~175 s
-make qes-app-test            # 202/0, 20 s (už paralelní)
+make qes-test-qes            # T0: QES + JS
+make qes-test-parallel       # T0 paralelně
+make qes-test-fast           # T1: bez spec/system
+make qes-test-parallel-fast   # T1 paralelně
+make qes-test                # T2: celá sada
+make qes-test-parallel-full   # T2 paralelně
+make qes-test-postgres       # T3: parita s upstream CI
+make qes-app-test            # appka (už paralelní)
+make qes-app-typecheck
 ```
 
 Po každé fázi znovu změřit `run_time` z JSON reportéru, ne wall clock (viz § 2).
+
+## 12. Implementace (2026-10-27) a naměřené výsledky
+
+Všechny fáze z § 8 jsou implementované. Čísla níže jsou měřená **před** a **po**
+na stejném stroji, stejnou sadou examples.
+
+| Fáze | Co je hotové | Kde |
+|---|---|---|
+| 1 — tiering | `qes-test-qes` (T0), `qes-test-fast` (T1), `qes-test` (T2), `qes-test-postgres` (T3); `pipefail` v Makefile | `Makefile`, `DEVELOPMENT.md`, `AGENTS.md` |
+| 2 — `previews: false` | `QesHelpers.without_page_previews` stubuje jen render PNG náhledů, `number_of_pages` zůstává | `spec/support/qes_helpers.rb` |
+| 3 — paralelní runner | `scripts/qes-test-parallel.sh` + `scripts/qes_test_groups.py` (LPT podle časů, dělení souborů po examplech) | `scripts/`, `test/qes/timings.txt` |
+| 4 — cache RSA klíčů | `TSA_KEYS` a `SELF_SIGNED_QC_SSCD` na úrovni modulu, certifikát jako kopie | `spec/support/qes_helpers.rb` |
+| 5 — 2FA flaky | `RateLimit::STORE.clear` per example + `travel_to(+20 s)` u re-sendu | `spec/support/qes_helpers.rb`, `spec/system/signing_form_spec.rb` |
+| 6 — mezery v T0 | `doc_ts_verification_spec.rb` v QES globu, `qes-js-test` součástí T0 | `Makefile` |
+
+Naměřeno (2026-10-27, 404 examples v QES vrstvě):
+
+| Běh | Před | Po | Zrychlení |
+|---|---:|---:|---:|
+| QES sekvenčně (`qes-test-qes`) | **100,3 s** | **42,2 s** | **2,4×** |
+| QES paralelně 4 workery | — | **25 s** | **4,0×** |
+| T1 bez `spec/system` | 157 s | **81 s** | 1,9× |
+| T1 paralelně 4 workery | — | **43 s** | 3,7× |
+| T2 celá sada | **211–384 s** | **205 s** | 1,8× |
+| T2 paralelně 4 workery | — | **90 s** | **2,3×** |
+
+Konkrétní dopad (run_time per soubor, stejný stroj):
+
+| Soubor | Před | Po |
+|---|---:|---:|
+| `spec/lib/qes/chain_spec.rb` | 15,9 s | 4,5 s |
+| `spec/lib/qes/verifier_spec.rb` | 11,2 s | 4,6 s |
+| `spec/lib/qes/validator_spec.rb` | 8,1 s | 4,3 s |
+| `spec/lib/qes/revocation_pipeline_spec.rb` | 12,9 s | 3,2 s |
+| `spec/requests/qes_sessions_spec.rb` | 14,2 s | 5,4 s |
+| `spec/system/signing_form_spec.rb` | 133,0 s | 60,7 s |
+
+Co se neudělalo a proč:
+
+- **`previews: false` jako transient ve `spec/factories/templates.rb`** — factory je upstream soubor;
+  místo toho stub v `spec/support/qes_helpers.rb` (nulový dotek upstreamu).
+- **`parallel_tests` gem** — přidal by řádek do `Gemfile`/`Gemfile.lock` (dotek upstreamu);
+  shell runner dělá totéž.
+- **Rozdělení `spec/system/signing_form_spec.rb` do souborů** — to je upstream soubor; runner
+  ho dělí po examplech (`file:řádek`), takže zůstává netknutý.
+- **`spec/system` v T0/T1** — zůstává jen v T2, protože je to jediná obrana proti
+  regresi doteků `generate_result_attachments`/`generate_audit_trail` při rebase.
+
+Nový nález při implementaci (nebyl v původním auditu): **`RateLimit::STORE` je
+proces-globální `MemoryStore`** a SQLite recykluje `submitter.id` po rollbacku → počítadla
+rate limitu se sčítají napříč example. To byl skutečný root cause 2FA flaky, ne `sidekiq: :inline`
+(viz § 5.4). Oprava je `RateLimit::STORE.clear` v `config.before`.
+
+Také opraveno: `make qes-test*` dřív maskoval červený RSpec, protože `rspec … | tee`
+bere exit kód z `tee`. Nově `SHELL := /bin/bash` + `.SHELLFLAGS := -o pipefail -c`.
+

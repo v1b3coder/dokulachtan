@@ -235,9 +235,14 @@ vendor/docuseal  lokální klon forku (gitignored, pin = HEAD forku v vendor/doc
 make venv        # .venv (pyHanko + podman-compose)
 make verify      # fixtures + validace + negativní/LTV scénáře
 make fork-setup  # klon + větev dokulachtan + skeleton
-make qes-test     # RSpec forku na SQLite (celá sada kromě dashboard specu)
-make qes-test-qes  # jen QES vrstva (rychlá smyčka)
-make qes-test-postgres  # paritní běh celé sady na Postgresu 18
+make qes-test-qes  # T0: QES vrstva + JS testy (rychlá smyčka)
+make qes-test-fast  # T1: celá sada bez spec/system (bez Chromia)
+make qes-test     # T2: RSpec forku na SQLite (celá sada kromě dashboard specu)
+make qes-test-postgres  # T3: paritní běh celé sady na Postgresu 18
+make qes-test-parallel  # T0 paralelně (4 kontejnery, vlastní SQLite)
+make qes-test-parallel-fast  # T1 paralelně
+make qes-test-parallel-full  # T2 paralelně (potřebuje system image)
+make qes-test-timings  # přeměří časy spec souborů pro paralelní runner
 make qes-e2e      # fork + podpis KÓDEM APPKY (B) → validované PDF
 make qes-e2e-two  # fork + 2 signeři → 4 signatury (2× appka + 2× pečeť), validované PDF
 make qes-e2e-pdf  # přímý podpis PDF (docs/15): upload + náhled + place + podpis kódem appky
@@ -253,6 +258,38 @@ make smtp-test    # pošle testovací e-mail přes SMTP na adresu TO=
 make qes-app-test # Jest testy appky (vault, P12, signer, API)
 make qes-app-typecheck # TypeScript kontrola appky
 ```
+
+### Testy: kdy co pouštět
+
+Testy jsou rozdelené do **tierů** podle ceny a rizika (měření a zdůvodnění:
+[docs/21-audit-testu.md](docs/21-audit-testu.md), runbook: [test/qes/README.md](test/qes/README.md)).
+Nepouštěj celou sadu na každý commit — 69 % jejího času jde na upstream specy, které fork
+nemodifikuje.
+
+| Tier | Cíl | Rozsah | Kdy | Naměřeno |
+|---|---|---|---|---|
+| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 404 ex, 43 s |
+| **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 404 ex, **25 s** |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 511 ex, 81 s |
+| **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 511 ex, 43 s |
+| **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 647 ex, 3,5 min |
+| **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 647 ex, **90 s** |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 651 ex, ~5 min |
+| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` (jinak v T0) | 33 ex, 0,2 s |
+| — | `make qes-app-test` | Jest testy appky | po změně appky | 202 ex, 20 s |
+| — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
+| — | `make qes-e2e` / `qes-e2e-two` / `qes-e2e-pdf` / `qes-verify-e2e` | E2E s reálným podpisem | před PR, když se mění signing flow | — |
+| — | `make qes-staging-e2e*` | E2E proti stagingu | po nasazení na staging | — |
+
+Pravidla:
+
+- **T0** je výchozí smyčka; běží i JS testy. Když je T0 zelené, QES vrstva je v pořádku.
+- **T1** přidává upstream specy, které fork nemodifikuje — chytí regresi v dotecích
+  (`template`, `submission`, `submitter`, `submit_values`, `routes`).
+- **T2** přidává `spec/system` — jediná obrana proti regresi `generate_result_attachments`,
+  `generate_combined_attachment` a `generate_audit_trail` při rebase. Proto zůstává v T2.
+- **T3** je parita s upstream CI (Postgres 18). Jen před vydáním.
+- `make qes-test*` mají `pipefail` — červený RSpec už neprojde jako úspěch.
 
 Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -468,6 +505,20 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       (CRL port 8765 ani Capybara Puma nekolidují — jiný netns; round-robin dělení dá jen 1,15×).
       Doporučení: tiering (`qes-test-qes` per-commit, plná sada per-PR), `previews: false` v QES
       šablonách, paralelní shell runner bez `parallel_tests` gemu; kombinace = QES 98 s → ~30 s.
+
+- [x] **Implementace zrychlení testů (2026-10-27):** všechny fáze z `docs/21` § 8 hotové.
+      **Tiery:** T0 `qes-test-qes` (QES + JS), T1 `qes-test-fast` (bez `spec/system`), T2 `qes-test`,
+      T3 `qes-test-postgres`; každý má paralelní variantu (`qes-test-parallel*`, N kontejnerů
+      s vlastní SQLite, dělení podle `test/qes/timings.txt` + LPT, soubory nad 45 s po examplech).
+      **Optimalizace:** `QesHelpers.without_page_previews` (PNG náhledy v `create(:template)` = 97 %
+      ceny; `number_of_pages` zůstává) a cache RSA klíčů v `QesHelpers` (`TSA_KEYS`,
+      `SELF_SIGNED_QC_SSCD`, cert jako kopie). **Opravy:** `pipefail` v Makefile (dřív
+      `rspec | tee` maskoval červený exit kód); 2FA flake root cause = `RateLimit::STORE`
+      je proces-globální `MemoryStore` a SQLite recykluje `submitter.id` → `RateLimit::STORE.clear`
+      v `config.before` + `travel_to(+20 s)` u re-sendu (re-send je omezený na 15 s).
+      Naměřeno: QES **100,3 → 42,2 s** sekvenčně a **25 s** se 4 workery (404/0); T1 157 → 81 s
+      (511/0) a 43 s paralelně; T2 647/0 za 3 min 20 s, paralelně **90 s**; `qes-app-test` 212/0.
+      Runbook: `test/qes/README.md`; tabulka „Testy: kdy co pouštět" v `AGENTS.md`.
 
 - [x] **Expo SDK 54 → 58 (2026-10-26):** `mobile/app` na **SDK 58** (expo 58.0.19, React Native 0.88.0,
       React 19.3.0, expo-router 58, expo-share-intent 9.0.0, jest-expo 58, TypeScript 6). `app.json` bez

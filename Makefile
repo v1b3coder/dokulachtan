@@ -1,4 +1,9 @@
-.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public
+# `pipefail` je potřeba, jinak `rspec … | tee` schová nenulový exit kód RSpecu
+# (make by jinak hlásil úspěch i u červených testů).
+SHELL := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
+.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -56,11 +61,35 @@ qes-test: qes-test-images ## RSpec na SQLite (jako staging) bez fulltext specu �
 	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
 		bundle exec rspec --exclude-pattern "spec/system/dashboard_spec.rb"' 2>&1 | tee test/out/qes-test-report.txt
 
-qes-test-qes: ## RSpec jen QES vrstva na SQLite (rychlá smyčka; do P0.3 vypíše, že specy nejsou)
-	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null; \
-		paths=$$(ls -d spec/lib/qes spec/models/qes_session_spec.rb spec/models/template_spec.rb spec/models/submission_spec.rb spec/jobs/qes spec/requests/qes_*_spec.rb 2>/dev/null); \
-		if [ -z "$$paths" ]; then echo "QES specy zatím nejsou (vzniknou v P0.3) - nic k běhu"; exit 0; fi; \
+# Tiery (docs/21-audit-testu.md § 8): T0 = qes-test-qes, T1 = qes-test-fast,
+# T2 = qes-test / qes-test-parallel-full, T3 = qes-test-postgres.
+QES_PARALLEL_WORKERS ?= 4
+
+qes-test-qes: qes-test-images ## T0: QES vrstva + JS testy (rychlá smyčka) → test/out/qes-report.txt
+	$(QES_RUN) $(QES_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null; \
+		paths=$$(ls -d spec/lib/qes spec/models/qes_session_spec.rb spec/models/template_spec.rb spec/models/submission_spec.rb spec/jobs/qes spec/requests/qes_*_spec.rb spec/requests/doc_ts_verification_spec.rb 2>/dev/null); \
+		if [ -z "$$paths" ]; then echo "QES specy zatím nejsou - nic k běhu"; exit 0; fi; \
 		bundle exec rspec $$paths' 2>&1 | tee test/out/qes-report.txt
+	$(MAKE) qes-js-test
+
+qes-test-fast: qes-test-images ## T1: celá sada bez spec/system (bez Chromia) → test/out/qes-test-fast-report.txt
+	$(QES_RUN) $(QES_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
+		bundle exec rspec spec/models spec/lib spec/requests spec/jobs' 2>&1 | tee test/out/qes-test-fast-report.txt
+
+qes-test-parallel: qes-test-images ## T0 paralelně: QES vrstva, N workerů (QES_PARALLEL_WORKERS=4)
+	./scripts/qes-test-parallel.sh --group qes --workers $(QES_PARALLEL_WORKERS)
+
+qes-test-parallel-fast: qes-test-images ## T1 paralelně: vše kromě spec/system
+	./scripts/qes-test-parallel.sh --group fast --workers $(QES_PARALLEL_WORKERS)
+
+qes-test-parallel-full: qes-test-images ## T2 paralelně: celá sada (potřebuje system image s Chromiem)
+	./scripts/qes-test-parallel.sh --group full --workers $(QES_PARALLEL_WORKERS)
+
+qes-test-timings: qes-test-images ## Přeměří časy spec souborů pro paralelní runner → test/qes/timings.txt
+	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
+		bundle exec rspec --exclude-pattern "spec/system/dashboard_spec.rb" \
+			--format json --out /app/tmp/rspec.json --format progress'
+	./scripts/qes-test-parallel.sh --write-timings
 
 qes-test-postgres: qes-test-images ## Paritní běh celé sady na Postgresu 18 (jako upstream CI)
 	./scripts/qes-test-postgres.sh

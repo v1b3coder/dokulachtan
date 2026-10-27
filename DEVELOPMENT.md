@@ -33,18 +33,33 @@ Pro `spec/system` navíc `make qes-test-assets` (kopie assetů z produkčního i
 
 ## Testovací smyčka
 
-| Příkaz | Co dělá | Kdy |
-|---|---|---|
-| `make qes-test-qes` | QES specy na SQLite | po každé změně QES vrstvy |
-| `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` |
-| `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky |
-| `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky |
-| `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před commitem forku |
-| `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | parita s upstream CI |
+Testy jsou rozdělené do tierů podle ceny a rizika (měření a zdůvodnění:
+[docs/21-audit-testu.md](docs/21-audit-testu.md)). Výchozí smyčka při vývoji QES je **T0**,
+plná sada patří k PR/release, ne k každému commitu.
 
-Naměřeno 2026-10-23: `qes-test-qes` 149/0, `qes-test` 392/1 (známý upstream flake
-`signing_form_spec.rb:1253`), `qes-test-postgres` 396/0, `qes-js-test` 9/0.
-Podrobnosti a pasti: [test/qes/README.md](test/qes/README.md).
+| Tier | Příkaz | Co dělá | Kdy | Naměřeno |
+|---|---|---|---|---|
+| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | 404/0 za 43 s |
+| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | 404/0 za **25 s** |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 513/0 za 75 s |
+| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 513/0 za ~35 s |
+| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | 647/0 za 3 min 20 s |
+| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | 647/0 za **90 s** |
+| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | 651/0 za 3 min 37 s |
+| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | 33/0 za 0,2 s |
+| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | 212/0 za 13 s |
+| — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
+| — | `make qes-test-timings` | přeměří časy spec souborů pro paralelní runner | po velké změně skladby speců | — |
+
+Pro `spec/system` navíc `make qes-test-assets` (kopie assetů z produkčního image).
+
+`make qes-test-parallel*` = N kontejnerů (`QES_PARALLEL_WORKERS`, default 4), každý
+s vlastní SQLite DB. Dělení podle naměřených časů v `test/qes/timings.txt`, soubory nad
+45 s se dělí po examplech (`file:řádek`), aby jeden soubor nedržel podlahu. Detaily:
+[test/qes/README.md](test/qes/README.md).
+
+`make qes-test` a spol. mají `pipefail`, takže červený RSpec už neprojde jako úspěch
+(dřív `rspec … | tee` maskoval exit kód).
 
 ## E2E
 
