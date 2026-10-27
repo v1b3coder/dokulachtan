@@ -123,7 +123,7 @@ def build_crl(root_name, root_key, revoked_serial: int | None) -> bytes:
         x509.CertificateRevocationListBuilder()
         .issuer_name(root_name)
         .last_update(now - dt.timedelta(days=1))
-        .next_update(now + dt.timedelta(days=30))
+        .next_update(now + dt.timedelta(days=3650))
     )
     if revoked_serial is not None:
         builder = builder.add_revoked_certificate(
