@@ -343,8 +343,26 @@ export default function SignPdfScreen() {
       {!document ? (
         <>
           <Text style={styles.label}>Soubor PDF</Text>
-          <SecondaryButton title={file ? file.name : 'Vybrat PDF'} onPress={pickFile} />
-          {file ? <TextButton title="Zkontrolovat PDF" onPress={reviewLocalFile} /> : null}
+          <SecondaryButton title="Vybrat PDF" onPress={pickFile} />
+          {file ? (
+            <>
+              <TouchableOpacity
+                style={styles.fileOpen}
+                onPress={reviewLocalFile}
+                accessibilityRole="link"
+                accessibilityLabel={`Otevřít místní PDF: ${file.name}`}
+              >
+                <Text style={styles.fileOpenLabel}>Otevřít</Text>
+                <Text style={styles.fileOpenName} numberOfLines={1} ellipsizeMode="middle">
+                  {file.name}
+                </Text>
+                <Text style={styles.fileOpenChevron}>›</Text>
+              </TouchableOpacity>
+              <Text style={styles.fileOpenCaption}>
+                Místní soubor před nahráním. Podepisuje se verze s pečetí.
+              </Text>
+            </>
+          ) : null}
 
           <Text style={styles.label}>Jméno do pečeti</Text>
           <TextInput
@@ -503,6 +521,18 @@ const styles = StyleSheet.create({
   detail: { color: '#b45309', fontSize: 12 },
   row: { flexDirection: 'row', gap: 8 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fileOpen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+  },
+  fileOpenLabel: { color: '#6b7280', fontSize: 12, fontWeight: '600', textDecorationLine: 'underline' },
+  fileOpenName: { flex: 1, color: '#6b7280', fontSize: 12 },
+  fileOpenChevron: { color: '#9ca3af', fontSize: 14 },
+  fileOpenCaption: { color: '#6b7280', fontSize: 10.5, lineHeight: 14, marginTop: -2, marginBottom: 2 },
   chip: { borderColor: '#291334', borderWidth: 1, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
   chipActive: { backgroundColor: '#291334' },
   chipText: { color: '#291334', fontWeight: '600' },

@@ -156,8 +156,10 @@ v náhledu Podepsat (plné) → Vybrat jiné PDF (obrys) → Zrušit (obrys).
 
 **Nově, výběr:**
 
-1. Label „Soubor PDF“ + **sekundární** „Vybrat PDF“ / název souboru a „Změnit“;
-   po výběru **terciární** „Zkontrolovat PDF“ (místní soubor, bez serveru a klíče).
+1. Label „Soubor PDF“ + **sekundární** „Vybrat PDF“ (label zůstává i po výběru; žádné
+   nahrazení názvem souboru). Po výběru se pod tlačítkem objeví malý **terciární**
+   odkaz **„Otevřít“ + název souboru** (místní soubor před nahráním; podepisuje se
+   verze s pečetí). Žádný samostatný řádek „Zkontrolovat PDF“.
 2. Jméno do pečeti, úroveň (beze změny).
 3. Chyba těsně nad akcí.
 4. **Primární** „Pokračovat“ (vypnuté bez souboru) — jen upload a založení session,
