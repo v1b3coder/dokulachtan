@@ -428,6 +428,15 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       upstreamu: 20 souborů +487/−41 → 21 souborů +629/−94 (nejvyšší churn `verify_pdf_signature.rb`
       zůstal na nule); `make qes-test` 624/1 (známý upstream flake), `make qes-test-qes` 365/0
 
+- [x] **Audit druhého kola a opravy (2026-10-27):** nálezy N1–N8 a S1–S7
+      z druhé kontroly (docs/20-audit-2026-10-27-opravy.md) — QES snapshot polí,
+      CRL scope, transport redirecty, PDF prohlížeč, DocTS verifikace, values
+      v prohlížeči, 24h TTL dokončeného tokenu, session-token dokončení,
+      revokace nad store chain, atomické přechody, `valid_unqualified`,
+      DNS chyby a QES hooky při vypnutém QES; S4 release keystore už hotový.
+      Ověřeno: QES 401/0, SQLite 646/1 (známý upstream flake), Postgres 650/0,
+      app 203/0, typecheck a JS testy zelené.
+
 - [x] **Expo SDK 54 → 58 (2026-10-26):** `mobile/app` na **SDK 58** (expo 58.0.19, React Native 0.88.0,
       React 19.3.0, expo-router 58, expo-share-intent 9.0.0, jest-expo 58, TypeScript 6). `app.json` bez
       zrušených polí (`newArchEnabled`, `android.minSdkVersion`, `splash` → plugin `expo-splash-screen`);
