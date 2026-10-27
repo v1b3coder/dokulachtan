@@ -92,7 +92,6 @@ export default function SignScreen() {
 
   const [reviewPdf, setReviewPdf] = useState<Uint8Array | null>(null);
   const [reviewOpened, setReviewOpened] = useState(false);
-  const pendingReviewOpen = useRef(false);
   const [openingPdf, setOpeningPdf] = useState(false);
   const consent = useRef<((confirmed: boolean) => void) | null>(null);
   const signingLock = useRef(false);
@@ -132,13 +131,7 @@ export default function SignScreen() {
     try {
       await previewPdf(reviewPdf);
       if (currentReview !== reviewGeneration.current) return;
-      // Na Androidu se PDF otevírá v externí appce; náhled je potvrzený až
-      // po návratu do appky, ne po startActivity (N4).
-      if (Platform.OS === 'android') {
-        pendingReviewOpen.current = true;
-      } else {
-        setReviewOpened(true);
-      }
+      setReviewOpened(true);
       setError(null);
     } catch {
       if (currentReview === reviewGeneration.current) setError('pdf_viewer_unavailable');
@@ -249,10 +242,6 @@ export default function SignScreen() {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         setBusy(false);
-        if (pendingReviewOpen.current) {
-          pendingReviewOpen.current = false;
-          setReviewOpened(true);
-        }
       }
     });
 
