@@ -146,7 +146,7 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   Detail: `docs/15-primy-podpis-pdf.md` § 8.
 - **Testovací APK:** <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> (Fly app
   `dokulachtan-download`, `deploy/apk/`; obsahuje testovací certifikát a stub čtečky).
-  Verze v repu **1.3.8** (versionCode 10308, debug podpis `fac61745…3b9c`; na Fly **1.3.8**) — **přímý podpis PDF
+  Verze v repu **1.3.9** (versionCode 10309, debug podpis `fac61745…3b9c`; na Fly **1.3.8**) — **přímý podpis PDF
   nativním tokem DocuSealu** („Podepsat PDF“ → náhled → klepnutí → podpis → dokument ve složce
   „Direct signing“, „Stáhnout“ (uložit do telefonu, volitelně jinam) / „Otevřít“ / „Sdílet“),
   **sdílení PDF do appky** (Android share sheet „Podepsat PDF“)
