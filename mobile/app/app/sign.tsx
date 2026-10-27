@@ -591,7 +591,7 @@ export default function SignScreen() {
         </>
       ) : done ? (
         <>
-          <Text style={styles.title}>Podepsáno ({done.level.toUpperCase()})</Text>
+          <Text style={styles.title}>Podepsáno ({done.level?.toUpperCase() ?? 'PDF'})</Text>
           <Text style={styles.muted}>
             {isPdfFlow
               ? 'PDF je podepsané a uložené v DocuSealu ve složce „Direct signing“. Stáhněte si ho nebo ho nasdílejte.'

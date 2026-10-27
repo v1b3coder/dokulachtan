@@ -208,7 +208,7 @@ Smazáním dokumentu v UI zmizí i PDF — žádný vlastní úklid QES nad PDF 
 - **Negativní** `make qes-negative` (N1–N17): N10 bez tokenu → `401`; N11 ne-PDF → `422 invalid_pdf`;
   N12 příliš velké → `422 file_too_large`; N13 šifrované → `422 encrypted_pdf`; N14 už podepsané → `422 already_signed`;
   N15 nepodporovaná úroveň → `422 invalid_level`; N16 cizí API token → `403`; N17 druhé spuštění obřadu zruší první.
-- **Appka** `make qes-app-test` (210/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
+- **Appka** `make qes-app-test` (211/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
   lokální fork + `adb reverse`): výběr PDF → náhled → klepnutí → podpis → stažení a sdílení.
 - **Appka – uložení a sdílení** (2026-10-25): `__tests__/pdfShare.test.ts` (stažení do cache,
   uložení do telefonu, share sheet, fallback, zrušení); na emulátoru uloženo do

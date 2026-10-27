@@ -21,7 +21,10 @@ import {
   savePdf,
   sharePdf,
   SAVE_FOLDER_KEY,
+  verifyFinalPdf,
 } from '../src/lib/pdfShare';
+import { sha256Hex } from '../src/lib/preparedDocument';
+import { preparedPdf } from './helpers/preparedPdf';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android', Version: 36 } }));
 
@@ -346,4 +349,26 @@ describe('pdfShare', () => {
 
     await expect(previewPdf(new Uint8Array([1]))).rejects.toMatchObject({ code: 'no_pdf_viewer' });
   });
+});
+
+it('verifies the downloaded final PDF hash and reviewed bytes', async () => {
+  const fixture = preparedPdf('sha256');
+  const final = file('file:///cache/final.pdf', fixture.bytes);
+
+  await expect(verifyFinalPdf(final, {
+    finalSha256: sha256Hex(fixture.bytes),
+    reviewedDocument: fixture.bytes,
+  })).resolves.toBeUndefined();
+
+  await expect(verifyFinalPdf(final, {
+    finalSha256: '00',
+    reviewedDocument: fixture.bytes,
+  })).rejects.toMatchObject({ code: 'verification_failed' });
+
+  const tampered = new Uint8Array(fixture.bytes);
+  tampered[tampered.length - 2] = 0x20;
+
+  await expect(verifyFinalPdf(file('file:///cache/tampered.pdf', tampered), {
+    reviewedDocument: fixture.bytes,
+  })).rejects.toMatchObject({ code: 'verification_failed' });
 });

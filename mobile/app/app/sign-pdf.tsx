@@ -172,7 +172,7 @@ export default function SignPdfScreen() {
     }
   }
 
-  async function uploadFile(upload: PdfUpload) {
+  async function uploadFile(upload: PdfUpload): Promise<boolean> {
     setBusy(true);
     setError(null);
     setErrorDetail(null);
@@ -181,7 +181,7 @@ export default function SignPdfScreen() {
       const client = api();
       if (!client) {
         setError('not_authenticated');
-        return;
+        return false;
       }
       const expected = localSha256 ?? await sha256File(upload).catch(() => null);
       const created = await client.createDocument(upload, { displayName, levelRequired: level });
@@ -190,7 +190,7 @@ export default function SignPdfScreen() {
         setError('source_mismatch');
         setErrorDetail('Server přijal jiný soubor, než jste vybrali.');
         setDocument(null);
-        return;
+        return false;
       }
 
       setLocalSha256(expected);
@@ -202,8 +202,12 @@ export default function SignPdfScreen() {
       if (created.normalized) {
         setErrorDetail('PDF bylo normalizováno (rotace stránek).');
       }
+
+      return true;
     } catch (err) {
       fail(err);
+
+      return false;
     } finally {
       setBusy(false);
     }
@@ -233,8 +237,11 @@ export default function SignPdfScreen() {
     setSession(null);
     setSubmittedArea(null);
     setPosition(null);
-    void uploadFile(shared);
-    router.setParams({ share: '', name: '' });
+    void uploadFile(shared).then((ok) => {
+      if (ok) {
+        router.setParams({ share: '', name: '' });
+      }
+    });
   }, [ready, shared?.uri]);
 
   async function place() {
