@@ -181,6 +181,7 @@ export default function SignScreen() {
     || error === 'failed' || error === 'cancelled'
     || error === 'values_changed' || error === 'document_set_changed'
     || error === 'signing_context_mismatch';
+  const pending = error === 'server_pending';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
   // Klient pro stažení finálního PDF (docs/15 § 5).
@@ -434,6 +435,42 @@ export default function SignScreen() {
     return { file, name };
   }, [session, pdfApi, done?.finalPdfSha256, reviewPdf]);
 
+  // Po 202/embedded appka polluje session; podpis se už neopakuje.
+  const checkCompletion = useCallback(async () => {
+    if (!token || !serverUrl) return;
+
+    setBusy(true);
+    setError(null);
+    setErrorDetail(null);
+
+    try {
+      const payload = await (await qesApi()).getSession();
+
+      if (payload.state === 'completed') {
+        const verified = reviewDigest ? payload.document_digest === reviewDigest : null;
+
+        setDone({
+          level: payload.level,
+          digest: payload.document_digest,
+          verified,
+          validation: payload.validation,
+          sealState: payload.seal_state,
+          docTimestampState: payload.doc_timestamp_state,
+          finalPdfSha256: payload.final_pdf_sha256,
+        });
+
+        if (isPdfFlow && verified !== false) void finishSubmission(payload.submitter_id);
+      } else {
+        setError('server_pending');
+      }
+    } catch (err) {
+      setError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
+      setErrorDetail(err instanceof Error ? err.message : null);
+    } finally {
+      setBusy(false);
+    }
+  }, [token, serverUrl, qesApi, reviewDigest, isPdfFlow, finishSubmission]);
+
   const failAction = useCallback((err: unknown) => {
     if (err instanceof PdfActionError || err instanceof PdfApiError || err instanceof SigningOriginError) {
       setActionError(ERROR_TEXT[err.code] ?? err.code);
@@ -629,7 +666,13 @@ export default function SignScreen() {
                 onPress={() => openReview()}
                 disabled={openingPdf}
               />
-              {terminal ? (
+              {pending ? (
+                <PrimaryButton
+                  title={busy ? 'Zjišťuji…' : 'Zkontrolovat znovu'}
+                  onPress={checkCompletion}
+                  disabled={busy}
+                />
+              ) : terminal ? (
                 <PrimaryButton title="Zavřít" onPress={leaveSignScreen} />
               ) : needsSetup ? (
                 <PrimaryButton title="Nastavit podepisování" onPress={() => router.push('/setup')} />
@@ -640,7 +683,7 @@ export default function SignScreen() {
                   disabled={!reviewOpened || signing}
                 />
               )}
-              {!terminal ? <TextButton title="Zrušit" onPress={cancelReview} /> : null}
+              {!terminal && !pending ? <TextButton title="Zrušit" onPress={cancelReview} /> : null}
             </>
           ) : terminal ? (
             <PrimaryButton title="Zavřít" onPress={leaveSignScreen} />

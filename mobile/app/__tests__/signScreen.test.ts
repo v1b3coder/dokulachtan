@@ -1,7 +1,7 @@
 import React from 'react';
 import { QesApi } from '../src/lib/api';
 import { PdfApi } from '../src/lib/pdfApi';
-import { runSigningCeremony } from '../src/lib/ceremony';
+import { CeremonyError, runSigningCeremony } from '../src/lib/ceremony';
 import { downloadPdf, previewPdf, sharePdf } from '../src/lib/pdfShare';
 import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
@@ -73,6 +73,25 @@ it('offers saving retry after a signature and retries only submission completion
   expect(complete).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenLastCalledWith();
   expect(runSigningCeremony).toHaveBeenCalledTimes(1);
+  await act(async () => screen.unmount());
+});
+
+it('offers check again when the server is still completing', async () => {
+  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError('server_pending'));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await signOnScreen(screen);
+  expect(screen.root.findByProps({ title: 'Zkontrolovat znovu' })).toBeTruthy();
+
+  jest.mocked(QesApi.prototype.getSession).mockResolvedValueOnce({
+    state: 'completed', session_id: 1, submitter_id: 42, level: 'ades',
+    document_digest: fixture.prepared.document_digest, signed_pdf_sha256: 'hash',
+  });
+  jest.spyOn(QesApi.prototype, 'completeSubmission')
+    .mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true });
+  await act(async () => { await screen.root.findByProps({ title: 'Zkontrolovat znovu' }).props.onPress(); });
+  await act(async () => {});
+  expect(screen.root.findByProps({ title: 'Stáhnout' })).toBeTruthy();
   await act(async () => screen.unmount());
 });
 
