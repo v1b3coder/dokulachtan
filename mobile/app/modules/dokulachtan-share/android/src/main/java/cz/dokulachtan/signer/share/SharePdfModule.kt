@@ -2,8 +2,10 @@ package cz.dokulachtan.signer.share
 
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -63,6 +65,18 @@ class SharePdfModule : Module() {
       val intent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(target, mimeType)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Vlastní appka se nesmí nabídnout jako PDF prohlížeč, jinak by
+        // náhled otevřel import/ověření místo zobrazení (N4).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+          putExtra(
+            Intent.EXTRA_EXCLUDE_COMPONENTS,
+            arrayOf(
+              ComponentName(context.packageName, "${context.packageName}.MainActivity"),
+              ComponentName(context.packageName, "${context.packageName}.SharePdfAlias"),
+              ComponentName(context.packageName, "${context.packageName}.OpenPdfAlias")
+            )
+          )
+        }
       }
 
       try {
