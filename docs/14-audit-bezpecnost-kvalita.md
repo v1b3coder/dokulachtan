@@ -217,22 +217,33 @@ App Links navíc kvůli M2 nefungují). Appka:
 (`EXPO_PUBLIC_API_URL`); další volání jen na `payload.server_url`, a to pouze pokud se rovná
 nakonfigurovanému hostu (nebo projde allowlistem); v UI zobrazit host. Test na to chybí.
 
-### M2 ❌ Release APK je podepsaný veřejným Android debug klíčem, `assetlinks.json` nesedí
+### M2 ✅ Release APK se podepisuje vlastním keystorem (2026-10-27)
 
-`mobile/app/android/app/build.gradle:115` → `release { signingConfig signingConfigs.debug }`.
+**Původní stav:** `mobile/app/android/app/build.gradle:115` → `release { signingConfig signingConfigs.debug }`.
 Ověřeno z distribuovaného APK (`deploy/apk/dokulachtan-signer.apk`): podepsán
 `CN=Android Debug` s SHA-256 `FA:C6:17:45:DC:09:03:78:…:9C` (veřejný debug klíč, heslo `android`).
-Staging ale publikuje `sha256_cert_fingerprints: ["48b1810c40e8dfefa011c23fb1fa4af85b199624d623e003b8d48f056fadd8ed"]`
+Staging publikoval `sha256_cert_fingerprints: ["48b1810c40e8dfefa011c23fb1fa4af85b199624d623e003b8d48f056fadd8ed"]`
 (`curl https://dokulachtan.fly.dev/.well-known/assetlinks.json`) → **nesouhlasí**.
 
-Důsledky:
-1. App Links (autoVerify) pro distribuovaný APK **nefungují** — primární `https://…/qes/sign` se neotevře,
-   reálně se používá neověřený custom scheme, který může zaregistrovat i cizí appka a token převzít.
-2. Kdokoli může sestavit APK se stejným package name a debug podpisem, který Android přijme jako
-   update nainstalované appky (přístup k SecureStore/Keystore vaultu).
+**Oprava:** `deploy/android-release/` drží privátní release keystore (gitignored) a
+`mobile/app/plugins/withReleaseSigning.js` při `expo prebuild` přidá `signingConfigs.release`;
+release build použije release config jen když je `ANDROID_KEYSTORE_PATH` nastavená, jinak zůstává
+debug pro lokální build. CI `.github/workflows/android-release.yml` dekóduje
+`ANDROID_KEYSTORE_BASE64`, předá hesla a po buildu ověří APK proti
+`ANDROID_RELEASE_CERT_SHA256`; když otisk nesedí, release nevytvoří.
 
-**Oprava:** vlastní keystore pro release, fingerprint dostat do `QES_ANDROID_CERT_SHA256` a ověřit
-`assetlinks` proti skutečnému APK; produkce bez debug klíče.
+Release certifikát má SHA-256
+`80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`.
+Na stagingu i produkci je potřeba nastavit `QES_ANDROID_CERT_SHA256` na tento otisk.
+Testovací APK na `dokulachtan-download.fly.dev` zůstává debug (samostatný účel).
+Stávající debug instalace vyžadují reinstalaci a nový import `.p12` — jiný podpis nejde
+aktualizovat.
+
+Důsledky původního stavu:
+1. App Links (autoVerify) pro distribuovaný APK **nefungovaly** — primární `https://…/qes/sign` se neotevřel,
+   reálně se používal neověřený custom scheme, který mohl zaregistrovat i cizí appka a token převzít.
+2. Kdokoli mohl sestavit APK se stejným package name a debug podpisem, který Android přijal jako
+   update nainstalované appky (přístup k SecureStore/Keystore vaultu).
 
 ### M3 ❌ Testovací privátní klíče jsou v každém buildu včetně release
 
@@ -376,7 +387,8 @@ akceptovat s vysvětlením.
 4. **K4** — opravit ASN.1 `crlVals [1]` (+ OCSP `[0]`); offline test `trusted=True`; `make qes-e2e`
    rozšířit na kontrolu `TRUSTED`.
 5. **M1** — odstranit `server` z deep linku, použít `server_url` z payloadu + allowlist; test.
-6. **M2** — vlastní keystore pro release, sladit `assetlinks.json`, produkce bez debug klíče.
+6. **M2** — ✅ release keystore v `deploy/android-release/` + CI secrets; zbývá nastavit
+   `QES_ANDROID_CERT_SHA256` na stagingu/produkci a počítat s reinstalací stávajících debug instalací.
 7. **M3** — testovací PKCS#12 jen v dev buildu; odstranit tlačítka z produkčního UI.
 8. **K5/K6** — `with_lock` + `LockEvent` + 409 při jiné signatuře.
 9. **M4/M5** — biometrie pro import/smazání, `disableDeviceFallback`, `biometricsSecurityLevel: 'strong'`.

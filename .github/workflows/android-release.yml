@@ -4,8 +4,8 @@ name: Android APK release
 # Běží na GitHubu i na Gitea Actions (Gitea čte .github/workflows a je
 # kompatibilní se syntaxí GitHub Actions); release krok se podle hostu rozhodne
 # mezi `gh` (GitHub) a REST API Gitea, protože `gh` s Giteou neumí mluvit.
-# Podpis: debug keystore z `expo prebuild` (jako dosavadní testovací APK).
-# Release keystore viz docs/14-audit-bezpecnost-kvalita.md, nález M2.
+# Podpis: release keystore z CI secrets; lokální buildy používají debug keystore.
+# Keystore se generuje mimo repo (deploy/android-release/, gitignored).
 
 on:
   push:
@@ -55,6 +55,18 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
 
+      - name: Připravit release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Chybí secret ANDROID_KEYSTORE_BASE64" >&2
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+
       - name: Nainstalovat závislosti
         working-directory: mobile/app
         run: npm ci
@@ -73,6 +85,10 @@ jobs:
 
       - name: Sestavit APK
         working-directory: mobile/app/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon
 
       - name: Připravit APK
@@ -81,10 +97,22 @@ jobs:
             "dokulachtan-signer-${RELEASE_TAG}.apk"
           echo "APK_NAME=dokulachtan-signer-${RELEASE_TAG}.apk" >> "$GITHUB_ENV"
 
-      - name: Otisk podpisového certifikátu
+      - name: Ověřit release podpis
+        env:
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
         run: |
+          if [ -z "$ANDROID_RELEASE_CERT_SHA256" ]; then
+            echo "Chybí secret ANDROID_RELEASE_CERT_SHA256" >&2
+            exit 1
+          fi
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
-          "$APKSIGNER" verify --print-certs "$APK_NAME" | grep SHA-256
+          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK_NAME" | awk -F': ' '/SHA-256/{print $3; exit}' | tr 'A-F' 'a-f')"
+          EXPECTED="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -d ':' | tr 'A-F' 'a-f')"
+          echo "APK SHA-256: $ACTUAL"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "APK není podepsané release certifikátem" >&2
+            exit 1
+          fi
 
       - name: Vytvořit release
         env:

@@ -78,7 +78,8 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
   (testovací klíče fungují, reálné PostSignum certy také)
 - `QES_REQUIRE_LTV=false` (testovací CRL DP `127.0.0.1:8765` není dostupné)
 - `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`
-- `QES_ANDROID_CERT_SHA256=<fingerprint testovacího APK>` pro `assetlinks.json`
+- `QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
+  (release keystore z `deploy/android-release/`; lokální debug build má jiný otisk)
 
 ## Konkrétní kroky (až se bude nasazovat)
 

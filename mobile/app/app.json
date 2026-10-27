@@ -64,6 +64,7 @@
         }
       ],
       "./plugins/withSharePdfTarget.js",
+      "./plugins/withReleaseSigning.js",
       [
         "expo-splash-screen",
         {

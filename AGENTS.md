@@ -91,8 +91,14 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   kvalifikované TSA zatím nekupujeme).
 - healthcheck `/up` = 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
   `SECRET_KEY_BASE` + `docuseal.env` + SQLite na volume.
-- Testovací APK na produkci App Links neotevře (`QES_ANDROID_CERT_SHA256` nenastaveno) a podpis
-  testovacím certem skončí na `ltv_unavailable` (test CRL není dostupné, `QES_REQUIRE_LTV=true`).
+- Testovací APK na produkci App Links neotevře (pro testovací APK není `QES_ANDROID_CERT_SHA256`
+  nastaveno) a podpis testovacím certem skončí na `ltv_unavailable` (test CRL není dostupné,
+  `QES_REQUIRE_LTV=true`).
+- **Release podpis (2026-10-27):** release APK se podepisuje vlastním keystorem z CI secrets
+  (`deploy/android-release/`, gitignored); lokální buildy bez `ANDROID_KEYSTORE_PATH` používají debug
+  keystore. Release cert SHA-256 `80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
+  musí být v `QES_ANDROID_CERT_SHA256` na produkci i stagingu. Stávající debug instalace
+  vyžadují reinstalaci a nový import `.p12` (jiný podpis = žádná aktualizace).
 - Ověřeno 2026-10-18: `trusted_roots` = 6× PostSignum, test cert `trusted=false`, `require_ltv=true`,
   reálný CRL fetch z produkce OK (`PostSignum Qualified CA 4`, 22 510 revoked).
 - První účet (setup) vytváří uživatel v prohlížeči; SMTP nastaveno (Brevo, `SMTP_FROM=<SMTP_FROM>`,

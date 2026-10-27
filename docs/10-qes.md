@@ -199,7 +199,7 @@ QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 #   root.crt = testovací root (testovací APK), postsignum.pem = reálné PostSignum CA
 #   (Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1 + Qualified ECC R1 CA1/CA3)
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
-QES_ANDROID_CERT_SHA256=<sha256 debug keystore appky>  # pro /.well-known/assetlinks.json
+QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0  # release keystore; lokální debug build má jiný
 QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
 QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
 QES_TSA_REQUIRED=true
@@ -234,13 +234,15 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
 **<https://dokulachtan-download.fly.dev/dokulachtan-signer.apk>**
 
 - `deploy/apk/` obsahuje nginx image s APK (build se negituje, `deploy/apk/*.apk` je v `.gitignore`).
-- Build: `cd mobile/app && npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`.
+- Build: `cd mobile/app && npx expo prebuild --platform android && cd android && ./gradlew assembleRelease`
+  (bez `ANDROID_KEYSTORE_PATH` = debug keystore pro lokální build; release v CI viz
+  `deploy/android-release/README.md`).
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release
-  s přiloženým APK (verze z tagu se zapíše do `app.json`); otisk podpisu vypíše do logu.
-- `QES_ANDROID_CERT_SHA256` na stagingu odpovídá podpisu tohoto buildu, takže `assetlinks.json`
-  na stagingu sedí; build APK ale deklaruje jen host `dokulachtan.fly.dev`, proto HTTPS App Links
-  na stagingu appku neotevřou — použij tlačítko „Otevřít appku“ (custom scheme
-  `dokulachtan://sign?token=…`, funguje vždy) a v appce přepni *Nastavení → Server URL* na staging.
+  s přiloženým APK (verze z tagu se zapíše do `app.json`); podpis ověří proti
+  `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
+- `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **release** podpisu (`deploy/android-release/`);
+  lokální debug build má jiný otisk, proto `assetlinks.json` na stagingu sedí jen pro release APK.
+  Testovací APK na `dokulachtan-download.fly.dev` je debug a App Links na produkci neotevře.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…"`
   → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
 
