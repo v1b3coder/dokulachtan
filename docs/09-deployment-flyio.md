@@ -64,7 +64,8 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
   (nový prázdný volume; starý `dokulachtan_data` s testovacími daty zůstává odpojený)
 - `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA, bez test rootu)
 - `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=false`, `QES_ENABLED=true`
-- `QES_ANDROID_CERT_SHA256` nenastaveno (testovací APK na produkci App Links neotevírá)
+- `QES_ANDROID_CERT_SHA256=80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0`
+  (release APK; testovací APK na `dokulachtan-download` má debug podpis a App Links neotevře)
 - healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet)
 - migrace proběhly automaticky při startu; `SECRET_KEY_BASE` a `docuseal.env` na volume
 - SMTP zatím nenastaveno (`deploy/smtp.env` neexistuje)
