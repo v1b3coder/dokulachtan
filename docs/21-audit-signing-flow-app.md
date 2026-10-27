@@ -546,5 +546,5 @@ Cílový tok výše tyhle mezery zavírá bez bourání dobré části (`verifyP
 
 - `make qes-app-test` → **211/211**.
 - `make qes-app-typecheck` → čisté.
-- `make qes-test-qes` → **401/0**.
+- `make qes-test-qes` → **402/0**.
 - `reviewOpened` zůstává po `startActivity` (rozhodnutí uživatele 2026-10-27).
