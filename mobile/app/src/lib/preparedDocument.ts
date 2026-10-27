@@ -11,6 +11,48 @@ const HASH_OIDS: Record<HashAlgorithm, string> = {
   sha512: '2.16.840.1.101.3.4.2.3',
 };
 
+export function normalizePdfName(value: string): string {
+  return value.replace(/#([0-9A-Fa-f]{2})/g, (_, hex: string) =>
+    String.fromCharCode(parseInt(hex, 16)));
+}
+
+function dictionaryEnd(value: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < value.length - 1; index += 1) {
+    if (value.startsWith('<<', index)) {
+      depth += 1;
+      index += 1;
+    } else if (value.startsWith('>>', index)) {
+      depth -= 1;
+      index += 1;
+      if (depth === 0) return index + 1;
+    }
+  }
+
+  return -1;
+}
+
+export function isEncryptedPdf(binary: string): boolean {
+  const tail = normalizePdfName(binary.slice(-65_536));
+  const dictionaries: string[] = [];
+  let offset = 0;
+
+  while ((offset = tail.indexOf('<<', offset)) >= 0) {
+    const end = dictionaryEnd(tail, offset);
+
+    if (end < 0) break;
+    const dictionary = tail.slice(offset, end);
+    const before = tail.slice(Math.max(0, offset - 20), offset);
+
+    if (before.includes('trailer') || /\/Type\s*\/XRef/.test(dictionary)) {
+      dictionaries.push(dictionary);
+    }
+    offset = end;
+  }
+
+  return dictionaries.some((dictionary) => /\/Encrypt\b/.test(dictionary));
+}
+
 export function verifyPreparedDocument(
   pdf: Uint8Array,
   prepared: QesCertificatePayload,
@@ -20,6 +62,11 @@ export function verifyPreparedDocument(
   if (!Object.hasOwn(HASH_OIDS, algorithm) || prepared.hash_algorithm !== algorithm
     || prepared.digest_algorithm_oid !== HASH_OIDS[algorithm]) throw new Error('hash algorithm');
 
+  const binary = uint8ToBinary(pdf);
+  if (isEncryptedPdf(binary)) {
+    throw new Error('encrypted');
+  }
+
   const range = prepared.byte_range;
   if (!Array.isArray(range) || range.length !== 4 || !range.every(Number.isSafeInteger)) {
     throw new Error('byte range');
@@ -28,7 +75,6 @@ export function verifyPreparedDocument(
   if (start !== 0 || firstLength <= 0 || secondStart <= firstLength || secondLength <= 0
     || secondStart + secondLength !== pdf.length) throw new Error('byte range');
 
-  const binary = uint8ToBinary(pdf);
   const prefix = binary.slice(0, firstLength);
   const gap = binary.slice(firstLength, secondStart);
   if (!binary.startsWith('%PDF-') || !/%%EOF\s*$/.test(binary)
@@ -36,8 +82,10 @@ export function verifyPreparedDocument(
     throw new Error('contents gap');
   }
   // Šifrované PDF by se otevřelo s dotazem na heslo, takže by ho uživatel
-  // nemusel vidět; podepsat ho nesmíme.
-  if (/\/Encrypt\s+\d+\s+\d+\s+R/.test(binary)) {
+  // nemusel vidět; podepsat ho nesmíme. Heuristika hledá /Encrypt jen
+  // v traileru/xref streamu a normalizuje jména (#xx); autoritativní kontrola
+  // je na serveru (HexaPDF).
+  if (isEncryptedPdf(binary)) {
     throw new Error('encrypted');
   }
   // `/ByteRange` musí být zapsaný hned před mezerou `/Contents`, ne kdekoliv

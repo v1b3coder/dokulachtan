@@ -1,15 +1,25 @@
 import { createHash } from 'node:crypto';
 import forge from 'node-forge';
-import { verifyPreparedDocument } from '../src/lib/preparedDocument';
+import { isEncryptedPdf, verifyPreparedDocument } from '../src/lib/preparedDocument';
 import { preparedPdf, signedAttrs } from './helpers/preparedPdf';
 
-it('rejects an encrypted PDF', () => {
+it('rejects an encrypted PDF with the marker in the trailer', () => {
   const { bytes, prepared } = preparedPdf('sha256');
-  const encrypted = new Uint8Array(bytes);
-  const marker = new TextEncoder().encode('/Encrypt 7 0 R');
-  encrypted.set(marker, 9);
+  const text = Buffer.from(bytes).toString('binary')
+    .replace('trailer\n<< /Size 8 /Root 1 0 R >>', 'trailer\n<< /Size 8 /Root 1 0 R /Encrypt 7 0 R >>');
+  const encrypted = new Uint8Array(Buffer.from(text, 'binary'));
 
   expect(() => verifyPreparedDocument(encrypted, prepared, 'sha256')).toThrow('encrypted');
+});
+
+it('detects an escaped /Encrypt name and a direct dictionary', () => {
+  expect(isEncryptedPdf('%PDF-1.7\ntrailer\n<< /Encr#79pt 7 0 R >>\n%%EOF')).toBe(true);
+  expect(isEncryptedPdf('%PDF-1.7\ntrailer\n<< /Encrypt << /Filter /Standard >> >>\n%%EOF')).toBe(true);
+});
+
+it('does not reject unencrypted content that merely mentions /Encrypt', () => {
+  expect(isEncryptedPdf('%PDF-1.7\n1 0 obj\n<< /Length 24 >>\nstream\n/Encrypt 7 0 R here!\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF'))
+    .toBe(false);
 });
 
 it('rejects a /ByteRange that is not the one in front of /Contents', () => {
