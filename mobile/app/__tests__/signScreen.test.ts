@@ -2,7 +2,8 @@ import React from 'react';
 import { QesApi } from '../src/lib/api';
 import { PdfApi } from '../src/lib/pdfApi';
 import { runSigningCeremony } from '../src/lib/ceremony';
-import { downloadPdf, sharePdf } from '../src/lib/pdfShare';
+import { downloadPdf, previewPdf, sharePdf } from '../src/lib/pdfShare';
+import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
 
 const { create, act } = require('react-test-renderer');
@@ -14,9 +15,9 @@ jest.mock('../src/lib/platform', () => ({ platformVaultDeps: () => ({ storage: {
 jest.mock('../src/lib/pdfShare', () => ({
   ...jest.requireActual('../src/lib/pdfShare'),
   sharePdf: jest.fn(),
-  previewPdf: jest.fn(),
   loadSaveFolder: jest.fn().mockResolvedValue(null),
-  downloadPdf: jest.fn().mockResolvedValue({ uri: 'file:///cache/contract-signed.pdf' }),
+  downloadPdf: jest.fn(),
+  previewPdf: jest.fn().mockResolvedValue(undefined),
   savePdf: jest.fn(),
   openPdf: jest.fn(),
 }));
@@ -31,16 +32,31 @@ jest.mock('../src/lib/ceremony', () => ({
   ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
 }));
 
+const fixture = preparedPdf('sha256');
+
 beforeEach(() => {
   jest.spyOn(QesApi.prototype, 'getSession').mockResolvedValue({
     state: 'app_opened', session_id: 1, submitter_id: 42, provider: 'app', document_name: 'Contract', signer_name: 'Signer',
     hash_algorithm: 'sha256', level_required: 'ades', requires_certificate: true, server_url: 'https://server', expires_at: null,
   });
+  jest.spyOn(QesApi.prototype, 'getDocument').mockResolvedValue(fixture.bytes);
+  jest.mocked(downloadPdf).mockResolvedValue({
+    uri: 'file:///cache/contract-signed.pdf',
+    bytes: async () => fixture.bytes,
+  } as never);
   jest.mocked(runSigningCeremony).mockResolvedValue({
-    completed: { state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash' },
-    level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1,
+    completed: {
+      state: 'completed', session_id: 1, submitter_id: 42, level: 'ades',
+      document_digest: fixture.prepared.document_digest, signed_pdf_sha256: 'hash',
+    },
+    level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1, documentDigest: fixture.prepared.document_digest,
   });
 });
+
+async function signOnScreen(screen: ReturnType<typeof create>) {
+  await act(async () => { await screen.root.findByProps({ title: 'Zobrazit dokument' }).props.onPress(); });
+  await act(async () => { await screen.root.findByProps({ title: 'Podepsat dokument' }).props.onPress(); });
+}
 afterEach(() => { jest.restoreAllMocks(); jest.clearAllMocks(); });
 
 it('offers saving retry after a signature and retries only submission completion', async () => {
@@ -49,7 +65,7 @@ it('offers saving retry after a signature and retries only submission completion
     .mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true });
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
-  await act(async () => { await screen.root.findByProps({ title: 'Zkontrolovat dokument' }).props.onPress(); });
+  await signOnScreen(screen);
   expect(screen.root.findByProps({ title: 'Dokončit uložení' })).toBeTruthy();
   expect(screen.root.findAllByProps({ title: 'Stáhnout' })).toHaveLength(0);
   await act(async () => { await screen.root.findByProps({ title: 'Dokončit uložení' }).props.onPress(); });
@@ -89,7 +105,7 @@ it.each([false, true])('recovers an already completed submission (reopen: %s) an
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
   if (!reopen) {
-    await act(async () => { await screen.root.findByProps({ title: 'Zkontrolovat dokument' }).props.onPress(); });
+    await signOnScreen(screen);
     expect(screen.root.findAllByProps({ title: 'Stáhnout' })).toHaveLength(0);
     await act(async () => { await screen.root.findByProps({ title: 'Dokončit uložení' }).props.onPress(); });
   }

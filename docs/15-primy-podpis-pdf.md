@@ -53,7 +53,7 @@ appka (S11/S12)                    fork (server)                        TSA / CR
   │ POST /s/:slug/qes_sessions ─────▶ TBS PDF s pečetí → token
   │◀── token + metadata ────────────│
   │ GET /qes/sessions/:token ───────▶ (dnešní obřad, beze změny)
-  │ POST …/certificate → biometrie → podpis → …/complete
+  │ GET …/document → kontrola → biometrie → POST …/certificate → podpis → …/complete
   │◀────────── state: completed ────│  CMS + TSA + LTV + pečeť + validace
   │ PUT /api/submitters/:id ────────▶ completed: true → finální PDF + audit
   │ GET /api/submitters/:id ────────▶ documents[].url
@@ -130,7 +130,7 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 | umístění pečeti | `PATCH /api/templates/:id` | `fields: [{ …field, areas: [{x, y, w, h, page, attachment_uuid}] }]` |
 | dokument k podpisu | `POST /api/templates/:id/submissions` | `send_email: false`, `submitters: [{role, name, email}]` |
 | spuštění obřadu | `POST /s/:slug/qes_sessions` | `field_uuid` → `token` (API token místo session) |
-| obřad | `GET /qes/sessions/:token`, `POST …/certificate`, `POST …/complete` | SPEC § 5.1–§ 5.4 |
+| obřad | `GET /qes/sessions/:token`, `GET …/document` (kontrola), `POST …/certificate`, `POST …/complete` | SPEC § 5.1–§ 5.4 |
 | dokončení | `PUT /api/submitters/:id` | `completed: true` → PDF + auditní stránka |
 | stažení | `GET /api/submitters/:id` | `documents[0].url` (platnost dle `FILE_URLS_EXPIRE_MINUTES`) |
 
@@ -208,7 +208,7 @@ Smazáním dokumentu v UI zmizí i PDF — žádný vlastní úklid QES nad PDF 
 - **Negativní** `make qes-negative` (N1–N17): N10 bez tokenu → `401`; N11 ne-PDF → `422 invalid_pdf`;
   N12 příliš velké → `422 file_too_large`; N13 šifrované → `422 encrypted_pdf`; N14 už podepsané → `422 already_signed`;
   N15 nepodporovaná úroveň → `422 invalid_level`; N16 cizí API token → `403`; N17 druhé spuštění obřadu zruší první.
-- **Appka** `make qes-app-test` (92/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
+- **Appka** `make qes-app-test` (208/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
   lokální fork + `adb reverse`): výběr PDF → náhled → klepnutí → podpis → stažení a sdílení.
 - **Appka – uložení a sdílení** (2026-10-25): `__tests__/pdfShare.test.ts` (stažení do cache,
   uložení do telefonu, share sheet, fallback, zrušení); na emulátoru uloženo do

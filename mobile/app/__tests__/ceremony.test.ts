@@ -16,12 +16,18 @@ function setup(algorithm = 'sha256') {
     postCertificate: jest.fn().mockResolvedValue(fixture.prepared),
     getDocument: jest.fn().mockResolvedValue(fixture.bytes),
     postAbort: jest.fn().mockResolvedValue({ state: 'failed' }),
-    postComplete: jest.fn().mockResolvedValue({ state: 'completed', level: 'ades', document_digest: fixture.prepared.document_digest, submitter_id: 42 }),
+    postComplete: jest.fn().mockResolvedValue({
+      state: 'completed', level: 'ades', document_digest: fixture.prepared.document_digest, submitter_id: 42,
+    }),
     completeSubmission: jest.fn().mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true }),
   };
-  const confirmDocument = jest.fn().mockResolvedValue(true);
-  const deps: CeremonyDeps = { api, vault: {} as VaultDeps, confirmDocument };
-  return { ...fixture, api, deps, confirmDocument };
+  const deps: CeremonyDeps = {
+    api,
+    vault: {} as VaultDeps,
+    reviewedDocument: fixture.bytes,
+    reviewedDigest: fixture.prepared.document_digest,
+  };
+  return { ...fixture, api, deps };
 }
 
 beforeEach(() => {
@@ -29,35 +35,26 @@ beforeEach(() => {
   unlock.mockResolvedValue({ ...material, info: material });
 });
 
-it.each(['sha256', 'sha384', 'sha512'])('signs verified PDF attributes with %s after consent and one unlock', async (algorithm) => {
-  const { deps, api, prepared, bytes, confirmDocument } = setup(algorithm);
-  await runSigningCeremony(deps, 'ades');
-  expect(confirmDocument).toHaveBeenCalledWith(new Uint8Array(bytes));
+it.each(['sha256', 'sha384', 'sha512'])('signs verified PDF attributes with %s after one unlock', async (algorithm) => {
+  const { deps, api, prepared } = setup(algorithm);
+  const result = await runSigningCeremony(deps, 'ades');
   expect(unlock).toHaveBeenCalledTimes(1);
   expect(api.postAbort).not.toHaveBeenCalled();
+  expect(api.getDocument).not.toHaveBeenCalled();
+  expect(result.documentDigest).toBe(prepared.document_digest);
   const signature = Buffer.from(api.postComplete.mock.calls[0][0], 'base64');
   expect(createVerify(algorithm).update(Buffer.from(prepared.data_to_sign, 'base64'))
     .verify(material.certificatePem, signature)).toBe(true);
 });
 
-it('waits for explicit confirmation before releasing a signature', async () => {
-  const { deps, api, confirmDocument } = setup();
-  let confirm!: (value: boolean) => void;
-  let reviewing!: () => void;
-  const ready = new Promise<void>((resolve) => { reviewing = resolve; });
-  confirmDocument.mockImplementation(() => { reviewing(); return new Promise((resolve) => { confirm = resolve; }); });
-  const result = runSigningCeremony(deps, 'ades');
-  await ready;
-  expect(api.postComplete).not.toHaveBeenCalled();
-  confirm(true);
-  await result;
-  expect(api.postComplete).toHaveBeenCalledTimes(1);
-});
+it('does not sign when the reviewed document differs from the server TBS', async () => {
+  const { deps, api } = setup();
+  deps.reviewedDocument = new Uint8Array(deps.reviewedDocument);
+  const marker = Buffer.from(deps.reviewedDocument).indexOf('100 CZK');
+  deps.reviewedDocument[marker] = 0x39;
 
-it('does not sign when review is cancelled', async () => {
-  const { deps, api, confirmDocument } = setup();
-  confirmDocument.mockResolvedValue(false);
-  await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'user_cancelled' });
+  await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'document_mismatch' });
+  expect(api.postAbort).toHaveBeenCalledWith('document_mismatch');
   expect(api.postComplete).not.toHaveBeenCalled();
 });
 
@@ -66,13 +63,13 @@ it.each([
   'trailing DER', 'invalid DER', 'nonzero start', 'overlap', 'uncovered tail', 'fraction',
   'wrong gap', 'wrong embedded range', 'wrong algorithm', 'wrong OID',
 ])('aborts without signing: %s', async (problem) => {
-  const { deps, api, prepared, bytes, digest, confirmDocument } = setup();
+  const { deps, api, prepared, bytes, digest, certificateDer } = setup();
   switch (problem) {
     case 'changed PDF': bytes[bytes.indexOf('100 CZK')] = 0x39; break;
     case 'wrong digest': prepared.document_digest = '00'.repeat(32); break;
-    case 'wrong messageDigest': prepared.data_to_sign = signedAttrs('x'.repeat(32)); break;
-    case 'wrong contentType': prepared.data_to_sign = signedAttrs(digest, '1.2.840.113549.1.7.2'); break;
-    case 'duplicate digest': prepared.data_to_sign = signedAttrs(digest, undefined, true); break;
+    case 'wrong messageDigest': prepared.data_to_sign = signedAttrs('x'.repeat(32), undefined, false, certificateDer); break;
+    case 'wrong contentType': prepared.data_to_sign = signedAttrs(digest, '1.2.840.113549.1.7.2', false, certificateDer); break;
+    case 'duplicate digest': prepared.data_to_sign = signedAttrs(digest, undefined, true, certificateDer); break;
     case 'trailing DER': prepared.data_to_sign = Buffer.concat([Buffer.from(prepared.data_to_sign, 'base64'), Buffer.from([0])]).toString('base64'); break;
     case 'invalid DER': prepared.data_to_sign = 'AAAA'; break;
     case 'nonzero start': prepared.byte_range[0] = 1; break;
@@ -87,7 +84,6 @@ it.each([
   await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'document_mismatch' });
   expect(api.postAbort).toHaveBeenCalledWith('document_mismatch');
   expect(api.postComplete).not.toHaveBeenCalled();
-  expect(confirmDocument).not.toHaveBeenCalled();
 });
 
 it('preserves mismatch error even if abort cannot reach the server', async () => {
@@ -97,8 +93,8 @@ it('preserves mismatch error even if abort cannot reach the server', async () =>
   await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'document_mismatch' });
 });
 
-it('resumes a completed session without touching the key, certificate or review', async () => {
-  const { deps, api, confirmDocument } = setup();
+it('resumes a completed session without touching the key or certificate', async () => {
+  const { deps, api } = setup();
   const completed = { state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, submitter_id: 42, signed_pdf_sha256: 'hash' };
   api.getSession.mockResolvedValue(completed);
   deps.configuration = { hasKey: false, hasReader: false, readerReady: false };
@@ -108,8 +104,35 @@ it('resumes a completed session without touching the key, certificate or review'
   expect(unlock).not.toHaveBeenCalled();
   expect(api.postCertificate).not.toHaveBeenCalled();
   expect(api.getDocument).not.toHaveBeenCalled();
-  expect(confirmDocument).not.toHaveBeenCalled();
   expect(api.postComplete).not.toHaveBeenCalled();
+});
+
+it('polls an embedded completion until the session is completed', async () => {
+  const { deps, api, prepared } = setup();
+  api.postComplete.mockResolvedValueOnce({ state: 'embedded', poll_after_ms: 1 });
+  api.getSession
+    .mockResolvedValueOnce({ state: 'app_opened', level_required: 'ades', hash_algorithm: 'sha256' })
+    .mockResolvedValueOnce({
+      state: 'completed', level: 'ades', document_digest: prepared.document_digest, session_id: 1, submitter_id: 42,
+      signed_pdf_sha256: 'hash',
+    });
+
+  const result = await runSigningCeremony(deps, 'ades');
+
+  expect(result.completed.state).toBe('completed');
+  expect(api.getSession).toHaveBeenCalledTimes(2);
+});
+
+it('returns the reviewed digest even when the server reports another one', async () => {
+  const { deps, api, prepared } = setup();
+  api.postComplete.mockResolvedValue({
+    state: 'completed', level: 'ades', document_digest: 'other', submitter_id: 42,
+  });
+
+  const result = await runSigningCeremony(deps, 'ades');
+
+  expect(result.documentDigest).toBe(prepared.document_digest);
+  expect(result.completed.document_digest).toBe('other');
 });
 
 it('recovers a lost completion response with no second signature or unlock', async () => {

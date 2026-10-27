@@ -1,6 +1,6 @@
 # 21 — Audit signing flow v appce (2026-10-27)
 
-**Stav:** audit hotový, návrh cílového toku k rozhodnutí
+**Stav:** realizováno 2026-10-27 (K1–K3, K5–K33; K4 zůstává dle rozhodnutí)
 **Rozsah:** `mobile/app/app/sign.tsx`, `sign-pdf.tsx`, `src/lib/ceremony.ts`,
 `src/lib/preparedDocument.ts`, `src/lib/api.ts`, `src/lib/pdfApi.ts`, `src/lib/pdfShare.ts`,
 `src/lib/crypto/vault.ts`, `src/lib/signer.ts`, server `Qes::SessionsController`,
@@ -37,7 +37,7 @@ i `contentType` v `data_to_sign`. Tuhle část auditu nedoporučuji bourat, jen 
 |---|---|---|
 | **P0** | Kontrola před klíčem a před serverovou přípravou; TBS stavět před certifikátem | K1, K2 |
 | **P0** | Ověřit finální PDF (hash + reviewed bytes) | K3 |
-| **P1** | Gate kontroly, cert atributy v `data_to_sign`, TTL během kontroly | K4, K5, K6, K7 |
+| **P1** | Cert atributy v `data_to_sign`, TTL během kontroly (gate K4 zůstává dle rozhodnutí) | K5, K6, K7 |
 | **P1** | Chybové kódy, `202` polling, `X-QES-Protocol`, `needs_reader` | K10, K11, K12, K13 |
 | **P2** | Přímý PDF: reuse submission, místní kontrola, `source_sha256`, UI texty | K8, K9, K14 |
 | **P2** | Testy, e2e a dokumentace | K29–K33 |
@@ -206,10 +206,10 @@ návratu z prohlížeče. `sign.tsx:461` povolí „Podepsat“ po `reviewOpened
 dokument vykreslil. Na iOS je „Otevřít“ share sheet (`pdfShare.ts:254-265`),
 což není prohlížeč. Gate je tedy „byl spuštěn prohlížeč“, ne „uživatel viděl“.
 
-**Doporučení:** neprezentovat to jako důkaz. Buď vyžadovat návrat z prohlížeče
-(`AppState`, ale docs/20 N4 říká, že je nespolehlivý), nebo nahradit výslovným
-potvrzením „Dokument jsem otevřel a zkontroloval“ (checkbox + potvrzovací dialog)
-a zalogovat ho. Appka nemá jak dokázat, že uživatel četl; nemá to tvrdit.
+**Doporučení:** neprezentovat to jako důkaz. Původně navržené AppState/checkbox
+bylo **zamítnuto uživatelem (2026-10-27)**: `reviewOpened` zůstává tak, jak je,
+kvůli riziku horšího UX. Gate tedy dál znamená „prohlížeč byl spuštěn“; appka
+nemá tvrdit, že uživatel dokument skutečně četl.
 
 #### K5 — `data_to_sign` se neověřuje proti certifikátu a času
 
@@ -439,8 +439,9 @@ vazba na to, co uživatel viděl**.
   `document_mismatch`; `signature_algorithm` jiný → `document_mismatch`.
 - `ceremony.test.ts`: `completed.document_digest` jiný → chyba;
   `final_pdf_sha256` jiný → chyba; reviewed prefix/suffix jiný → chyba.
-- `documentReview.test.ts`: `reviewOpened` se nenastaví před návratem z prohlížeče;
-  „Podepsat“ je disabled; „Zrušit“ zavolá `postAbort('user_cancelled')`.
+- `documentReview.test.ts`: `reviewOpened` se nastaví po spuštění prohlížeče
+  (bez AppState/checkboxu dle rozhodnutí); „Podepsat“ je disabled do otevření;
+  „Zrušit“ zavolá `postAbort('user_cancelled')`.
 - `signScreen.test.ts`: `202` → polling; `embedded` → „Dokončuji na serveru…“;
   `X-QES-Protocol` jiný → chyba.
 - `signPdf.test.ts`: `source_sha256` jiný → chyba; `signature_in_progress` →
@@ -478,17 +479,17 @@ vazba na to, co uživatel viděl**.
 ## 7. Rozhodnutí k potvrzení
 
 1. **Pevná rezerva `/Contents`**: `QES_SIGNATURE_RESERVE` (default 64 KB) místo
-   závislosti na certifikátu. Tím se TBS dá postavit před certifikátem. Souhlas?
+   závislosti na certifikátu. Tím se TBS dá postavit před certifikátem. **Hotovo.**
 2. **Kontrola před klíčem**: „Zobrazit dokument“ bez biometrie a bez
-   `POST /certificate`; „Podepsat“ až po potvrzení. Souhlas?
+   `POST /certificate`; „Podepsat“ až po potvrzení. **Hotovo.**
 3. **Kontrola TBS, nebo base**: Kontrolovat TBS (přesné bajty, které se podepisují),
-   nebo base před podpisovým polem? TBS je silnější a jednodušší.
-4. **Gate**: checkbox „Dokument jsem otevřel a zkontroloval“ + potvrzovací dialog
-   místo `reviewOpened` po `startActivity`. Souhlas?
+   nebo base před podpisovým polem? TBS je silnější a jednodušší. **Hotovo: TBS.**
+4. **Gate**: `reviewOpened` po `startActivity` **zůstává** (rozhodnutí uživatele
+   2026-10-27); checkbox/AppState se nezavádí kvůli horšímu UX. **Hotovo.**
 5. **Finální PDF**: hash + reviewed prefix/suffix v v1; lokální CAdES verifikace
-   v další verzi. Souhlas?
+   v další verzi. **Hotovo: hash + prefix/suffix.**
 6. **TTL**: prodloužit při `GET /document`/`POST /certificate` na 15 min, nebo
-   oddělit review a sign TTL. Souhlas?
+   oddělit review a sign TTL. **Hotovo: `review_ttl` 15 min, `session_ttl` 10 min.**
 
 ---
 
@@ -504,3 +505,46 @@ reviewed TBS“ funguje a je dobře testovaná. Chybí ale:
 - ošetření chyb, TTL a retry.
 
 Cílový tok výše tyhle mezery zavírá bez bourání dobré části (`verifyPreparedDocument`).
+
+---
+
+## 9. Realizace (2026-10-27)
+
+### 9.1 Server (fork)
+
+- `Qes::Config`: `signature_reserve` 65 536 B, `review_ttl` 900 s.
+- `Qes::Providers::MobileApp#prepare_document`: postaví TBS **před** certifikátem,
+  uloží ho s `qes_values`, `qes_document_manifest`, `qes_base_digest` a `document_digest`.
+- `Qes::SessionsController#document`: povolí `awaiting_app`/`app_opened`/`awaiting_signature`,
+  postaví TBS při prvním volání a prodlouží `expires_at` na `review_ttl`.
+- `Qes::SessionsController#certificate`: už TBS nepřestavuje, jen ověří certifikát/řetěz/CRL,
+  zkontroluje `qes_values` snapshot (`values_changed`) a vytvoří `signed_attrs_der`; prodlouží TTL.
+- `POST /api/qes/documents` vrací `source_sha256`, `document_sha256`, `normalized`.
+- `Qes::Providers::MobileApp#data_to_sign` volá `prepare_document` (idempotentně) a
+  `ensure_values_unchanged!`.
+
+### 9.2 Appka
+
+- `sign.tsx`: „Zobrazit dokument“ = jen `GET /document` + `previewPdf`; „Podepsat dokument“
+  = `runSigningCeremony` s `reviewedDocument`/`reviewedDigest`; `reviewOpened` zůstává.
+- `ceremony.ts`: `reviewedDocument` povinný, žádný `confirmDocument`; ověření
+  `messageDigest`, `contentType`, `signingCertificateV2`, `signingTime`, `certificate_info`,
+  `document_digest`, `signature_algorithm`; `202 embedded` polling; kontrola
+  `completed.document_digest`.
+- `preparedDocument.ts`: `documentDigest`, `sha256Hex`, `certificateIdentityFromPem`,
+  prázdný `/Contents`, `signingCertificateV2`, `signingTime`, `certificate_info`.
+- `pdfShare.ts`: `verifyFinalPdf` (SHA-256 finálního PDF + reviewed prefix/suffix),
+  `readFileBytes`, `sha256File`; `PdfActionError('verification_failed')`.
+- `sign-pdf.tsx`: místní kontrola PDF před uploadem, `source_sha256`, reuse submission
+  (jiná pečet → cancel + nová submission), `signature_in_progress`, `onError` náhledu,
+  S12 „Pokračovat“.
+- `api.ts`: `X-QES-Protocol`, `202` polling, mapování nových chyb.
+- `sign.tsx`: certifikát/platnost/otisk v kontrole, validace ve výsledku, `needs_reader`/
+  `needs_qes_key` do wizardu, `canGoBack`, `verification_failed`.
+
+### 9.3 Ověření
+
+- `make qes-app-test` → **208/208**.
+- `make qes-app-typecheck` → čisté.
+- `make qes-test-qes` → **401/0**.
+- `reviewOpened` zůstává po `startActivity` (rozhodnutí uživatele 2026-10-27).

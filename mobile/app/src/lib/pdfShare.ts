@@ -17,6 +17,7 @@ import {
   saveToDownloads,
   sharePdf as nativeSharePdf,
 } from '../../modules/dokulachtan-share';
+import { documentDigest, sha256Hex } from './preparedDocument';
 
 export type PdfActionErrorCode =
   | 'download_failed'
@@ -24,7 +25,8 @@ export type PdfActionErrorCode =
   | 'share_failed'
   | 'sharing_unavailable'
   | 'open_failed'
-  | 'no_pdf_viewer';
+  | 'no_pdf_viewer'
+  | 'verification_failed';
 
 export class PdfActionError extends Error {
   readonly code: PdfActionErrorCode;
@@ -111,6 +113,70 @@ export async function downloadPdf(url: string, fileName: string): Promise<File> 
   } catch (err) {
     throw new PdfActionError('download_failed', err instanceof Error ? err.message : undefined);
   }
+}
+
+export interface PdfFileLike {
+  uri?: string;
+  bytes?: Uint8Array;
+}
+
+export async function readFileBytes(file: PdfFileLike): Promise<Uint8Array> {
+  if (file.bytes) {
+    return file.bytes;
+  }
+
+  if (!file.uri) {
+    throw new PdfActionError('open_failed');
+  }
+
+  try {
+    return await new File(file.uri).bytes();
+  } catch (err) {
+    throw new PdfActionError('open_failed', err instanceof Error ? err.message : undefined);
+  }
+}
+
+export async function sha256File(file: PdfFileLike): Promise<string> {
+  return sha256Hex(await readFileBytes(file));
+}
+
+// Ověří, že stažené finální PDF je skutečně to, co server podepsal, a že
+// obsahuje reviewed TBS beze změny (prefix/suffix mimo `/Contents`).
+export async function verifyFinalPdf(
+  file: File,
+  options: { finalSha256?: string; reviewedDocument?: Uint8Array | null } = {},
+): Promise<void> {
+  const bytes = new Uint8Array(await file.bytes());
+
+  if (options.finalSha256 && sha256Hex(bytes) !== options.finalSha256.toLowerCase()) {
+    throw new PdfActionError('verification_failed');
+  }
+
+  if (options.reviewedDocument) {
+    const { byteRange } = documentDigest(options.reviewedDocument);
+    const [start, firstLength, secondStart, secondLength] = byteRange;
+    const prefix = options.reviewedDocument.slice(start, start + firstLength);
+    const suffix = options.reviewedDocument.slice(secondStart, secondStart + secondLength);
+
+    if (!sameBytes(bytes.slice(start, start + firstLength), prefix)
+      || !sameBytes(bytes.slice(secondStart, secondStart + secondLength), suffix)) {
+      throw new PdfActionError('verification_failed');
+    }
+  }
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // Uložení do telefonu: Android 10+ výchozí Downloads přes MediaStore, na přání

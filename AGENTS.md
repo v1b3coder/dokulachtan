@@ -513,6 +513,17 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       release arm64 + deflate + shrinkResources **14,06 MB**; ověřeno na emulátoru (debug x86_64, `extractNativeLibs=true`,
       nativní moduly z `/data/app/…/lib/x86_64/`, home screen s certem) i na telefonu (release arm64 z předchozího dne).
 
+- [x] **Audit a opravy signing flow v appce (2026-10-27):** `docs/21-audit-signing-flow-app.md` — K1–K33;
+      **kontrola je nyní před klíčem** (`GET /document` → review → biometrie → `POST /certificate`),
+      TBS se staví **před** certifikátem s pevnou rezervou `QES_SIGNATURE_RESERVE` 64 KB, `POST /certificate`
+      už TBS nepřestavuje a ověří `qes_values` snapshot; appka ověří `signingCertificateV2`, `signingTime`,
+      `certificate_info`, `document_digest` a po stažení finálního PDF i `final_pdf_sha256` + reviewed prefix/suffix;
+      dále `202 embedded` polling, `X-QES-Protocol`, mapování nových chyb, `needs_reader`/`needs_qes_key` do S10,
+      místní kontrola PDF před uploadem, `source_sha256`, reuse submission a `reviewOpened` **zůstává** (rozhodnutí
+      uživatele). Ověřeno: `make qes-app-test` 208/0, `make qes-app-typecheck`, `make qes-test-qes` 401/0,
+      `make qes-e2e`, `make qes-e2e-two`, `make qes-e2e-pdf`; plná sada SQLite 646/2 a Postgres 650/1 mají
+      jen upstream/system flaky (`signing_form_spec.rb:1253` a `:253`), QES vrstva je zelená.
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.

@@ -1,12 +1,15 @@
 import React from 'react';
 import { QesApi } from '../src/lib/api';
-import { runSigningCeremony, type CeremonyDeps } from '../src/lib/ceremony';
+import { runSigningCeremony } from '../src/lib/ceremony';
 import { previewPdf } from '../src/lib/pdfShare';
+import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
 
 const { create, act } = require('react-test-renderer');
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ token: 'tok' }), useFocusEffect: () => {}, router: { replace: jest.fn() },
+  useLocalSearchParams: () => ({ token: 'tok' }),
+  useFocusEffect: () => {},
+  router: { replace: jest.fn(), back: jest.fn(), canGoBack: () => false },
 }));
 jest.mock('../src/lib/platform', () => ({ platformVaultDeps: () => ({ storage: {} }) }));
 jest.mock('../src/lib/pdfShare', () => ({
@@ -21,36 +24,59 @@ jest.mock('../src/lib/ceremony', () => ({
   ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
 }));
 
-it('requires opening the exact downloaded PDF and a separate explicit confirmation', async () => {
+const fixture = preparedPdf('sha256');
+const bytes = fixture.bytes;
+
+beforeEach(() => {
   jest.spyOn(QesApi.prototype, 'getSession').mockResolvedValue({
     state: 'app_opened', session_id: 1, submitter_id: 42, provider: 'app', document_name: 'Contract', signer_name: 'Signer',
     hash_algorithm: 'sha256', level_required: 'ades', requires_certificate: true, server_url: 'https://server', expires_at: null,
   });
-  const bytes = new Uint8Array([37, 80, 68, 70, 45]);
-  const signature = jest.fn();
-  jest.mocked(runSigningCeremony).mockImplementation(async (deps: CeremonyDeps) => {
-    if (!await deps.confirmDocument(bytes)) throw new Error('cancelled');
-    signature();
-    return { completed: { state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash' },
-      level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1 };
+  jest.spyOn(QesApi.prototype, 'getDocument').mockResolvedValue(bytes);
+  jest.spyOn(QesApi.prototype, 'postAbort').mockResolvedValue({ state: 'cancelled' });
+  jest.mocked(previewPdf).mockResolvedValue();
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  jest.clearAllMocks();
+});
+
+it('reviews the unsigned document before unlocking the key and signs the same bytes', async () => {
+  jest.mocked(runSigningCeremony).mockResolvedValue({
+    completed: {
+      state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest',
+      signed_pdf_sha256: 'hash',
+    },
+    level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1, documentDigest: 'digest',
   });
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
-  let signing!: Promise<void>;
-  await act(async () => { signing = screen.root.findByProps({ title: 'Zkontrolovat dokument' }).props.onPress(); });
-  expect(screen.root.findByProps({ title: 'Podepsat tento dokument' }).props.disabled).toBe(true);
-  jest.mocked(previewPdf).mockRejectedValueOnce(new Error('no viewer'));
-  await act(async () => { await screen.root.findByProps({ title: 'Otevřít přesné PDF' }).props.onPress(); });
-  expect(screen.root.findByProps({ title: 'Podepsat tento dokument' }).props.disabled).toBe(true);
-  await act(async () => { await screen.root.findByProps({ title: 'Otevřít přesné PDF' }).props.onPress(); });
-  expect(previewPdf).toHaveBeenLastCalledWith(bytes);
-  expect(screen.root.findByProps({ title: 'Podepsat tento dokument' }).props.disabled).toBe(false);
-  expect(signature).not.toHaveBeenCalled();
-  await act(async () => {
-    screen.root.findByProps({ title: 'Podepsat tento dokument' }).props.onPress();
-    await signing;
-  });
-  expect(signature).toHaveBeenCalledTimes(1);
+
+  await act(async () => { await screen.root.findByProps({ title: 'Zobrazit dokument' }).props.onPress(); });
+
+  expect(QesApi.prototype.getDocument).toHaveBeenCalledTimes(1);
+  expect(previewPdf).toHaveBeenCalledWith(bytes);
+  expect(runSigningCeremony).not.toHaveBeenCalled();
+  expect(screen.root.findByProps({ title: 'Podepsat dokument' }).props.disabled).toBe(false);
+
+  await act(async () => { await screen.root.findByProps({ title: 'Podepsat dokument' }).props.onPress(); });
+
+  expect(runSigningCeremony).toHaveBeenCalledWith(
+    expect.objectContaining({ reviewedDocument: bytes }),
+    'ades',
+  );
   await act(async () => screen.unmount());
-  jest.restoreAllMocks();
+});
+
+it('cancels the session without unlocking the key', async () => {
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await act(async () => { await screen.root.findByProps({ title: 'Zobrazit dokument' }).props.onPress(); });
+
+  await act(async () => { await screen.root.findByProps({ title: 'Zrušit' }).props.onPress(); });
+
+  expect(QesApi.prototype.postAbort).toHaveBeenCalledWith('user_cancelled');
+  expect(runSigningCeremony).not.toHaveBeenCalled();
+  await act(async () => screen.unmount());
 });

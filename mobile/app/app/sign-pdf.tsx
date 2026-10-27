@@ -31,8 +31,11 @@ import {
   tapToPosition,
   type PdfApiSettings,
   type PdfDocument,
+  type PdfSession,
+  type PdfSubmitter,
   type PdfUpload,
 } from '../src/lib/pdfApi';
+import { previewPdf, readFileBytes, sha256File } from '../src/lib/pdfShare';
 import type { QesLevel } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
@@ -52,6 +55,10 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: 'Příliš mnoho požadavků. Zkuste to později.',
   server_error: 'Chyba serveru. Zkuste to znovu.',
   network: 'Chyba připojení. Zkuste to znovu.',
+  source_mismatch: 'Server přijal jiný soubor, než jste vybrali. Zkuste to znovu.',
+  already_completed: 'Dokument už je podepsaný. Otevřete ho v DocuSealu.',
+  signature_in_progress: 'Podpis už probíhá v jiném okně. Dokončete ho, nebo zkuste znovu.',
+  pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
 };
 
 interface Rect {
@@ -80,6 +87,10 @@ export default function SignPdfScreen() {
   const [displayName, setDisplayName] = useState('');
   const [level, setLevel] = useState<QesLevel>('ades');
   const [document, setDocument] = useState<PdfDocument | null>(null);
+  const [localSha256, setLocalSha256] = useState<string | null>(null);
+  const [submitter, setSubmitter] = useState<PdfSubmitter | null>(null);
+  const [session, setSession] = useState<PdfSession | null>(null);
+  const [submittedArea, setSubmittedArea] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [container, setContainer] = useState<{ width: number; height: number } | null>(null);
@@ -138,9 +149,27 @@ export default function SignPdfScreen() {
 
     setFile({ uri: asset.uri, name: asset.name, type: asset.mimeType ?? 'application/pdf' });
     setDocument(null);
+    setLocalSha256(null);
+    setSubmitter(null);
+    setSession(null);
+    setSubmittedArea(null);
     setPosition(null);
     setError(null);
     setErrorDetail(null);
+  }
+
+  // Kontrola místního souboru ještě před uploadem: co uživatel vybral,
+  // to si může otevřít a zkontrolovat bez serveru a bez klíče.
+  async function reviewLocalFile() {
+    if (!file) {
+      return;
+    }
+
+    try {
+      await previewPdf(await readFileBytes(file));
+    } catch {
+      setError('pdf_viewer_unavailable');
+    }
   }
 
   async function uploadFile(upload: PdfUpload) {
@@ -154,12 +183,25 @@ export default function SignPdfScreen() {
         setError('not_authenticated');
         return;
       }
+      const expected = localSha256 ?? await sha256File(upload).catch(() => null);
       const created = await client.createDocument(upload, { displayName, levelRequired: level });
 
+      if (created.source_sha256 && expected && created.source_sha256.toLowerCase() !== expected) {
+        setError('source_mismatch');
+        setErrorDetail('Server přijal jiný soubor, než jste vybrali.');
+        setDocument(null);
+        return;
+      }
+
+      setLocalSha256(expected);
       setFile(upload);
       setDocument(created);
       setPage(0);
       setPosition(null);
+
+      if (created.normalized) {
+        setErrorDetail('PDF bylo normalizováno (rotace stránek).');
+      }
     } catch (err) {
       fail(err);
     } finally {
@@ -186,6 +228,10 @@ export default function SignPdfScreen() {
 
     setFile(shared);
     setDocument(null);
+    setLocalSha256(null);
+    setSubmitter(null);
+    setSession(null);
+    setSubmittedArea(null);
     setPosition(null);
     void uploadFile(shared);
     router.setParams({ share: '', name: '' });
@@ -213,21 +259,40 @@ export default function SignPdfScreen() {
         return;
       }
       const area = stampArea(position, pageSize, document.stamp);
+      const areaKey = JSON.stringify({ ...area, page });
 
       await client.setStampArea(document, { ...area, page });
 
-      const user = await client.user();
-      const submitter = await client.createSubmission(document, {
-        name: displayName || user.email,
-        email: user.email,
-      });
+      let currentSubmitter = submitter;
 
-      const session = await client.startSession(submitter.slug, document.field.uuid);
+      if (!currentSubmitter || submittedArea !== areaKey) {
+        if (currentSubmitter && session) {
+          await client.cancelSession(currentSubmitter.slug, session.id).catch(() => {});
+        }
+
+        const user = await client.user();
+        currentSubmitter = await client.createSubmission(document, {
+          name: displayName || user.email,
+          email: user.email,
+        });
+
+        setSubmitter(currentSubmitter);
+        setSubmittedArea(areaKey);
+      }
+
+      const next = await client.startSession(currentSubmitter.slug, document.field.uuid);
+
+      if (!next.token) {
+        setError(next.completed ? 'already_completed' : 'signature_in_progress');
+        return;
+      }
+
+      setSession(next);
 
       router.push({
         pathname: '/sign',
         params: {
-          token: session.token,
+          token: next.token,
           server: settings?.serverUrl ?? '',
           flow: 'pdf',
         },
@@ -272,6 +337,7 @@ export default function SignPdfScreen() {
         <>
           <Text style={styles.label}>Soubor PDF</Text>
           <SecondaryButton title={file ? file.name : 'Vybrat PDF'} onPress={pickFile} />
+          {file ? <TextButton title="Zkontrolovat PDF" onPress={reviewLocalFile} /> : null}
 
           <Text style={styles.label}>Jméno do pečeti</Text>
           <TextInput
@@ -368,6 +434,10 @@ export default function SignPdfScreen() {
                     uri: pageSize.preview_url,
                     headers: settings ? { 'X-Auth-Token': settings.apiToken } : undefined,
                   }}
+                  onError={() => {
+                    setError('network');
+                    setErrorDetail('Náhled stránky se nepodařilo načíst.');
+                  }}
                 />
               </Pressable>
             ) : (
@@ -394,7 +464,7 @@ export default function SignPdfScreen() {
           {errorBlock}
 
           <PrimaryButton
-            title={busy ? 'Připravuji…' : 'Podepsat'}
+            title={busy ? 'Připravuji…' : 'Pokračovat'}
             onPress={place}
             disabled={busy || !position}
           />
@@ -402,6 +472,10 @@ export default function SignPdfScreen() {
             title="Vybrat jiné PDF"
             onPress={() => {
               setDocument(null);
+              setLocalSha256(null);
+              setSubmitter(null);
+              setSession(null);
+              setSubmittedArea(null);
               setPosition(null);
             }}
           />

@@ -1,6 +1,26 @@
 import { createHash } from 'node:crypto';
 import forge from 'node-forge';
+import { parseP12 } from '../../src/lib/crypto/p12';
+import { TEST_P12_BASE64, TEST_P12_PASSWORD } from '../../src/lib/testCertificate';
 import type { QesCertificatePayload } from '../../src/lib/types';
+
+const material = parseP12(
+  Uint8Array.from(atob(TEST_P12_BASE64), (char) => char.charCodeAt(0)),
+  TEST_P12_PASSWORD,
+);
+const certificateDer = Uint8Array.from(
+  atob(material.certificatePem.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----|\s+/g, '')),
+  (char) => char.charCodeAt(0),
+);
+const identity = {
+  serial: material.serial,
+  notBefore: material.notBefore,
+  notAfter: material.notAfter,
+  level: material.level,
+  qcStatements: material.qcStatements,
+  keyType: material.keyType,
+  keySize: material.keySize,
+};
 
 // Platné jednostránkové PDF s xref, viditelným textem a prázdným podpisem.
 export function preparedPdf(algorithm = 'sha256') {
@@ -33,25 +53,69 @@ export function preparedPdf(algorithm = 'sha256') {
   // CMS messageDigest používá algoritmus session; document_digest je vždy SHA-256.
   const digest = createHash(algorithm).update(covered).digest('binary');
   const prepared: QesCertificatePayload = {
-    data_to_sign: signedAttrs(digest),
+    data_to_sign: signedAttrs(digest, undefined, false, certificateDer),
     byte_range: range,
     document_digest: createHash('sha256').update(covered).digest('hex'),
     hash_algorithm: algorithm,
     digest_algorithm_oid: { sha256: '2.16.840.1.101.3.4.2.1', sha384: '2.16.840.1.101.3.4.2.2', sha512: '2.16.840.1.101.3.4.2.3' }[algorithm]!,
     signature_algorithm: 'rsa_pkcs1v15', expires_at: null,
-    certificate_info: { subject: 'Test', issuer: 'Test', serial: '1', not_before: '', not_after: '', level: 'ades', qc_statements: [], key_type: 'rsa', key_size: 2048 },
+    certificate_info: {
+      subject: material.subject,
+      issuer: material.issuer,
+      serial: material.serial,
+      not_before: material.notBefore,
+      not_after: material.notAfter,
+      level: material.level,
+      qc_statements: material.qcStatements,
+      key_type: material.keyType,
+      key_size: material.keySize,
+    },
   };
-  return { bytes, prepared, digest };
+  return { bytes, prepared, digest, certificateDer, identity };
 }
 
-export function signedAttrs(digest: string, contentType = '1.2.840.113549.1.7.1', duplicate = false) {
+export function signedAttrs(
+  digest: string,
+  contentType = '1.2.840.113549.1.7.1',
+  duplicate = false,
+  certificateDer = certificateDerForTests(),
+  signingTime = new Date(),
+) {
   const { create, Class: C, Type: T } = forge.asn1;
   const attribute = (oid: string, type: number, value: string) => create(C.UNIVERSAL, T.SEQUENCE, true, [
     create(C.UNIVERSAL, T.OID, false, forge.asn1.oidToDer(oid).getBytes()),
     create(C.UNIVERSAL, T.SET, true, [create(C.UNIVERSAL, type, false, value)]),
   ]);
+  const rawAttribute = (oid: string, der: string) => create(C.UNIVERSAL, T.SEQUENCE, true, [
+    create(C.UNIVERSAL, T.OID, false, forge.asn1.oidToDer(oid).getBytes()),
+    create(C.UNIVERSAL, T.SET, true, [forge.asn1.fromDer(der)]),
+  ]);
+  const certHash = createHash('sha256').update(certificateDer).digest('binary');
+  const signingCertificate = rawAttribute(
+    '1.2.840.113549.1.9.16.2.47',
+    forge.asn1.toDer(create(C.UNIVERSAL, T.SEQUENCE, true, [
+      create(C.UNIVERSAL, T.SEQUENCE, true, [
+        create(C.UNIVERSAL, T.SEQUENCE, true, [
+          create(C.UNIVERSAL, T.OCTETSTRING, false, certHash),
+        ]),
+      ]),
+    ])).getBytes(),
+  );
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const signingTimeValue = `${pad(signingTime.getUTCFullYear() % 100)}${pad(signingTime.getUTCMonth() + 1)}`
+    + `${pad(signingTime.getUTCDate())}${pad(signingTime.getUTCHours())}`
+    + `${pad(signingTime.getUTCMinutes())}${pad(signingTime.getUTCSeconds())}Z`;
   const md = attribute('1.2.840.113549.1.9.4', T.OCTETSTRING, digest);
-  const attrs = [attribute('1.2.840.113549.1.9.3', T.OID, forge.asn1.oidToDer(contentType).getBytes()), md];
+  const attrs = [
+    attribute('1.2.840.113549.1.9.3', T.OID, forge.asn1.oidToDer(contentType).getBytes()),
+    md,
+    signingCertificate,
+    attribute('1.2.840.113549.1.9.5', T.UTCTIME, signingTimeValue),
+  ];
   if (duplicate) attrs.push(md);
   return forge.util.encode64(forge.asn1.toDer(create(C.UNIVERSAL, T.SET, true, attrs)).getBytes());
+}
+
+function certificateDerForTests(): Uint8Array {
+  return certificateDer;
 }

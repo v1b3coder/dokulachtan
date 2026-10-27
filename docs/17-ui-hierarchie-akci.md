@@ -156,27 +156,35 @@ v náhledu Podepsat (plné) → Vybrat jiné PDF (obrys) → Zrušit (obrys).
 
 **Nově, výběr:**
 
-1. Label „Soubor PDF“ + **sekundární** „Vybrat PDF“ / název souboru a „Změnit“.
+1. Label „Soubor PDF“ + **sekundární** „Vybrat PDF“ / název souboru a „Změnit“;
+   po výběru **terciární** „Zkontrolovat PDF“ (místní soubor, bez serveru a klíče).
 2. Jméno do pečeti, úroveň (beze změny).
 3. Chyba těsně nad akcí.
-4. **Primární** „Pokračovat“ (vypnuté bez souboru).
+4. **Primární** „Pokračovat“ (vypnuté bez souboru) — jen upload a založení session,
+   **nepodepisuje**.
 5. **Terciární** „Zrušit“.
 
-**Nově, náhled:** **primární** „Podepsat“ (vypnuté bez umístěné pečeti), **terciární**
-„Vybrat jiné PDF“, **terciární** „Zrušit“.
+**Nově, náhled:** **primární** „Pokračovat“ (vypnuté bez umístěné pečeti; jen založí
+submission + session a přejde na S4), **terciární** „Vybrat jiné PDF“, **terciární** „Zrušit“.
 
 ### S4 Žádost o podpis
 
-**Dnes:** Podepsat (plné) → Zrušit (obrys); při chybě je import testovacího certu nad Podepsat;
-po úspěchu Stáhnout a sdílet (plné) + Zavřít (plné).
+**Dnes:** Zkontrolovat dokument (plné) → biometrie + `POST /certificate` + stažení TBS
+→ Otevřít přesné PDF → Podepsat tento dokument; po úspěchu Stáhnout a sdílet (plné) + Zavřít (plné).
 
 **Nově:**
 
-- **Stav podpisu:** **primární** „Podepsat“, **terciární** „Zrušit“.
-- **Chyba `certificate_missing` / `no_signer`:** **primární** „Nastavit podepisování“ → S10
-  (testovací certifikát se nabízí až tam), **terciární** „Zavřít“.
+- **Stav kontroly:** **primární** „Zobrazit dokument“ (jen `GET /document`, žádný klíč,
+  žádný `POST /certificate`), **terciární** „Zrušit“.
+- **Po otevření dokumentu:** **sekundární** „Otevřít dokument“ (znovu),
+  **primární** „Podepsat dokument“ (odemkne klíč biometrií, ověří `data_to_sign`
+  proti reviewed TBS a podepíše), **terciární** „Zrušit“ (zruší session).
+- **Chyba `certificate_missing` / `no_signer` / `needs_reader` / `needs_qes_key`:**
+  **primární** „Nastavit podepisování“ → S10, kontrola dokumentu zůstává viditelná.
 - **Hotovo:** **primární** „Stáhnout“ (uložit do telefonu), **sekundární** „Sdílet“ (share sheet),
   **terciární** „Zavřít“; po návratu ze share sheetu jdou obě akce znovu.
+- **Neshoda digestu / finálního PDF:** místo stahování se zobrazí chyba
+  „Server vrátil jiný dokument, než jste viděli. Nestahujte ho a kontaktujte podporu.“
 
 ### S8 Připojení čtečky
 

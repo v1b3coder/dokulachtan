@@ -21,10 +21,11 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | ENV | Default | Význam |
 |---|---|---|
 | `QES_ENABLED` | `false` | vypínač QES (staging/produkce) |
-| `QES_SESSION_TTL` | `600` | platnost session [s] |
-| `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury (rezerva `/Contents`) [B] |
-| `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` [B] |
-| `QES_SIGNATURE_SIZE_MARGIN` | `16384` | marže nad odhad CMS (TSA token, změna CRL) [B] |
+| `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
+| `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
+| `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
+| `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
+| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
 | `QES_TRUST_ROOTS` | — | cesty k CA certům (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
@@ -122,7 +123,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `422 not_qualified` | cert bez `QcCompliance` | použijte kvalifikovaný cert (I.CA/PostSignum) |
 | `422 qes_required_qscd` | pole `preferences.level=qes`, cert bez `QcSSCD` | cert z čipu, nebo pole přepněte na `ades` |
 | `422 level_mismatch` | `QcSSCD` cert poslaný jako `phone_keystore` | telefon není QSCD; použijte čtečku |
-| `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_SIZE_MARGIN` (rezerva se počítá z odhadu CMS včetně CRL) |
+| `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví před certifikátem, SPEC § 5.1a) |
 | `ltv_unavailable` | nedostupné OCSP/CRL a `QES_REQUIRE_LTV=true` | spusťte CRL/OCSP endpoint, nebo `QES_REQUIRE_LTV=false` |
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
 | `pyhanko` → `UNTRUSTED` | chybí root v `QES_TRUST_ROOTS`, nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
@@ -187,8 +188,8 @@ a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkci jsou CRL hosty PostSignum (
 `crl2.postsignum.cz`, `crl.postsignum.eu`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
 bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` by skončil na
 `ltv_unavailable` (ověřeno na produkci 2026-10-18). Reálný CRL PostSignum Qualified CA 4 má
-812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je
-`Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN` (SPEC § 7.1, § 7.4, § 7.6).
+812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
+`QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
 
 **Negativní scénáře:** `make qes-negative` (N1–N9) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
 

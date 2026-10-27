@@ -85,6 +85,18 @@ export interface PdfDocument {
   field: PdfField;
   document: { uuid: string; filename: string; pages: PdfPage[] };
   stamp: { width: number; height: number };
+  source_sha256?: string;
+  document_sha256?: string;
+  normalized?: boolean;
+}
+
+export interface PdfSession {
+  id: number;
+  state: string;
+  token?: string;
+  completed?: boolean;
+  value?: string;
+  expires_at?: string;
 }
 
 export interface PdfSubmitter {
@@ -251,11 +263,19 @@ export class PdfApi {
   }
 
   // Spuštění obřadu (endpoint podpisového formuláře; slug je kapabilita).
-  async startSession(submitterSlug: string, fieldUuid: string): Promise<{ token: string }> {
-    return this.request<{ token: string }>(
+  async startSession(submitterSlug: string, fieldUuid: string): Promise<PdfSession> {
+    return this.request<PdfSession>(
       'POST',
       `/s/${encodeURIComponent(submitterSlug)}/qes_sessions`,
       { field_uuid: fieldUuid },
+    );
+  }
+
+  // Zrušení staré session před novým pokusem (stejný submitter, jiná pečeť).
+  async cancelSession(submitterSlug: string, sessionId: number): Promise<void> {
+    await this.request(
+      'POST',
+      `/s/${encodeURIComponent(submitterSlug)}/qes_sessions/${sessionId}/cancel`,
     );
   }
 

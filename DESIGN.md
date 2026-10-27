@@ -301,7 +301,9 @@ na stav, alternativy za oddělovačem, navigace a „Zrušit“ jako textové od
 ```
 Import:   soubor PKCS#12 ─▶ heslo ─▶ parse (node-forge) ─▶ kontrola ─▶ přešifrování AES-256-GCM ─▶ soubor
 Podpis:   deep link ─▶ GET metadata ─▶ volba podepisujícího (klíč → čip → wizard)
-          ─▶ zobrazení ─▶ biometrie (SecureStore) ─▶ POST certificate ─▶ sign(data_to_sign) ─▶ POST complete
+          ─▶ GET document (nepodepsaný TBS) ─▶ kontrola uživatelem
+          ─▶ biometrie (SecureStore) ─▶ POST certificate ─▶ ověření data_to_sign proti reviewed TBS
+          ─▶ sign(data_to_sign) ─▶ POST complete ─▶ ověření finálního PDF
 ```
 
 ---
@@ -564,7 +566,7 @@ Všechny níže uvedené body jsou rozhodnuté ve SPEC.md (potvrzeno 2026-10-15)
 
 | # | Otázka | Rozhodnutí | Kde |
 |---|---|---|---|
-| 1 | Zobrazení dokumentu v appce | appka zobrazí název, podepisujícího a cert; **žádný náhled PDF** | SPEC § 5.1, § 9.1 |
+| 1 | Zobrazení dokumentu v appce | appka zobrazí název, podepisujícího a cert; **nepodepsaný TBS** (`GET /document`) otevře ke kontrole **před** odemčením klíče | SPEC § 5.1a, § 9.1 |
 | 2 | Universal links vs custom scheme | **universal links** (`/qes/sign`) + custom scheme jako fallback | SPEC § 6.6, § 10 |
 | 3 | Více certifikátů v appce | v1: import PKCS#12 **nahrazuje**; u A povinný výběr kontejneru na kartě | SPEC § 1.2, § 9.4 |
 | 4 | Obnova certifikátu | v1: upozornění na expiraci + ruční re-import; staré podpisy zůstávají | SPEC § 9.1 (S3) |

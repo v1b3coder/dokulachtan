@@ -61,9 +61,17 @@ export interface QesCompletedPayload {
   signed_pdf_sha256: string;
   final_pdf_sha256?: string;
   seal_state?: string;
+  doc_timestamp_state?: string;
   validation?: QesValidationReport;
   completed_at?: string | null;
 }
+
+export interface QesEmbeddedPayload {
+  state: 'embedded';
+  poll_after_ms?: number;
+}
+
+export type QesCompleteResponse = QesCompletedPayload | QesEmbeddedPayload;
 
 export type KeyLocation = 'phone_keystore' | 'card';
 
@@ -89,7 +97,7 @@ export interface SessionSource {
   getDocument(): Promise<Uint8Array>;
   postAbort(code: string, message?: string): Promise<{ state: string }>;
   postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload>;
-  postComplete(signatureBase64: string): Promise<QesCompletedPayload>;
+  postComplete(signatureBase64: string): Promise<QesCompleteResponse>;
   completeSubmission(): Promise<{ state: string; submitter_id: number; completed: boolean }>;
 }
 

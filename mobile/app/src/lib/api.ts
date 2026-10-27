@@ -6,7 +6,7 @@ import type {
   QesAppMetadata,
   QesCertificatePayload,
   QesCertificateRequest,
-  QesCompletedPayload,
+  QesCompleteResponse,
   QesSessionPayload,
   SessionSource,
 } from './types';
@@ -48,6 +48,7 @@ export class QesApi implements SessionSource {
       { method: 'GET', redirect: 'error', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
     );
     assertResponseOrigin(response, this.serverUrl);
+    assertProtocolVersion(response);
     if (!response.ok) {
       const payload = await readErrorPayload(response);
       throw new QesApiError(response.status, payload.error ?? 'server_error');
@@ -66,8 +67,8 @@ export class QesApi implements SessionSource {
     );
   }
 
-  async postComplete(signatureBase64: string): Promise<QesCompletedPayload> {
-    return this.request<QesCompletedPayload>(
+  async postComplete(signatureBase64: string): Promise<QesCompleteResponse> {
+    return this.request<QesCompleteResponse>(
       'POST',
       `/qes/sessions/${encodeURIComponent(this.token)}/complete`,
       { signature: signatureBase64 },
@@ -101,6 +102,7 @@ export class QesApi implements SessionSource {
     });
 
     assertResponseOrigin(response, this.serverUrl);
+    assertProtocolVersion(response);
 
     const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
 
@@ -114,6 +116,16 @@ export class QesApi implements SessionSource {
 
 // Chybová odpověď může být HTML (404/500 stránka), ne jen JSON; `response.json()`
 // by jinak shodilo celý obřad na „Unexpected character: <“.
+const PROTOCOL_VERSION = '1';
+
+function assertProtocolVersion(response: Response): void {
+  const version = response.headers.get('X-QES-Protocol');
+
+  if (version && version !== PROTOCOL_VERSION) {
+    throw new QesApiError(response.status, 'unsupported_protocol');
+  }
+}
+
 async function readErrorPayload(response: Response): Promise<{ error?: string }> {
   const text = await response.text();
 

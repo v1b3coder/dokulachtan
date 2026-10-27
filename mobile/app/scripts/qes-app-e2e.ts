@@ -6,6 +6,7 @@ import { QesApi } from '../src/lib/api';
 import { runSigningCeremony } from '../src/lib/ceremony';
 import { FakeCardSigner } from '../src/lib/cardSigner';
 import { importCertificate, type VaultDeps } from '../src/lib/crypto/vault';
+import { documentDigest } from '../src/lib/preparedDocument';
 import { TEST_P12_BASE64, TEST_P12_PASSWORD } from '../src/lib/testCertificate';
 
 // Lokální testovací harness používá stejné HTTP výjimky jako dev build.
@@ -76,12 +77,18 @@ async function main(): Promise<void> {
 
   const info = await importCertificate(deps, p12, TEST_P12_PASSWORD);
 
+  const api = new QesApi(serverUrl, token);
+  // Kontrola dokumentu je před certifikátem: stáhneme nepodepsaný TBS a ověříme
+  // jeho otisk; harness nemá UI, takže potvrzení nahrazuje tento krok.
+  const reviewedDocument = await api.getDocument();
+  const { digest } = documentDigest(reviewedDocument);
+
   const result = await runSigningCeremony(
     {
-      api: new QesApi(serverUrl, token),
+      api,
       vault: deps,
-      // Automatický souhlas pouze v explicitně spuštěném E2E harnessu.
-      confirmDocument: async () => true,
+      reviewedDocument,
+      reviewedDigest: digest,
       cardSigner: fakeCard ? new FakeCardSigner() : undefined,
       configuration: fakeCard
         ? { hasKey: false, hasReader: true, readerReady: true }

@@ -79,7 +79,10 @@ certifikátů v appce (import nahrazuje předchozí).
 
 **Server NESMÍ**: vidět privátní klíč, PIN/QPIN, obsah PKCS#12, ani dešifrovat cokoli z appky.
 **Server MUSÍ**: ověřit, že raw signatura kryptograficky odpovídá certifikátu a podepsaným atributům.
-**Appka NESMÍ**: dostat dokument v plném znění kvůli podpisu (dostane jen metadata + `data_to_sign`).
+**Appka MŮŽE**: dostat **nepodepsaný TBS** pro kontrolu uživatelem (`GET /document`) — PDF se tím
+nevrací kvůli podpisu, ale kvůli tomu, aby uživatel viděl přesně ty bajty, které podepíše.
+**Appka NESMÍ**: dostat dokument v plném znění *mimo* kontrolu; klíč se odemyká až po potvrzení
+reviewed TBS a `data_to_sign` se ověřuje proti němu (§ 5.1a, § 9.3).
 
 ---
 
@@ -363,6 +366,21 @@ Server ověří token (existuje, neexpirovaný, ne v terminálním stavu), sessi
 
 Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 session_not_active`.
 
+### 5.1a `GET /qes/sessions/:token/document` — nepodepsaný TBS pro kontrolu
+
+Server **MUSÍ** vrátit **nepodepsaný TBS** (PDF s prázdnou rezervou `/Contents`) **před** přijetím
+certifikátu, aby appka mohla uživateli zobrazit přesně ty bajty, které se budou podepisovat. TBS se staví
+při prvním volání (nebo při vytvoření session) s pevnou rezervou `QES_SIGNATURE_RESERVE` (default 64 KB),
+nezávislou na certifikátu; `POST /certificate` už TBS **NEPŘESTAVUJE**.
+
+- Stav: `awaiting_app`, `app_opened`, `awaiting_signature`.
+- Odpověď: `application/pdf` (`Cache-Control: no-store`), hlavička `X-QES-Protocol: 1`.
+- `GET /document` **MUSÍ** prodloužit `expires_at` na `review_ttl` (default 15 min), aby dlouhá kontrola
+  neprošla expirací.
+- `POST /certificate` **MUSÍ** ověřit, že se hodnoty pole od přípravy TBS nezměnily (`values_changed`).
+- Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 wrong_state`,
+  `409 document_missing`, `422 values_changed`.
+
 ### 5.2 `POST /qes/sessions/:token/certificate` — certifikát a podepsané atributy
 
 Request:
@@ -389,9 +407,9 @@ Odmítnutý certifikát **NEMĚNÍ** stav session (zůstává `app_opened`, uži
 do session se zapíše jen `failure_code` pro diagnostiku. Volání je přípustné z `awaiting_app` i `app_opened`
 (appka nemusí před `POST /certificate` volat `GET`; server v takovém případě doplní `app_opened_at`).
 
-Server poté vytvoří CMS s placeholderem, uloží `signed_attrs_der` a vrátí 200.
-Přechod `app_opened → awaiting_signature`; opakované volání se stejným certifikátem je idempotentní
-(vrátí stejné `data_to_sign`).
+Server ověří certifikát a řetěz, ale **TBS už je uložený** z § 5.1a; `POST /certificate` nad ním
+jen vytvoří `signed_attrs_der`, uloží ho a vrátí 200. Přechod `app_opened → awaiting_signature`;
+opakované volání se stejným certifikátem je idempotentní (vrátí stejné `data_to_sign`).
 
 ```json
 {
@@ -988,7 +1006,7 @@ spolu s `key_location`, `reader` (u A) a verzí protokolu.
 | S1 | **Home** | stav certifikátu (žádný / platný / **expiruje** = méně než 30 dní, jen varování); s klíčem primární „Podepsat PDF“ + sekundární „Ověřit PDF“, bez klíče primární „Importovat klíč (PKCS#12)“ + sekundární „Ověřit PDF“; karta certifikátu je klikací → S3, varování u expirace odkazuje na import; terciárně „Připojit čtečku“ (A) a „Nastavení“ | — |
 | S2 | **Import certifikátu** | výběr PKCS#12 (sekundární), heslo, primární „Importovat“ (vypnuté bez souboru), **testovací certifikát až za oddělovačem „Nebo“ jako alternativní cesta**; po uložení souhrn + primární „Hotovo“ | `invalid_p12`, `wrong_password`, `no_signing_key`, `qscd_certificate` (telefon není QSCD, § 5.2) |
 | S3 | **Detail certifikátu** | subject, issuer, platnost, sériové číslo, úroveň (AdES/QES dle QCStatements), „Importovat jiný klíč“ (sekundární), nebezpečná zóna s odstraněním (potvrzení + biometrie) | — |
-| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Podepsat“, terciární „Zrušit“; při `certificate_missing`/`no_signer` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout a sdílet“ + sekundární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10) |
+| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout“ + sekundární „Sdílet“ + terciární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neobsahuje reviewed TBS) |
 | S5 | **Biometrie** | systémová výzva (`expo-local-authentication`) před každým podpisem | zamítnuto → zpět na S4 |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba + „Zkusit znovu" / „Vyžádat nový odkaz" | — |
 | S7 | **Nastavení** | sekce Server (URL + API token + primární „Uložit“), Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A), Pokročilé (testovací certifikát); smazání dat je jen v S3 | — |
@@ -1014,14 +1032,19 @@ odkazy, mazání oddělené a s potvrzením.
 
 0. Automatická volba podepisujícího dle § 9.8 (bez ptaní; dle `level_required`); když není ani klíč, ani čtečka, spustí se S10 místo S4.
 1. Deep link → S4 (`GET /qes/sessions/:token`).
-2. Zobrazení dokumentu + certifikátu (lokálně); tlačítko „Podepsat".
+2. **Kontrola:** `GET /qes/sessions/:token/document` → nepodepsaný TBS; appka ho otevře
+   a uživatel potvrdí. **Žádný klíč, žádná biometrie, žádný `POST /certificate`.**
 3. Biometrie (S5) → odemčení vault klíče (`expo-secure-store`) → dešifrování klíčového materiálu
    v paměti. **Heslo k PKCS#12 se při podpisu nevyžaduje** (jen při importu, § 9.5).
-4. `POST /certificate` s certifikátem a **řetězem** z PKCS#12 → `data_to_sign` (app zobrazí jeho hash).
+4. `POST /certificate` s certifikátem a **řetězem** z PKCS#12 → `data_to_sign`; appka ověří
+   `messageDigest`, `signingCertificateV2`, `signingTime` a `certificate_info` proti reviewed TBS
+   (§ 5.1a); při neshodě `POST /abort` a konec.
 5. Podpis: `node-forge` `privateKey.sign(forge.md.sha256.create().update(data_to_sign))`
    (`RSASSA-PKCS1-V1_5`, SHA-256; `pki.rsa.sign` v node-forge neexistuje) → raw signatura (256/384/512 B).
-6. `POST /complete` → S6.
-7. Klíč se ihned po podpisu vymaže z paměti (`key = null`, `p12 = null`).
+6. `POST /complete` → S6; appka porovná `completed.document_digest` s reviewed digestem.
+7. Po stažení finálního PDF appka ověří `final_pdf_sha256` a přítomnost reviewed TBS
+   (prefix/suffix mimo `/Contents`); při neshodě PDF nenabídne.
+8. Klíč se ihned po podpisu vymaže z paměti (`key = null`, `p12 = null`).
 
 ### 9.4 Varianta A (karta) — tok
 
