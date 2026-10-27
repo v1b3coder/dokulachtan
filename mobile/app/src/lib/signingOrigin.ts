@@ -38,8 +38,9 @@ export function isSameOrigin(url: string, origin: string): boolean {
 }
 
 export function assertResponseOrigin(response: Response, origin: string): void {
-  // `new Response()` v testech má `url` prázdné; v RN je vždy `xhr.responseURL`.
-  if (response.url && !isSameOrigin(response.url, origin)) {
+  // Prázdné `url` nesmí kontrolu přeskočit: bez důkazu o originu odpověď
+  // odmítneme (N3).
+  if (!response.url || !isSameOrigin(response.url, origin)) {
     throw new SigningOriginError('foreign_server');
   }
 }

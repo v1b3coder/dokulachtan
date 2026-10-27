@@ -80,8 +80,9 @@ it.each([false, true])('recovers an already completed submission (reopen: %s) an
       state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash',
     });
   }
-  const fetchMock = jest.spyOn(global, 'fetch')
-    .mockResolvedValueOnce(new Response(JSON.stringify({ documents: [{ name: 'contract', url: 'https://server/final.pdf' }] })));
+  const documentsResponse = new Response(JSON.stringify({ documents: [{ name: 'contract', url: 'https://server/final.pdf' }] }));
+  Object.defineProperty(documentsResponse, 'url', { value: 'https://server/api/submitters/42' });
+  const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(documentsResponse);
   const complete = jest.spyOn(QesApi.prototype, 'completeSubmission');
   if (!reopen) complete.mockRejectedValueOnce(new Error('response lost'));
   complete.mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true });

@@ -3,10 +3,13 @@ import { File, Paths } from 'expo-file-system';
 import { PdfApi, PdfApiError, type PdfUpload, stampArea, stampOutline, tapToPosition } from '../src/lib/pdfApi';
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  const response = new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+  Object.defineProperty(response, 'url', { value: 'https://server/api/templates/7' });
+
+  return response;
 }
 
 const document = {

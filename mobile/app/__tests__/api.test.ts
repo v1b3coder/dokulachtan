@@ -1,10 +1,13 @@
 import { QesApi, QesApiError } from '../src/lib/api';
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+function jsonResponse(body: unknown, status = 200, url = 'https://server/qes/sessions/tok'): Response {
+  const response = new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+  Object.defineProperty(response, 'url', { value: url, configurable: true });
+
+  return response;
 }
 
 describe('QesApi', () => {
@@ -80,9 +83,9 @@ describe('QesApi', () => {
 
 it('downloads the exact prepared PDF from the configured server', async () => {
   const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
-  const fetchImpl = jest.fn().mockResolvedValue(new Response(bytes, {
-    headers: { 'Content-Type': 'application/pdf' },
-  }));
+  const response = new Response(bytes, { headers: { 'Content-Type': 'application/pdf' } });
+  Object.defineProperty(response, 'url', { value: 'https://server/qes/sessions/a%2Fb/document' });
+  const fetchImpl = jest.fn().mockResolvedValue(response);
   const api = new QesApi('https://server', 'a/b', { serverUrl: 'https://server', fetchImpl });
   expect(await api.getDocument()).toEqual(bytes);
   expect(fetchImpl).toHaveBeenCalledWith('https://server/qes/sessions/a%2Fb/document',
@@ -121,10 +124,15 @@ it('maps an HTML error page to a typed error instead of a JSON parse crash', asy
   const api = new QesApi('https://server', 'tok', {
     serverUrl: 'https://server',
     fetchImpl: (async () =>
-      new Response('<html><body>404</body></html>', {
-        status: 404,
-        headers: { 'Content-Type': 'text/html' },
-      })) as typeof fetch,
+      (() => {
+        const response = new Response('<html><body>404</body></html>', {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' },
+        });
+        Object.defineProperty(response, 'url', { value: 'https://server/qes/sessions/tok' });
+
+        return response;
+      })()) as typeof fetch,
   });
 
   await expect(api.getDocument()).rejects.toMatchObject({ status: 404, code: 'server_error' });
@@ -134,11 +142,44 @@ it('maps an HTML 200 response to invalid_response', async () => {
   const api = new QesApi('https://server', 'tok', {
     serverUrl: 'https://server',
     fetchImpl: (async () =>
-      new Response('<html><body>login</body></html>', {
-        status: 200,
-        headers: { 'Content-Type': 'text/html' },
-      })) as typeof fetch,
+      (() => {
+        const response = new Response('<html><body>login</body></html>', {
+          status: 200,
+          headers: { 'Content-Type': 'text/html' },
+        });
+        Object.defineProperty(response, 'url', { value: 'https://server/qes/sessions/tok' });
+
+        return response;
+      })()) as typeof fetch,
   });
 
   await expect(api.getSession()).rejects.toMatchObject({ status: 200, code: 'invalid_response' });
+});
+
+it('sends redirect: error on every QES request', async () => {
+  let redirect: RequestRedirect | undefined;
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: (async (_url, init) => {
+      redirect = init?.redirect;
+
+      return jsonResponse({ session_id: 1, state: 'app_opened', level_required: 'ades' });
+    }) as typeof fetch,
+  });
+
+  await api.getSession();
+
+  expect(redirect).toBe('error');
+});
+
+it('rejects a response without a URL instead of skipping the origin check', async () => {
+  const response = new Response(JSON.stringify({ session_id: 1, state: 'app_opened' }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: (async () => response) as typeof fetch,
+  });
+
+  await expect(api.getSession()).rejects.toMatchObject({ code: 'foreign_server' });
 });

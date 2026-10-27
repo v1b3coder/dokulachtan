@@ -5,6 +5,7 @@ import { File } from 'expo-file-system';
 import forge from 'node-forge';
 
 import { copyPdf } from '../../modules/dokulachtan-open-pdf';
+import { secureFetch } from './http';
 import { toBase64 } from './crypto/softwareSigner';
 import type {
   PdfCoverage,
@@ -83,7 +84,7 @@ export class EuDssApi {
   private readonly readBase64: (file: PdfUpload) => Promise<string>;
 
   constructor(options: EuDssApiOptions = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? secureFetch;
     this.url = options.url ?? EU_DSS_URL;
     this.timeoutMs = options.timeoutMs ?? EU_DSS_TIMEOUT_MS;
     this.readBase64 = options.readBase64 ?? readFileBase64;

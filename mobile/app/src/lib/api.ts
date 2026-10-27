@@ -1,4 +1,5 @@
 // Klient QES API (SPEC § 5): token je jen v paměti, nikdy se neukládá.
+import { secureFetch } from './http';
 import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 
 import type {
@@ -34,7 +35,7 @@ export class QesApi implements SessionSource {
   constructor(serverUrl: string, token: string, options: QesApiOptions = {}) {
     this.serverUrl = signingOrigin(options.serverUrl ?? serverUrl);
     this.token = token;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? secureFetch;
   }
 
   async getSession(): Promise<QesSessionPayload> {
@@ -44,7 +45,7 @@ export class QesApi implements SessionSource {
   async getDocument(): Promise<Uint8Array> {
     const response = await this.fetchImpl(
       `${this.serverUrl}/qes/sessions/${encodeURIComponent(this.token)}/document`,
-      { method: 'GET', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
+      { method: 'GET', redirect: 'error', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
     );
     assertResponseOrigin(response, this.serverUrl);
     if (!response.ok) {
@@ -90,6 +91,7 @@ export class QesApi implements SessionSource {
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
       method,
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',

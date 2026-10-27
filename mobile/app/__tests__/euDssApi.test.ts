@@ -1,10 +1,13 @@
 import { EuDssApi, EuDssError, EU_DSS_URL } from '../src/lib/euDssApi';
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  const response = new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+  Object.defineProperty(response, 'url', { value: 'https://ec.europa.eu/digital-building-blocks/DSS/' });
+
+  return response;
 }
 
 interface SignatureOptions {
