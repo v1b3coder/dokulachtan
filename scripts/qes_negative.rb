@@ -22,8 +22,9 @@ when 'tamper_tbs'
   range = Qes::TbsDocument.byte_range(bytes)
   index = range.present? ? range[1] / 2 : bytes.bytesize / 2
   bytes[index] = bytes[index] == 'x' ? 'y' : 'x'
+  metadata = session.tbs_document.blob.metadata
   session.tbs_document.attach(io: StringIO.new(bytes), filename: "qes-neg-tampered-#{session.id}.pdf",
-                              content_type: 'application/pdf')
+                              content_type: 'application/pdf', metadata:)
 
   puts JSON.generate({ mode: 'tamper_tbs', session_id: session.id, index:, byte_size: bytes.bytesize })
 when 'expire'
