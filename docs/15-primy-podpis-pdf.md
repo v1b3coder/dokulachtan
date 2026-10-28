@@ -30,7 +30,7 @@ model jako u QES obřadu pro DocuSeal submission (SPEC § 9).
 | D9 | **Obřad se spouští s API tokenem** (`POST /s/:slug/qes_sessions`) | appka nepotřebuje prohlížeč; slug je kapabilita (jako podpisový odkaz) |
 | D10 | **Dokončení přes existující API** (`PUT /api/submitters/:id` s `completed: true`) | DocuSeal vygeneruje finální PDF i **auditní stránku**; žádný vlastní kód |
 | D11 | **V1 jen nepodepsaná PDF bez šifrování**; rotace stránek se normalizuje při uploadu | DocuSeal staví výsledek znovu ze stránek, takže původní podpis by zmizel; u otočených stránek by pečeť seděla mimo |
-| D12 | **Žádná nová ENV** — reuse `QES_ENABLED`, `QES_TSA_URL`, `QES_TRUST_ROOTS`, `QES_LTV_ALLOWED_HOSTS`, `QES_SESSION_TTL`; nově jen `QES_PDF_MAX_BYTES` (default 25 MB) | provozní konfigurace zůstává jedna |
+| D12 | **Žádná nová ENV pro podpis** — reuse `QES_ENABLED`, `QES_TSA_URL`, `QES_TRUST_ROOTS`, `QES_LTV_ALLOWED_HOSTS`, `QES_SESSION_TTL`; nově jen `QES_PDF_MAX_BYTES` (default 25 MB); ověření PDF má samostatný `QES_VERIFICATION_TRUST_ROOTS` | provozní konfigurace zůstává jedna, signing a verification trust store jsou oddělené |
 | D13 | **Offline core (původní varianta A) mimo v1**, ale appka má rozhraní `SessionSource` | ceremoniál se nemění, jde doplnit později |
 
 **Zamítnuto** (rozhodnutí uživatele 2026-10-18): vlastní tabulka `qes_pdf_sessions`, vlastní náhledy a vlastní

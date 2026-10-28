@@ -62,7 +62,9 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
 - machine `80e9579c6de348`, region `fra`
 - volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty zapnuté) → `/data/docuseal`
   (nový prázdný volume; starý `dokulachtan_data` s testovacími daty zůstává odpojený)
-- `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA, bez test rootu)
+- `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (signing: jen reálné PostSignum CA, bez test rootu)
+- `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (verification: PostSignum, I.CA,
+  eIdentity, NCA, KB; v secrets není potřeba)
 - `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=false`, `QES_ENABLED=true`
 - `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
   (debug fingerprint; prostředí používá lokální bleeding-edge debug build. Release APK z CI by
@@ -77,7 +79,9 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` → `/data/docuseal`
   (obnovený ze snapshotu starého staging volume; účet a šablona „QES E2E (staging)“ k dispozici)
 - `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`
-  (testovací klíče fungují, reálné PostSignum certy také)
+  (testovací klíč i reálné PostSignum certy pro podpis)
+- `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`
+  (testovací i reálné české CA pro ověření)
 - `QES_REQUIRE_LTV=false` (testovací CRL DP `127.0.0.1:8765` není dostupné)
 - `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`
 - `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`

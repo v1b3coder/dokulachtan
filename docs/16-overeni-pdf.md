@@ -21,17 +21,17 @@ a hledat v appce. Výsledek se zobrazí v appce, PDF zůstává v zařízení a 
 | # | Rozhodnutí | Důvod |
 |---|---|---|
 | D1 | **Ověřování běží na serveru**, appka jen nahraje PDF a zobrazí výsledek | server už má `Qes::Validator` (Pdfium + OpenSSL + trust roots), appka nemá PDF parser ani CA store; stejný výsledek jako při podpisu |
-| D2 | **Nový endpoint `POST /api/qes/verify`** (multipart, `X-Auth-Token`) | `/api/tools/verify` je upstream a ověřuje vůči „account“ certům, ne vůči `QES_TRUST_ROOTS`; neumí `intact/trusted/coverage/level` ani `origin`; nový endpoint je konzistentní s `POST /api/qes/documents` |
+| D2 | **Nový endpoint `POST /api/qes/verify`** (multipart, `X-Auth-Token`) | `/api/tools/verify` je upstream a ověřuje vůči „account“ certům, ne vůči `QES_VERIFICATION_TRUST_ROOTS`; neumí `intact/trusted/coverage/level` ani `origin`; nový endpoint je konzistentní s `POST /api/qes/documents` |
 | D3 | **Bez automatického ukládání**: ověření PDF jen přečte v paměti; do složky „Verified documents“ se uloží **jen na tlačítko** | ověření je read-only; uživatel kontroluje, co zůstane na serveru; složka dá historii, download/share/delete bez nového modelu |
 | D4 | **HTTP 200 i pro negativní verdikt** (`unsigned`, `invalid`, `valid_untrusted`); 422 jen pro nepřečtené PDF, šifrované PDF a příliš velký soubor | „ověření proběhlo“ je úspěch requestu; špatný podpis není chyba API |
 | D5 | `verdict` = `valid` / `valid_untrusted` / `valid_unqualified` / `invalid` / `unsigned`; zvlášť `intact`, `trusted`, `modified`, `level`, `coverage`, `origin` | appka potřebuje jednoduchý verdikt i technické detaily; pole se nesmí míchat |
 | D6 | **`modified` = `VerifyPdfSignature` (`unsigned_changes?`)**, ne jen `coverage` z `Qes::Validator` | DSS/LTV aktualizace po podpisu je legitimní a `coverage` ji označí jako `partial`; naopak přidaná stránka po podpisu musí být `invalid` |
-| D7 | **Trust = `QES_TRUST_ROOTS`** (stejně jako při podpisu); produkce má jen PostSignum, staging test root + PostSignum | jeden zdroj pravdy; přidání I.CA je konfigurační rozhodnutí, ne změna kódu |
+| D7 | **Trust pro ověření = `QES_VERIFICATION_TRUST_ROOTS`** (výchozí `czech.pem`: PostSignum, I.CA, eIdentity, NCA, KB); signing trust store `QES_TRUST_ROOTS` zůstává PostSignum | ověření cizích PDF a přijetí certu při podpisu jsou dvě různé politiky; přidání českých CA je konfigurační rozhodnutí, ne změna kódu |
 | D8 | **Revokace se v v1 nekontroluje** (`revocation: "not_checked"`) | korektní revokace potřebuje LTV/časové razítko; při podpisu už `Qes::Ltv.check_revoked!` běží; verifikace nesmí kvůli CRL zdržovat nebo padat |
 | D9 | **`origin` = `docuseal` / `external`** podle `CompletedDocument.sha256` **scoped na účet** | uživatel chce vědět „je to PDF z našeho DocuSealu?“; hash je už dnes v `CompletedDocument` (upstream `/api/tools/verify`) |
 | D10 | **Dvě cesty, jedna S14**: share sheet „Podepsat PDF“ (`ACTION_SEND`) i open-with „Ověřit PDF“ (`ACTION_VIEW`) → S14 s volbou „Podepsat PDF“ / „Ověřit PDF“ | share zůstává kompatibilní; open intent dostane původní content URI bez re-exportu z PDF editoru; `OpenPdfModule` ho zkopíruje do cache a `+not-found` přesměruje na S14 |
 | D11 | **Web UI: template show page zobrazuje panel „Ověření PDF“** (verdikt, podpisy, issuer, časy, pečeť, origin, SHA-256) + **náhled** a **stažení PDF**; upstream „Verify PDF“ (účetní certy) zůstává | uživatel chce vidět uložený výsledek i PDF bez appky; panel čte `preferences['qes_verification']`, nic nepřepočítává; sjednocení upstream Verify PDF na QES trust roots je další fáze |
-| D12 | **Žádná nová ENV**: reuse `QES_ENABLED`, `QES_PDF_MAX_BYTES`, `QES_TRUST_ROOTS` | provozní konfigurace zůstává jedna |
+| D12 | **Jedna nová ENV**: `QES_VERIFICATION_TRUST_ROOTS` vedle stávajících `QES_ENABLED`, `QES_PDF_MAX_BYTES`, `QES_TRUST_ROOTS` | signing a verification trust store musí být oddělené |
 | D13 | **Uložení na tlačítko**: `POST /api/qes/verified_documents` znovu ověří PDF a uloží ho jako template ve složce „Verified documents“; report JSON do `template.preferences['qes_verification']` | reuse DocuSeal Documents, žádná nová tabulka; PDF + výsledek pro audit |
 | D14 | Ukládají se jen `intact && !modified` PDF (`valid`, `valid_untrusted`, `valid_unqualified`); `invalid`/`unsigned` ne | složka „Verified documents“ nemá obsahovat prokazatelně změněné PDF; server to vynutí |
 
@@ -145,7 +145,7 @@ Uložení (`POST /api/qes/verified_documents`) vrátí stejný report a navíc:
 
 Poznámky:
 
-- `signatures[].trusted` = řetěz k `QES_TRUST_ROOTS` (platí pro `kind: "qes"`, tj. `ETSI.CAdES.detached`);
+- `signatures[].trusted` = řetěz k `QES_VERIFICATION_TRUST_ROOTS` (platí pro `kind: "qes"`, tj. `ETSI.CAdES.detached`);
   u `kind: "seal"` je vždy `false` — pečeť má vlastní `seal.trusted` proti certům účtu;
 - `seal` = agregát z `VerifyPdfSignature` (`adbe.pkcs7.detached`, certy účtu DocuSeal);
 - `messages` = texty z `VerifyPdfSignature` (pro „Technické detaily“);
@@ -173,7 +173,7 @@ verdict =
 | Verdikt | Význam | UI |
 |---|---|---|
 | `valid` | všechny podpisy INTACT, žádné unsigned změny, alespoň jeden CAdES a všechny CAdES důvěryhodné | zeleně „Podpis je platný“ + úroveň |
-| `valid_untrusted` | podpis je kryptograficky platný, ale certifikát nevede k `QES_TRUST_ROOTS` | žlutě „Podpis je platný, ale certifikát není důvěryhodný“ |
+| `valid_untrusted` | podpis je kryptograficky platný, ale certifikát nevede k `QES_VERIFICATION_TRUST_ROOTS` | žlutě „Podpis je platný, ale certifikát není důvěryhodný“ |
 | `valid_unqualified` | PDF je podepsané, ale jen pečetí / bez CAdES (žádný kvalifikovaný podpis) | žlutě „PDF je podepsané, ale ne kvalifikovaným podpisem“ |
 | `invalid` | některý podpis není INTACT nebo `modified` (unsigned změny po podpisu) | červeně „PDF bylo po podpisu změněno“ / „Podpis je neplatný“ |
 | `unsigned` | PDF nemá žádný digitální podpis | šedě „PDF není podepsané“ |
@@ -226,7 +226,7 @@ end
 `issuer`, `serial`, `signing_time`, `not_before`, `not_after`, `chain`. `origin` je `docuseal`, když
 `CompletedDocument` (scoped na `account`) má stejný `sha256`; jinak `external`. `seal.trusted` se
 počítá z `VerifyPdfSignature` proti `Accounts.load_trusted_certs(account)`, zatímco `signatures[].trusted`
-proti `QES_TRUST_ROOTS` (dvě různé důvěry). `messages` patří k pečeti (`seal`), ne k podpisu
+proti `QES_VERIFICATION_TRUST_ROOTS` (dvě různé důvěry). `messages` patří k pečeti (`seal`), ne k podpisu
 podepisujícího — texty „signed with trusted certificate“ u QES by jinak mátly.
 
 ### 4.5 Změny ve forku
@@ -430,7 +430,7 @@ async storeVerifiedDocument(file: PdfUpload): Promise<PdfVerification> {
 | Šifrované PDF | `422 encrypted_pdf` (bez hesla nelze ověřit) |
 | Cizí PDF v cizím účtu | `origin` se počítá jen v rámci `current_account`; žádná data z cizího účtu |
 | Falešná pečeť „DocuSeal“ | `seal.trusted` se počítá proti `Accounts.load_trusted_certs(account)` (ne jen podle CN) |
-| Falešný „trusted“ podpis | `Qes::Validator#trusted` jen proti `QES_TRUST_ROOTS`, ne proti account certům |
+| Falešný „trusted“ podpis | `Qes::Validator#trusted` jen proti `QES_VERIFICATION_TRUST_ROOTS`, ne proti account certům |
 | Záměna podepsaného obsahu | `modified` z `VerifyPdfSignature` (DSS je povoleno, přidaná stránka ne) |
 | Únik tokenu | token jen v hlavičce, nikdy se neloguje; PDF se neloguje |
 
@@ -522,7 +522,7 @@ PDF opouští stroj; nespouštět v běžném CI.
 9. Bez API tokenu → `401`; rate limit → `429`; šifrované PDF → `422`.
 10. Na stagingu i produkci ověřeno reálným requestem: staging test cert → `valid` + `origin=docuseal`,
     store → template 30, tampered → `invalid`, unsigned → `unsigned`; produkce test cert →
-    `valid_untrusted` (root jen z `QES_TRUST_ROOTS`), unsigned → `unsigned`; `/up` 200 na obou.
+    `valid_untrusted` (root jen z `QES_VERIFICATION_TRUST_ROOTS`), unsigned → `unsigned`; `/up` 200 na obou.
 11. V appce (APK 1.2.0) na emulátoru ověřeno: Home → „Ověřit PDF“ → staging PDF →
     žlutý verdikt „Podpis je platný, ale certifikát není důvěryhodný“ (produkce, test cert),
     soubor, podpisy a „Uložit do DocuSealu“; sdílení i otevření PDF otevírá S14 s volbou.
@@ -540,7 +540,7 @@ PDF opouští stroj; nespouštět v běžném CI.
   audit i těchto výsledků, přidá se samostatná tabulka `qes_verifications` bez PDF.
 - **Náhled jen ve webu**: appka nepotřebuje PDF renderer; web má iframe s uloženým PDF.
 - **Web UI jen pro uložené verified documents**: panel + náhled/stažení PDF; upstream „Verify PDF“
-  (účetní certy) zůstává beze změny a sjednocení na `QES_TRUST_ROOTS` je další fáze.
+  (účetní certy) zůstává beze změny a sjednocení na `QES_VERIFICATION_TRUST_ROOTS` je další fáze.
 - **Bez iOS share extension**: stejně jako dnes; ověření jen v appce.
 - **Bez dávkového ověření** více PDF v jednom requestu; jedno PDF na request.
 - **Externí ověření (appka, 2026-10-23):** volba „DocuSeal / EU DSS“ v S14,

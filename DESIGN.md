@@ -516,7 +516,8 @@ Přesný seznam ENV (včetně `QES_ENABLED`, `QES_SIGNATURE_SIZE`, `QES_TSA_REQU
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` (custom scheme fallback) |
 | `QES_PUBLIC_BASE_URL` | host pro universal links (`/qes/sign`) |
 | `QES_SESSION_TTL` | 600 s |
-| `QES_TRUST_ROOTS` | cesty k rootům pro validaci (I.CA test/produkce) |
+| `QES_TRUST_ROOTS` | signing trust store: cesty k rootům pro přijetí certu při podpisu (PostSignum) |
+| `QES_VERIFICATION_TRUST_ROOTS` | verification trust store: české kvalifikované CA pro ověření cizích PDF |
 | `QES_TSA_URL` | kvalifikované TSA (I.CA/PostSignum) |
 
 ---

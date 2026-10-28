@@ -28,7 +28,8 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
-| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | cesty k CA certům (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
+| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF (PEM, čárkou oddělené) |
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepište |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
@@ -40,20 +41,52 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
 | `QES_SEAL_PKCS_PATH` + `QES_SEAL_PKCS_PASSWORD` | — | jen pro testy (PKCS#12 pečeti); jinak `Accounts.load_signing_pkcs` |
 
-Defaulty jsou pro český deployment (PostSignum CRL hosty a rooty, DigiCert TSA). ENV je override:
-staging přepisuje trust roots, `QES_REQUIRE_LTV`, test CRL a allowlist; jiná CA přepíše trust roots.
+Defaulty jsou pro český deployment (PostSignum CRL hosty a signing roots, české kvalifikační CA pro ověření, DigiCert TSA). ENV je override:
+staging přepisuje verification trust roots, `QES_REQUIRE_LTV`, test CRL a allowlist; jiná CA přepíše signing trust roots.
 Kdo nechce TSA, dá `QES_TSA_URL=` a `QES_TSA_REQUIRED=false`. `QES_ENABLED=false` vypne QES
 na upstream/ne-QES instanci.
 
-Trust roots: `Qes::Validator` staví OpenSSL store z `QES_TRUST_ROOTS` **a z intermediate certifikátů
+Trust roots: `Qes::Validator` staví OpenSSL store z předaných trust roots **a z intermediate certifikátů
 z CMS** (SPEC § 7.5), takže v seznamu stačí root; leaf se ověřuje řetězem (self-signed certifikát
 projde jen když je sám sobě rootem — a pak `422 not_trusted`, SPEC § 5.2).
 
-Staging má v `QES_TRUST_ROOTS` vedle testovacího rootu i reálné PostSignum CA
-(`config/qes/postsignum.pem`: Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1 + Qualified ECC R1 CA1/CA3),
-takže testovací cert je trusted proti test rootu a reálné PostSignum certy proti PostSignum CA.
+`QES_TRUST_ROOTS` je **signing** trust store: které certy smí podepsat v tomto DocuSealu.
+Výchozí je PostSignum (`config/qes/postsignum.pem`: Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1
++ Qualified ECC R1 CA1/CA3).
 
-Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt`. V CI `QES_TSA_URL` prázdné
+`QES_VERIFICATION_TRUST_ROOTS` je **verification** trust store: české kvalifikované CA pro ověření
+cizích PDF (`config/qes/czech.pem`: PostSignum, I.CA, eIdentity, NCA, KB). Ověření tak nevnucuje
+všechny české QTSP jako podepisující autority.
+
+### Český verification bundle (`config/qes/czech.pem`)
+
+Stav 2026-10-28, 29 certů:
+
+- **PostSignum** (6): Root QCA 4, Qualified CA 4/5, Root QCA ECC R1, Qualified ECC R1 CA1/CA3.
+- **I.CA** (11): Root CA/RSA, Root CA/ECC 12/2016, Root CA/RSA a ECC 05/2022,
+  Root CA/RSA v2 10/2026, QCA1/RSA v2 10/2026, EU Qualified CA2/RSA a ECC 06/2022,
+  Qualified 2 CA/ECC 06/2019, Qualified 2 CA/RSA 02/2016, Qualified CA/RSA 07/2015.
+- **eIdentity** (4): ACAeID3 Root, ACAeID3.1/3.2/3.3 Issuing.
+- **NCA** (6): Root CA/RSA a ECC 10/2023, SubCA1/2 RSA a ECC.
+- **Komerční banka** (2): KB Root 3 CA, Komerční banka Qualified CA/RSA.
+
+Expired intermediates (I.CA 2015/2016, eIdentity 3.1) jsou v bundle záměrně: podpis
+s časovým razítkem se validuje k času razítka, ne k aktuálnímu datu. Signing trust store
+`config/qes/postsignum.pem` zůstává bez nich.
+
+Regenerace: stáhnout PEM z webů CA (I.CA `ica.cz/en/root-certificates`, eIdentity
+`eidentity.cz/certifikaty-certifikacnich-autorit`, NCA `narodni-ca.gov.cz/Dokumenty.aspx`,
+KB `kb.cz/cs/certifikacni-sluzby-kb/kvalifikovane-certifikaty`), sloučit s `postsignum.pem`
+a ověřit počet:
+
+```bash
+openssl crl2pkcs7 -nocrl -certfile config/qes/czech.pem \
+  | openssl pkcs7 -print_certs -noout | grep -c '^subject'   # 29
+make qes-test-qes
+```
+
+Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt` a
+`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures). V CI `QES_TSA_URL` prázdné
 (testy bez TSA); staging/produkce DigiCert free, I.CA test TSA jen lokálně. Tajemství jen přes
 `fly secrets` / `.env`, nikdy do repa.
 
@@ -131,7 +164,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví před certifikátem, SPEC § 5.1a) |
 | `ltv_unavailable` | cert má CRL DP a CRL nelze stáhnout (chybí allowlist / egress / DNS) | přidejte hosty do `QES_LTV_ALLOWED_HOSTS` a ověřte egress; `QES_REQUIRE_LTV=false` u certu s CRL DP nepomůže |
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
-| `pyhanko` → `UNTRUSTED` | chybí root v `QES_TRUST_ROOTS`, nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
+| `pyhanko` → `UNTRUSTED` | chybí root v signing/verification trust store (podle toho, co se ověřuje), nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
 | `pyhanko` → `EXTENDED_WITH_FORM_FILLING` | po podpisu appky přibyla pečeť | očekávané; podpis appky zůstává INTACT |
 | `429 rate_limited` | příliš pokusů (60/5 min/IP, 10 selhaných tokenů) | počkejte, nebo zvyšte limity v `Qes::RateLimiter` |
 | Pečeť se nepřidala (`seal_state=failed`) | chybí PKCS DocuSealu | nastavte `ESIGN_CERTS_KEY`, nebo `QES_SEAL_PKCS_PATH` (testy) |
@@ -200,11 +233,12 @@ bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` b
 
 ```bash
 # staging (deploy/docuseal/fly.staging.toml, APP=dokulachtan-staging)
-# Defaulty: QES_ENABLED=true, PostSignum CRL hosty a rooty, DigiCert TSA,
-# require_ltv=true. Staging přepisuje jen test root, require_ltv, test CRL a allowlist.
+# Defaulty: QES_ENABLED=true, PostSignum CRL hosty a signing roots, české CA pro ověření,
+# DigiCert TSA, require_ltv=true. Staging přepisuje test root, require_ltv, test CRL a allowlist.
 QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
-#   root.crt = testovací root (testovací APK), postsignum.pem = reálné PostSignum CA
-#   (Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1 + Qualified ECC R1 CA1/CA3)
+QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem
+#   root.crt = testovací root (testovací APK); postsignum.pem = reálné PostSignum certy pro podpis;
+#   czech.pem = české kvalifikované CA pro ověření (PostSignum, I.CA, eIdentity, NCA, KB)
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; lokální bleeding-edge build
 QES_REQUIRE_LTV=false
@@ -213,7 +247,8 @@ QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dok
 #   test cert má CRL DP na staging host → staging CRL je dostupné; 127.0.0.1 se ignoruje
 
 # produkce (deploy/docuseal/fly.toml, APP=dokulachtan)
-# Defaulty pokrývají QES_ENABLED, trust roots, LTV hosty, TSA i require_ltv.
+# Defaulty pokrývají QES_ENABLED, signing trust roots (PostSignum),
+# verification trust roots (české CA), LTV hosty, TSA i require_ltv.
 # Explicitně zůstává jen veřejná URL a fingerprint Android podpisu APK.
 QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0

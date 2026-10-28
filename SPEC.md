@@ -819,7 +819,9 @@ a session označit `failed` (nikdy nezkracovat podpis).
 
 ### 7.5 Validace
 
-`Qes::Validator.call(signed_pdf_bytes, trust_roots:, at:)`:
+`Qes::Validator.call(signed_pdf_bytes, trust_roots:, at:)` — `trust_roots` je **verification**
+trust store (`QES_VERIFICATION_TRUST_ROOTS`, výchozí `config/qes/czech.pem`); signing acceptance
+používá samostatný `QES_TRUST_ROOTS` (výchozí `config/qes/postsignum.pem`, § 5.2):
 1. **Pdfium** (`VerifyPdfSignature.call`) — interní validace jako u DocuSealu; výsledek se ukládá do `validation_report`.
 2. **Všechny signatury**: `signature_dicts` vrací všechny signatury v aktuální revizi; `intact` = kryptografická
    platnost všech (NOVERIFY — kontroluje se jen signatura, ne řetěz), `trusted` = jen QES signatury
@@ -1241,7 +1243,8 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
-| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | cesty k rootům (PEM) pro validaci; jiná CA přepíše |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM); jiná CA přepíše |
+| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF (PEM) |
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepíše |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA; povinné když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
@@ -1258,7 +1261,8 @@ Plánování expiračního jobu: fork nemá `sidekiq-cron` a nové závislosti j
 `perform_in(QES_EXPIRY_JOB_INTERVAL)`; duplicity po restartu vylučuje idempotentní klíč `qes_expire_sessions`
 přes `LockEvent` (§ 7.8).
 
-Pro testy a staging: `QES_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures), produkce I.CA rooty;
+Pro testy a staging: `QES_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures) a
+`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (verification fixtures); produkce I.CA rooty;
 `QES_TSA_URL` prázdné v CI (testy bez TSA), FreeTSA/I.CA jen lokálně/produkce.
 
 Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO_PUBLIC_QES_FAKE_CARD`

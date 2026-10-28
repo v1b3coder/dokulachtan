@@ -98,6 +98,7 @@ def start_app() -> None:
         "-e", "WORKDIR=/data/docuseal",
         "-e", "QES_ENABLED=true",
         "-e", "QES_TRUST_ROOTS=/qes-test/certs/pki/root.crt",
+        "-e", "QES_VERIFICATION_TRUST_ROOTS=/qes-test/certs/pki/root.crt",
         "-e", "QES_TSA_URL=http://timestamp.digicert.com",
         "-e", "QES_TSA_REQUIRED=true",
         "-e", "QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem",

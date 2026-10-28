@@ -86,12 +86,12 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 | Co | K čemu | Debug/test build | Produkce |
 |---|---|---|---|
 | **Android signing key** (podpis APK) | integrita APK, App Links, aktualizace | `debug.keystore`, fingerprint `FA:C6:17:45:…:3B:9C` | release keystore `deploy/android-release/dokulachtan-release.jks`, fingerprint `80:DC:86:EF:…:C3:E0`; jen CI/distribuce |
-| **Certifikát pro podpis dokumentů** (AdES/QES) | podpis PDF, trust roots na serveru | testovací cert v APK pro E2E; uživatel jinak importuje vlastní `.p12` | uživatel importuje **PostSignum** `.p12` nebo použije čtečku; server má jen PostSignum trust roots |
+| **Certifikát pro podpis dokumentů** (AdES/QES) | podpis PDF, trust roots na serveru | testovací cert v APK pro E2E; uživatel jinak importuje vlastní `.p12` | uživatel importuje **PostSignum** `.p12` nebo použije čtečku; signing trust store má jen PostSignum, verification trust store české CA |
 
 - **Testovací APK** na `dokulachtan-download.fly.dev` = Gradle `release` varianta **s debug Android podpisem** (standalone JS bundle, `arm64-v8a`, testovací dokumentový cert + stub čtečky). Není to produkční APK.
 - **Produkční APK** = `assembleRelease` s `ANDROID_KEYSTORE_PATH` + `deploy/android-release/release.properties`, podepsaný release keystorem; jen CI/distribuce, nikdy testovací APK.
 - **Gradle `release` varianta ≠ produkční podpis.** Rozhoduje `ANDROID_KEYSTORE_PATH`, ne název varianty.
-- **PostSignum certy** s Android podpisem APK nesouvisí: produkce má `QES_TRUST_ROOTS` jen PostSignum, staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
+- **PostSignum certy** s Android podpisem APK nesouvisí: signing `QES_TRUST_ROOTS` má jen PostSignum, verification `QES_VERIFICATION_TRUST_ROOTS` české CA (`czech.pem`), staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
 - `QES_ANDROID_CERT_SHA256` na Fly = fingerprint **Android podpisu testovacího APK** (nyní debug `FA:C6:…:9C`), ne cert dokumentu. Při nasazení produkčního APK z CI se přepne na `80:DC:…:E0`.
 - Testovací telefon s debug-signed APK **nejde** aktualizovat produkčním APK přes `adb install -r` (jiný podpis); vyžaduje uninstall a nový import `.p12`.
 
@@ -109,7 +109,8 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   (`fly volumes destroy`); tabulka `qes_pdf_sessions` po zrušené vlastní vrstvě zůstala jen v DB, kde
   vznikla — migrace byla při squashi historie odstraněna (2026-10-23), v nových DB už nevznikne.
 - Defaulty forku pokrývají `QES_ENABLED=true`, `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem`
-  (jen reálné PostSignum CA), `QES_REQUIRE_LTV=true`,
+  (signing: jen reálné PostSignum CA), `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/czech.pem`
+  (verification: PostSignum, I.CA, eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`,
   `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu`,
   `QES_TSA_URL=http://timestamp.digicert.com`, `QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem`,
   `QES_TSA_REQUIRED=true` (DigiCert free, AATL; kvalifikované TSA zatím nekupujeme);
@@ -138,7 +139,9 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   obnovený ze snapshotu starého staging volume (`dokulachtan_data`), takže má účet
   `<SMTP_FROM>` a šablonu „QES E2E (staging)“ (starý volume zůstává odpojený).
 - Defaulty forku + override: `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`
-  (testovací klíče fungují, reálné PostSignum certy také), `QES_REQUIRE_LTV=false`,
+  (testovací klíč i reálné PostSignum certy pro podpis),
+  `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`
+  (testovací i reálné české CA pro ověření), `QES_REQUIRE_LTV=false`,
   `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev`,
   `QES_TEST_CRL_PATH=/app/config/qes/test-root.crl`, `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`,
   `QES_ANDROID_CERT_SHA256=FA:C6:…:9C`.
@@ -158,7 +161,7 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   `POST /api/qes/verify` (stateless) a `POST /api/qes/verified_documents` (ukládá do
   „Verified documents“) jsou na obou prostředích; staging ověřeno test certem → `valid`, `origin=docuseal`,
   2 signatury, store → template 30, tampered → `invalid`, unsigned → `unsigned`; produkce test certem
-  → `valid_untrusted` (trust fix: root jen z `QES_TRUST_ROOTS`, ne z PDF chain), unsigned → `unsigned`;
+  → `valid_untrusted` (trust fix: root jen z `QES_VERIFICATION_TRUST_ROOTS`, ne z PDF chain), unsigned → `unsigned`;
   `/up` 200 na obou.
 - **Staging, přímý podpis PDF (P8) nasazen 2026-10-18:** `make qes-staging-e2e-pdf` (upload tokenem →
   náhled stránky → `PATCH` oblast → submission → spuštění obřadu → podpis kódem appky →

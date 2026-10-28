@@ -107,7 +107,8 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | Proměnná | Default | Význam |
 |---|---|---|
 | `QES_ENABLED` | `true` | zapne QES vrstvu (`false` pro upstream/ne-QES) |
-| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | trust roots pro podpis i ověření (čárkou oddělené cesty) |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat (čárkou oddělené cesty) |
+| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF |
 | `QES_REQUIRE_LTV` | `true` | vyžaduje LTV data pro certy bez CRL DP |
 | `QES_LTV_ALLOWED_HOSTS` | PostSignum hosty | allowlist hostů pro CRL (SSRF ochrana) |
 | `QES_TSA_URL`, `QES_TSA_TRUST_ROOTS`, `QES_TSA_REQUIRED` | DigiCert / `config/qes/digicert-tsa.pem` / `true` | časové razítko (RFC 3161) |
@@ -115,8 +116,10 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | `QES_PDF_MAX_BYTES`, `QES_SESSION_TTL` | limity uploadu a session |
 | `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID` | App Links pro konkrétní build |
 
-Výchozí trust roots v repu jsou PostSignum (`config/qes/postsignum.pem`); staging přidává
-testovací root přes `QES_TRUST_ROOTS`. Pro iSignum/I.CA přidej její root do `QES_TRUST_ROOTS`.
+Výchozí signing trust store je PostSignum (`config/qes/postsignum.pem`), verification trust store je
+český bundle (`config/qes/czech.pem`). Staging přidává testovací root do obou přes `QES_TRUST_ROOTS` a
+`QES_VERIFICATION_TRUST_ROOTS`. Pro iSignum/I.CA přidej její root do `QES_VERIFICATION_TRUST_ROOTS`
+(signing trust store měň jen když má daná CA podepisovat).
 Defaulty jsou pro český deployment; ENV je override (`QES_REQUIRE_LTV=false` na stagingu/testech).
 
 ## Fork
