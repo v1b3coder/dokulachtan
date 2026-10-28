@@ -67,6 +67,11 @@ na server. Výsledkem je upravený DocuSeal (fork) + mobilní appka.
     (Documents), lze ho stáhnout, sdílet i smazat; DocuSeal generuje auditní stránku. Předchozí vlastní vrstva
     (`QesPdfSession` a spol.) byla revertnuta — maximum vlastního kódu, minimum užitku.
     Detail: `docs/15-primy-podpis-pdf.md`, SPEC § 4.8/§ 5.8/§ 9.9.
+16. **Defaulty pro český deployment jsou ve forku** (rozhodnutí uživatele 2026-10-28): `QES_ENABLED=true`,
+    PostSignum CRL hosty, PostSignum trust roots, DigiCert TSA a `QES_REQUIRE_LTV=true` jsou
+    výchozí v `Qes::Config::DEFAULTS`; ENV je jen override. Produkce tak v secrets drží jen
+    `QES_PUBLIC_BASE_URL` a `QES_ANDROID_CERT_SHA256`; staging přepisuje trust roots,
+    `QES_REQUIRE_LTV=false`, test CRL a allowlist. Detail: SPEC § 7.4 a § 11, `docs/10-qes.md`.
 
 ## Deployment
 
@@ -103,10 +108,12 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   starý volume `dokulachtan_data` (testovací data, tabulka `qes_pdf_sessions`) byl **smazán 2026-10-18**
   (`fly volumes destroy`); tabulka `qes_pdf_sessions` po zrušené vlastní vrstvě zůstala jen v DB, kde
   vznikla — migrace byla při squashi historie odstraněna (2026-10-23), v nových DB už nevznikne.
-- `QES_ENABLED=true`, `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA),
-  `QES_REQUIRE_LTV=true`, `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu`,
-  `QES_TSA_URL=http://timestamp.digicert.com`, `QES_TSA_REQUIRED=true` (DigiCert free, AATL;
-  kvalifikované TSA zatím nekupujeme).
+- Defaulty forku pokrývají `QES_ENABLED=true`, `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem`
+  (jen reálné PostSignum CA), `QES_REQUIRE_LTV=true`,
+  `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu`,
+  `QES_TSA_URL=http://timestamp.digicert.com`, `QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem`,
+  `QES_TSA_REQUIRED=true` (DigiCert free, AATL; kvalifikované TSA zatím nekupujeme);
+  v secrets zůstává jen `QES_PUBLIC_BASE_URL` a `QES_ANDROID_CERT_SHA256`.
 - healthcheck `/up` = 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
   `SECRET_KEY_BASE` + `docuseal.env` + SQLite na volume.
 - **Fly `QES_ANDROID_CERT_SHA256`** je fingerprint Android podpisu testovacího APK (nyní debug
@@ -123,11 +130,11 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`;
   obnovený ze snapshotu starého staging volume (`dokulachtan_data`), takže má účet
   `<SMTP_FROM>` a šablonu „QES E2E (staging)“ (starý volume zůstává odpojený).
-- `QES_ENABLED=true`, `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`
+- Defaulty forku + override: `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`
   (testovací klíče fungují, reálné PostSignum certy také), `QES_REQUIRE_LTV=false`,
-  `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu`,
-  `QES_TSA_URL=http://timestamp.digicert.com`, `QES_TSA_REQUIRED=true`,
-  `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`.
+  `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev`,
+  `QES_TEST_CRL_PATH=/app/config/qes/test-root.crl`, `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`,
+  `QES_ANDROID_CERT_SHA256=FA:C6:…:9C`.
 - Ověřeno 2026-10-18: `make qes-staging-e2e` → 4 signatury INTACT, `trusted: true`,
   `trusted_roots` = test root + 6× PostSignum; report `test/out/qes-staging-e2e-report.txt`.
   `make qes-staging-e2e-pdf` → 2 signatury INTACT, `trusted: true`, report

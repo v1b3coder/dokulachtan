@@ -811,8 +811,9 @@ a session označit `failed` (nikdy nezkracovat podpis).
   (privátní/loopback/link-local se odmítne); odpověď má limit velikosti.
 - `Qes::Ltv.check_revoked!` při přijetí certifikátu **MUSÍ** ověřit, že certifikát není v CRL uvedený jako
   revokovaný; pokud je, session **MUSÍ** selhat s `422 revoked` (SPEC § 15.2 N4).
-- Pokud OCSP/CRL není dostupné a `QES_REQUIRE_LTV=true` (default pro produkci), session **MUSÍ** selhat
-  s `failure_code = "ltv_unavailable"`; při `false` se vloží podpis bez LTV a do auditu se zapíše varování.
+- Pokud cert má `CRLDistributionPoints` a CRL nelze získat (allowlist, egress, DNS), session **MUSÍ**
+  selhat s `failure_code = "ltv_unavailable"`; `QES_REQUIRE_LTV` řídí jen certy **bez** CRL DP
+  (`true` = fail, `false` = podpis bez LTV s varováním v auditu).
 - **Poznámka:** HexaPDF 1.7 LTV neumí (viz § 16), proto je LTV implementováno vlastními moduly
   `Qes::Ltv` (CRL pro DSS) a `Qes::Dss` (DSS slovník); CMS LTV se nepoužívá (viz § 7.4 výše).
 
@@ -1240,11 +1241,12 @@ Inicializér `config/initializers/qes.rb` načítá:
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
-| `QES_TRUST_ROOTS` | — | cesty k rootům (PEM) pro validaci |
-| `QES_TSA_URL` | — | RFC 3161 TSA; produkce/staging `http://timestamp.digicert.com` (free, AATL), kvalifikované I.CA/PostSignum |
-| `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token (produkce/staging `true`) |
-| `QES_REQUIRE_LTV` | `false` (testy), `true` (produkce) | vyžadovat revokační data |
-| `QES_LTV_ALLOWED_HOSTS` | — | allowlist hostů pro CRL/OCSP (SSRF ochrana; čárkou oddělené) |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | cesty k rootům (PEM) pro validaci; jiná CA přepíše |
+| `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepíše |
+| `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA; povinné když je `QES_TSA_URL` nastavené |
+| `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
+| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
+| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené) |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro assetlinks.json |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s] |

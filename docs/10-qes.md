@@ -20,7 +20,7 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 
 | ENV | Default | Význam |
 |---|---|---|
-| `QES_ENABLED` | `false` | vypínač QES (staging/produkce) |
+| `QES_ENABLED` | `true` | vypínač QES; `false` jen pro upstream/ne-QES instanci |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
@@ -28,17 +28,22 @@ Vše níže je **změřené** (2026-10-16), ne odhad.
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
-| `QES_TRUST_ROOTS` | — | cesty k CA certům (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
-| `QES_TSA_URL` | — | RFC 3161 TSA; produkce/staging `http://timestamp.digicert.com` (free, AATL), kvalifikované I.CA/PostSignum |
-| `QES_TSA_TRUST_ROOTS` | — | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
-| `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token (produkce/staging `true`) |
-| `QES_REQUIRE_LTV` | `false` (testy), `true` (produkce) | vyžadovat revokační data |
-| `QES_LTV_ALLOWED_HOSTS` | — | allowlist hostů pro CRL/OCSP (SSRF ochrana; čárkou oddělené) |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | cesty k CA certům (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
+| `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepište |
+| `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
+| `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
+| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
+| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené) |
 | `QES_TEST_CRL_PATH` | — | cesta k testovacímu CRL, které fork vystaví na `/qes-test/root.crl` (jen staging) |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro `assetlinks.json` |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
 | `QES_SEAL_PKCS_PATH` + `QES_SEAL_PKCS_PASSWORD` | — | jen pro testy (PKCS#12 pečeti); jinak `Accounts.load_signing_pkcs` |
+
+Defaulty jsou pro český deployment (PostSignum CRL hosty a rooty, DigiCert TSA). ENV je override:
+staging přepisuje trust roots, `QES_REQUIRE_LTV`, test CRL a allowlist; jiná CA přepíše trust roots.
+Kdo nechce TSA, dá `QES_TSA_URL=` a `QES_TSA_REQUIRED=false`. `QES_ENABLED=false` vypne QES
+na upstream/ne-QES instanci.
 
 Trust roots: `Qes::Validator` staví OpenSSL store z `QES_TRUST_ROOTS` **a z intermediate certifikátů
 z CMS** (SPEC § 7.5), takže v seznamu stačí root; leaf se ověřuje řetězem (self-signed certifikát
@@ -124,7 +129,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `422 qes_required_qscd` | pole `preferences.level=qes`, cert bez `QcSSCD` | cert z čipu, nebo pole přepněte na `ades` |
 | `422 level_mismatch` | `QcSSCD` cert poslaný jako `phone_keystore` | telefon není QSCD; použijte čtečku |
 | `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví před certifikátem, SPEC § 5.1a) |
-| `ltv_unavailable` | nedostupné OCSP/CRL a `QES_REQUIRE_LTV=true` | spusťte CRL/OCSP endpoint, nebo `QES_REQUIRE_LTV=false` |
+| `ltv_unavailable` | cert má CRL DP a CRL nelze stáhnout (chybí allowlist / egress / DNS) | přidejte hosty do `QES_LTV_ALLOWED_HOSTS` a ověřte egress; `QES_REQUIRE_LTV=false` u certu s CRL DP nepomůže |
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
 | `pyhanko` → `UNTRUSTED` | chybí root v `QES_TRUST_ROOTS`, nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
 | `pyhanko` → `EXTENDED_WITH_FORM_FILLING` | po podpisu appky přibyla pečeť | očekávané; podpis appky zůstává INTACT |
@@ -195,29 +200,23 @@ bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` b
 
 ```bash
 # staging (deploy/docuseal/fly.staging.toml, APP=dokulachtan-staging)
-QES_ENABLED=true
+# Defaulty: QES_ENABLED=true, PostSignum CRL hosty a rooty, DigiCert TSA,
+# require_ltv=true. Staging přepisuje jen test root, require_ltv, test CRL a allowlist.
 QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 #   root.crt = testovací root (testovací APK), postsignum.pem = reálné PostSignum CA
 #   (Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1 + Qualified ECC R1 CA1/CA3)
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; lokální bleeding-edge build
-QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
-QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
-QES_TSA_REQUIRED=true
 QES_REQUIRE_LTV=false
 QES_TEST_CRL_PATH=/app/config/qes/test-root.crl
 QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev
 #   test cert má CRL DP na staging host → staging CRL je dostupné; 127.0.0.1 se ignoruje
 
 # produkce (deploy/docuseal/fly.toml, APP=dokulachtan)
-QES_ENABLED=true
-QES_TRUST_ROOTS=/app/config/qes/postsignum.pem   # jen reálné PostSignum CA, bez test rootu
+# Defaulty pokrývají QES_ENABLED, trust roots, LTV hosty, TSA i require_ltv.
+# Explicitně zůstává jen veřejná URL a fingerprint Android podpisu APK.
 QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
-QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu
-QES_TSA_URL=http://timestamp.digicert.com   # DigiCert free (AATL), non-qualified
-QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem
-QES_TSA_REQUIRED=true
-QES_REQUIRE_LTV=true     # CRL se stahují a vkládají do CMS; ověřeno 2026-10-18
+QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0
 ```
 
 Ověřeno 2026-10-18 na novém stagingu: `make qes-staging-e2e` → 4 signatury INTACT, `trusted: true`,

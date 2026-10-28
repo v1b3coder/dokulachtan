@@ -104,19 +104,20 @@ Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 Konfigurace se čte z ENV s prefixem `QES_` (`Qes::Config`), hodnoty a troubleshooting jsou
 v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 
-| Proměnná | Význam |
-|---|---|
-| `QES_ENABLED` | zapne QES vrstvu |
-| `QES_TRUST_ROOTS` | trust roots pro podpis i ověření (čárkou oddělené cesty) |
-| `QES_REQUIRE_LTV` | vyžaduje LTV data při podpisu |
-| `QES_LTV_ALLOWED_HOSTS` | allowlist hostů pro CRL/OCSP (SSRF ochrana) |
-| `QES_TSA_URL`, `QES_TSA_REQUIRED` | časové razítko (RFC 3161) |
+| Proměnná | Default | Význam |
+|---|---|---|
+| `QES_ENABLED` | `true` | zapne QES vrstvu (`false` pro upstream/ne-QES) |
+| `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | trust roots pro podpis i ověření (čárkou oddělené cesty) |
+| `QES_REQUIRE_LTV` | `true` | vyžaduje LTV data pro certy bez CRL DP |
+| `QES_LTV_ALLOWED_HOSTS` | PostSignum hosty | allowlist hostů pro CRL (SSRF ochrana) |
+| `QES_TSA_URL`, `QES_TSA_TRUST_ROOTS`, `QES_TSA_REQUIRED` | DigiCert / `config/qes/digicert-tsa.pem` / `true` | časové razítko (RFC 3161) |
 | `QES_PUBLIC_BASE_URL`, `QES_DEEP_LINK_BASE` | veřejná URL a deep link pro appku |
 | `QES_PDF_MAX_BYTES`, `QES_SESSION_TTL` | limity uploadu a session |
 | `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID` | App Links pro konkrétní build |
 
-Výchozí trust roots v repu jsou PostSignum (`config/qes/postsignum.pem`) a testovací root.
-Pro iSignum/I.CA přidej její root do `QES_TRUST_ROOTS`.
+Výchozí trust roots v repu jsou PostSignum (`config/qes/postsignum.pem`); staging přidává
+testovací root přes `QES_TRUST_ROOTS`. Pro iSignum/I.CA přidej její root do `QES_TRUST_ROOTS`.
+Defaulty jsou pro český deployment; ENV je override (`QES_REQUIRE_LTV=false` na stagingu/testech).
 
 ## Fork
 
