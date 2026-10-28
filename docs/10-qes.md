@@ -219,6 +219,16 @@ QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0
 ```
 
+**Produkce po zjednodušení (2026-10-28):** release **v51**
+(`deployment-01M61NDWNT8R8VA1HH9GEHBMG1`), fork `b2396604`; v secrets zůstávají jen
+`QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256` a SMTP. `Qes::Config` na stroji:
+`enabled=true`, `require_ltv=true`, `ltv_allowed_hosts` = 3 PostSignum hosty, trust roots
+6× PostSignum, `tsa_url=http://timestamp.digicert.com`, TSA roots 1, `tsa_required=true`;
+CRL fetch OK (`PostSignum Qualified CA 4`, 21 988 revoked), `/up` 200,
+`POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes/sessions/unknown/document` → 404,
+`/qes-test/root.crl` → 404. Staging zatím běží v23 ze staršího forku a explicitní defaulty
+zůstávají; při dalším deployi může použít stejné zjednodušení.
+
 Ověřeno 2026-10-18 na novém stagingu: `make qes-staging-e2e` → 4 signatury INTACT, `trusted: true`,
 `trusted_roots` = test root + 6× PostSignum (`test/out/qes-staging-e2e-report.txt`);
 `make qes-staging-e2e-pdf` → 2 signatury INTACT, `trusted: true`

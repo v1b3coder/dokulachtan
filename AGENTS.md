@@ -122,6 +122,13 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   „Android podpisy vs. certifikáty“ výše.
 - Ověřeno 2026-10-18: `trusted_roots` = 6× PostSignum, test cert `trusted=false`, `require_ltv=true`,
   reálný CRL fetch z produkce OK (`PostSignum Qualified CA 4`, 22 510 revoked).
+- Ověřeno 2026-10-28 po zjednodušení (release **v51**, `deployment-01M61NDWNT8R8VA1HH9GEHBMG1`,
+  fork `b2396604`): v secrets jen `QES_PUBLIC_BASE_URL` + `QES_ANDROID_CERT_SHA256` (+ SMTP);
+  `Qes::Config` na stroji `enabled=true`, `require_ltv=true`, `ltv_allowed_hosts` = 3 PostSignum hosty,
+  trust roots 6× PostSignum, `tsa_url=http://timestamp.digicert.com`, TSA roots 1, `tsa_required=true`;
+  CRL fetch OK (`PostSignum Qualified CA 4`, 21 988 revoked), `/up` 200,
+  `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes/sessions/unknown/document` → 404,
+  `/qes-test/root.crl` → 404.
 - První účet (setup) vytváří uživatel v prohlížeči; SMTP nastaveno (Brevo, `SMTP_FROM=<SMTP_FROM>`,
   `deploy/smtp.prod.env` — reálné hodnoty jsou v gitignored souboru).
 
@@ -640,6 +647,14 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       Staging e2e: `make qes-staging-e2e` 2 signeři → 6 signatur (report
       `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury, podpis appky
       INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
+
+- [x] **Defaulty pro český deployment ve forku a zjednodušená produkce (2026-10-28):** fork `b2396604`
+      má v `Qes::Config::DEFAULTS` `QES_ENABLED=true`, PostSignum CRL hosty, PostSignum trust roots,
+      DigiCert TSA a `require_ltv=true`; produkce **v51** (`deployment-01M61NDWNT8R8VA1HH9GEHBMG1`)
+      po `fly secrets unset` drží jen `QES_PUBLIC_BASE_URL` + `QES_ANDROID_CERT_SHA256` (+ SMTP).
+      Ověřeno `Qes::Config` na stroji, CRL fetch, `/up` 200, `POST /api/qes/*` 401,
+      `/qes/sessions/unknown/document` 404, `/qes-test/root.crl` 404. Testy: T0 416/0, T1 523/0, T2 659/0.
+      Staging v23 běží ze staršího forku s explicitními defaulty; při dalším deployi může zjednodušit stejně.
 
 ## Pravidla modifikací forku
 
