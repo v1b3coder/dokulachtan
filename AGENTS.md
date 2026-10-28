@@ -602,6 +602,12 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       R1 (bezpečnostní: tamper po nedůvěryhodném podpisu se nehlásí, `modified: false`), R2 (CAdES podpisy
       přestaly být trusted přes certy účtu), R3 (`qes` pole v builderu vždy, i při `QES_ENABLED=false`),
       R4 (tiché neuložení QES šablony / 500), R5 (dotazy `qes_sessions` v non-QES cestách) + R6–R11.
+      **Opravy 2026-10-28:** R1 hranice změn z `accepted.presence || verified`, R2 CAdES přes certy
+      účtu s `signing_leaf?`, R3 `withQes` gate (`QES_ENABLED`) + volba AdES/QES v kontextovém menu pole,
+      R4 422 s překladem v web/API šablonách i preferencích + `alert` v builderu, R5 jeden dotaz na
+      submission v `submissions/show` a `generate_audit_trail`; regresní specy
+      `spec/lib/qes/verify_parity_spec.rb` a `spec/requests/qes_template_errors_spec.rb`.
+      Ověřeno: `make qes-test-qes` 413/0 + JS 33/0, `make qes-test` 655/0, `make qes-test-postgres` 660/0.
       Kombinace QES a non-QES u **různých** signerů je záměrně zakázaná (`qes_all_signers_required`);
       u **stejného** signera lze mít `qes` i `signature` pole (QES krok jde poslední a kryje i vykreslený podpis).
 

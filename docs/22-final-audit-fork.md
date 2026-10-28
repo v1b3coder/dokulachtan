@@ -5,7 +5,7 @@
 **Otázky:** (1) nerozbili jsme nesouvisející funkcionalitu DocuSealu? (2) lze kombinovat
 QES a non-QES podpisy v jednom dokumentu u více signerů?
 
-**Verdikt:**
+**Verdikt:** (nálezy R1–R5 opraveny 2026-10-28, viz § 8)
 
 1. **Upstream funkcionalita v testech nespadla.** Celá sada prošla: **647/0** na SQLite
    (`make qes-test`) a **655/0** na Postgresu 18 (`make qes-test-postgres`). Žádný
@@ -311,3 +311,20 @@ Qes::PdfiumTrust.report(StringIO.new(pdf + "\n% injected\n"), []).first # nemodi
 
 Smíšená šablona: `Template#save` s `qes` polem jen u prvního ze dvou
 signerů → `errors[:fields] == ['qes_all_signers_required']`.
+
+## 8. Opravy (2026-10-28)
+
+Všechny akční nálezy jsou opravené ve forku, každá oprava má regresní test.
+
+| Nález | Oprava | Test |
+|---|---|---|
+| **R1** | `Qes::PdfiumTrust.report` bere hranici změn z `(accepted.presence || verified)`, pokud nejsou žádné trusted ranges; `trusted_ranges` zůstávají jen pro QES scope | `spec/lib/qes/verify_parity_spec.rb` (tamper po nedůvěryhodném podpisu, prázdné trusted ranges, intact) |
+| **R2** | `trusted?` přijímá CAdES i přes certy účtu, ale jen když je podepisující cert `signing_leaf?` (CA cert / `keyEncipherment` zůstává netrusted) | `verify_parity_spec.rb` (CAdES přes cert účtu, CA cert netrusted, adbe parity) |
+| **R3** | `withQes` flag z `QES_ENABLED` v `application.js`/`builder.vue`, gate v `field_type.vue`, `fields.vue`, `dynamic_insert_menu.vue`; volba levelu (AdES/QES) v `field_context_menu.vue`; `disabled` kód v `qes_step_logic.mjs` + texty | `spec/javascript/qes_step_logic.test.mjs`; eslint |
+| **R4** | 422 JSON v `TemplatesController#update` a `Api::TemplatesController#update`, 422 s chybou v `TemplatesPreferencesController#create` (banner v modalu), `alert` v `builder.vue` při `!response.ok` (stejná chyba jen jednou); překlady `qes.error.qes_*` (en/cs) | `spec/requests/qes_template_errors_spec.rb` (web, API, preferences) |
+| **R5** | jeden dotaz na submission v `submissions/show` (gate `Qes.enabled?`) a v `generate_audit_trail`; jednorázové dotazy v `generate_result_attachments`/`generate_combined_attachment` zůstávají (1 na dokončení, ne N+1) | upstream sada |
+
+Ověřeno po opravách: `make qes-test-qes` **413/0** + JS **33/0**,
+`make qes-test` **655/0** (SQLite), `make qes-test-postgres` **660/0** (Postgres 18).
+R6–R11 jsou informační (Boolean cast je oprava, QES merged dokument a `deep_dup`
+jsou záměr, routy/schema bez konfliktu, upravený upstream spec je jen flake fix).
