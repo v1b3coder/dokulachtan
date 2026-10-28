@@ -611,6 +611,17 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       Kombinace QES a non-QES u **různých** signerů je záměrně zakázaná (`qes_all_signers_required`);
       u **stejného** signera lze mít `qes` i `signature` pole (QES krok jde poslední a kryje i vykreslený podpis).
 
+- [x] **Nasazení oprav finálního auditu (2026-10-28):** staging **v22**
+      (`deployment-01M60WHPTS8KJXQ4AX0H0HN5YF`), produkce **v48**
+      (`deployment-01M60WZEE84GAQED00DPZZJSW7`), obě z forku `1b3bb645` (pushnuto na GitHub i giteu).
+      `/up` 200 na obou, produkce `Qes::Config`: `enabled=true`, `signature_reserve=65536`, `require_ltv=true`,
+      trust roots 6 (PostSignum), TSA roots 1, `tsa_url=http://timestamp.digicert.com`; `/api/qes/verify`,
+      `/api/qes/documents` i `/api/tools/verify` → 401 (endpointy žijí).
+      Staging e2e: `make qes-staging-e2e` 2 signeři → 6 signatur INTACT (report
+      `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury, podpis appky
+      INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`); `ILLEGAL_MODIFICATIONS`
+      v pyHanko výstupu je jen u mezikroků s DocTS (skript prošel, `make_exit=0`).
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.
