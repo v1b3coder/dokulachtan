@@ -25,8 +25,11 @@ nad tím, co už existuje, ne nový kryptografický systém.
 2. **Nenahrazuje heslo.** Přihlášení certifikátem je další metoda vedle hesla; vynucení
    (`force`) je až budoucí politika s break-glass účtem.
 3. **Feature flag `QES_LOGIN_ENABLED=false`**, zapnout nejdřív na stagingu, pak na produkci.
-4. **Žádné automatické párování certifikátu podle e-mailu ze subjectu.** Registrace certifikátu
-   je explicitní, po přihlášení heslem (nebo předpřipravená adminem).
+4. **Žádné automatické párování certifikátu podle e-mailu ze subjectu bez ověření.**
+   PostSignum e-mail v kvalifikovaném certifikátu **neověřuje** (QCA policy § 3.2.4),
+   takže samotný e-mail nestačí. Doporučená varianta E2 (§ 12): první přihlášení
+   certem + e-mailový kód na adresu z certifikátu + automatické párování; další
+   přihlášení už jen cert + biometrie (+ OTP, pokud je zapnuté).
 5. **2FA zůstává.** Pokud má uživatel zapnuté TOTP, přihlášení certifikátem ho po ověření
    podpisu vyžádá také. Cert + biometrie je „possessed key + inherence“, ale server biometrii
    nevidí, takže TOTP je rozumná obrana navíc.
@@ -34,17 +37,25 @@ nad tím, co už existuje, ne nový kryptografický systém.
    `DOKULACHTAN-LOGIN-V1`, nikdy PDF TBS. Appka formát ověří a podepíše jen exact bytes;
    server ověří podpis nad uloženým challenge. Tím se login nedá zneužít jako podpis dokumentu.
 
-**Odhad pracnosti:** 13–18 člověkodnů (server 6–8, appka 3–4, testy/e2e 3–4, dokumentace a
-nasazení 1–2). Bez reálné čtečky; ta je závislá na P5.
+**Odhad pracnosti (původní):** 13–18 člověkodnů (server 6–8, appka 3–4, testy/e2e 3–4,
+dokumentace a nasazení 1–2). **E2:** 12–16, **E1:** 10–13 (revize § 12). Bez reálné
+čtečky; ta je závislá na P5.
 
 **Největší riziko:** login CSRF / phishing — útočník oběti podstrčí svůj browser a nechá ji
 podepsat přihlášení do jeho session. Mitigace: krátký TTL, jednorázový token, kód zobrazený
-v browseru i appce, origin v challenge, bind na browser session a explicitní potvrzení uživatele.
-Zbytkové riziko zůstává, pokud uživatel kód neporovná; proto UI musí být hodně explicitní.
+v browseru i appce, **e-mailový kód na adresu z certifikátu (E2)**, origin v challenge, bind
+na browser session a explicitní potvrzení uživatele. Zbytkové riziko zůstává, pokud uživatel
+kód neporovná; proto UI musí být hodně explicitní.
 
 **Největší blokátor:** přihlášení čipem eObčanky (QES) nejde do produkce, dokud není hotová
 reálná MOI SDK integrace v P5. Dnes je `StubCardSigner` a `FakeCardSigner`; login s kartou by
 fungoval jen v testovacím režimu.
+
+**Revize 2026-10-28 — párování přes e-mail:** ruční registrace certifikátu v appce není
+nutná. PostSignum ale e-mail v certifikátu neověřuje, takže e-mailový kód je **podmínka**
+(jinak by šel kvalifikovaný cert s cizím e-mailem zneužít k přihlášení). Doporučení se
+mění na **E2**: první přihlášení e-mailem + automatické párování, další už cert + biometrie.
+Odhad klesá na **12–16 člověkodnů**; detail § 12.
 
 ---
 
@@ -208,6 +219,10 @@ Napojit DocuSeal na existující firemní IdP.
 | 7 | browser | `POST /qes/login/attempts/:id/finish` | CSRF, kontrola session, `sign_in` / OTP |
 | 8 | server | `sign_in(user)` nebo OTP formulář, pak redirect | Devise session fixation protection |
 
+**E2:** krok 5 vrací `email_required` při nepárovaném certu; krok 6 je „Zadejte kód
+z e-mailu“ (`POST …/email_code`), krok 7 finish a krok 8 `sign_in`. S párováním
+krok 6 odpadá.
+
 **V1 bez JS:** krok 6 je `<meta http-equiv="refresh" content="2">`; po schválení se vykreslí
 formulář s tlačítkem. Je to o jeden klik navíc, ale nulový JS a nulové CSP riziko.
 **V1.1:** malý custom element `qes-login` polluje `GET /qes/login/attempts/:id/status`
@@ -215,7 +230,12 @@ a po `approved` automaticky odešle finish formulář.
 
 ### 5.2 Datový model
 
-#### `qes_login_certificates` (registrované certifikáty pro přihlášení)
+#### `qes_login_certificates` (původní) / `qes_login_pairings` (E2)
+
+> **E2 (§ 12):** místo `qes_login_certificates` stačí `qes_login_pairings` s `user_id`,
+> `fingerprint_sha256` (unique), `paired_at`, `last_used_at`, `revoked_at`; metadata
+> (`subject`, `issuer`, `serial`, `not_after`) lze uložit pro UI/audit. Plní se automaticky
+> po e-mailovém kódu, ne ručně.
 
 | Sloupec | Typ | Význam |
 |---|---|---|
@@ -256,6 +276,12 @@ a po `approved` automaticky odešle finish formulář.
 | `challenge_digest` | string | SHA-256 challenge |
 | `origin` | string | normalizovaný origin serveru |
 | `certificate_fingerprint_sha256` | string, nullable | po ověření |
+| `certificate_email` | string, nullable | e-mail ze SAN certu (lowercase, E2) |
+| `email_code_digest` | string, nullable | SHA-256 e-mailového kódu (E2) |
+| `email_code_expires_at` | datetime, nullable | TTL e-mailového kódu (E2) |
+| `email_code_attempts` | integer | pokusy o e-mailový kód (E2) |
+| `email_confirmed_at` | datetime, nullable | e-mail potvrzen (E2) |
+| `pairing_id` | bigint, nullable | E2 párování |
 | `certificate_attempts` | integer | počet pokusů s jiným certem |
 | `failure_code` | string, nullable | audit |
 | `signature` | binary, nullable | podpis challenge pro audit |
@@ -271,6 +297,8 @@ a po `approved` automaticky odešle finish formulář.
 - `browser_secret_digest`; raw secret jen v podepsané Rails session (HttpOnly cookie).
 - `challenge` není tajný po načtení appkou, ale před načtením ho chrání `app_token`.
 - `signature` je veřejný důkaz; ukládá se pro audit úspěšného přihlášení.
+- **E2:** `purpose` je jen `login`; párování je stav, ne purpose. `qes_login_certificate_id`
+  se nahrazuje `pairing_id`.
 
 ### 5.3 Endpointy
 
@@ -294,6 +322,9 @@ a po `approved` automaticky odešle finish formulář.
 - Browser endpointy mají normální CSRF a session; `POST …/finish` a `…/otp` jsou
   formuláře s CSRF, ne JSON.
 - `GET …/status` je volitelný pro v1.1 (JS auto-submit); v1 stačí meta refresh.
+
+> **E2 (§ 12):** `GET/DELETE /qes/login/pairings` místo `certificates`;
+> `POST /qes/login/certificates` odpadá; přidává se `POST /qes/login/attempts/:id/email_code`.
 
 #### Limity
 
@@ -343,7 +374,9 @@ expires: 2026-10-28T12:34:56Z
 |---|---|---|
 | `pending` | browser vytvořil attempt, čeká | `scanned`, `expired`, `failed`, `cancelled` |
 | `scanned` | appka otevřela odkaz | `approved`, `expired`, `failed`, `cancelled` |
-| `approved` | podpis ověřen, čeká na browser/OTP | `consumed`, `expired`, `cancelled` |
+| `approved` | podpis ověřen, čeká na browser/OTP | `awaiting_email`, `consumed`, `expired`, `cancelled` |
+| `awaiting_email` | E2: e-mailový kód odeslán, čeká na browser | `email_confirmed`, `expired`, `failed`, `cancelled` |
+| `email_confirmed` | E2: e-mail potvrzen, čeká na browser finish | `consumed`, `expired`, `cancelled` |
 | `consumed` | browser dokončil `sign_in` | — |
 | `expired` | TTL | — |
 | `failed` | max cert pokusů / neplatný stav | — |
@@ -353,32 +386,47 @@ expires: 2026-10-28T12:34:56Z
   `Qes::SessionManager`.
 - `scanned` je volitelný; pokud appka odkaz nikdy neotevře, `pending` expiruje.
 - `approved` může expirovat, pokud browser nedokončí v `QES_LOGIN_ATTEMPT_TTL`.
+- **E2:** `approved` → `awaiting_email` jen když neexistuje párování; s párováním
+  jde rovnou `approved` → `consumed`.
 - `consumed` je terminální; opakovaný finish vrací 410.
 
-### 5.6 Registrace certifikátu pro přihlášení
+### 5.6 Registrace certifikátu (původní) a párování přes e-mail (E2)
 
-- **Self-service (v1):** uživatel přihlášený heslem → Profil → „Přihlašování certifikátem“ →
+> **Revize 2026-10-28:** doporučená varianta E2 ruší ruční registraci; tato sekce
+> popisuje původní návrh a na konci E2. Detail § 12.
+
+- **Původní self-service (v1, před revizí):** uživatel přihlášený heslem → Profil → „Přihlašování certifikátem“ →
   „Přidat certifikát“ → `POST /qes/login/certificates` → attempt `purpose=enroll` →
   stejná waiting page + QR/kód → appka podepíše → server uloží `QesLoginCertificate`
   pro `current_user` → browser finish → „Certifikát byl přidán“.
-- **Admin (v1):** `UsersController#edit` zobrazí seznam certifikátů uživatele a
-  „Odvolat“; oprávnění `can :manage, QesLoginCertificate, user: { account_id: … }`
+- **Admin (v1):** `UsersController#edit` zobrazí seznam párování uživatele a
+  „Odvolat“; oprávnění `can :manage, QesLoginPairing, user: { account_id: … }`
   (DocuSeal dnes nemá striktní admin roli, každý uživatel účtu může spravovat
   uživatele; sjednotit s `can :manage, User`).
-- **Žádné auto-provisioning podle e-mailu ze subjectu.** Kvalifikovaný certifikát
-  nemusí mít e-mail a shoda e-mailu není důkaz totožnosti. Registrace je explicitní.
+- **Původní pravidlo:** žádné auto-provisioning **bez ověření** e-mailu. Kvalifikovaný
+  certifikát nemusí mít e-mail a shoda e-mailu není důkaz totožnosti. E2 s e-mailovým
+  kódem auto-provisioning **umožňuje**; bez kódu ne.
 - **Idempotence:** stejný cert pro stejného uživatele = OK; pro jiného uživatele =
   `certificate_in_use`; stejný cert pro stejného uživatele znovu = update `last_used_at`.
 - **Ověření při registraci:** stejné jako login (podpis challenge, řetěz, CRL,
   platnost, key usage). Ukládá se jen veřejný certifikát, nikdy privátní klíč.
 - **Odvolání:** `revoked_at`; login ho odmítne. U archivovaného uživatele
   `active_for_authentication?` odmítne; při archivaci lze certy odvolat (volitelné).
+- **Varianta E2 (revize 2026-10-28):** ruční „Přidat certifikát“ se nahrazuje párováním
+  při prvním přihlášení. Appka podepíše challenge, server z certifikátu přečte e-mail
+  (SAN `rfc822Name`), pošle na něj 6místný kód a browser ho ověří; cert se automaticky
+  spáruje s uživatelem. Tabulka `qes_login_pairings` zůstává (fingerprint → user), ale
+  plní se automaticky; UI jen zobrazuje seznam a „Odvolat“. Detail § 12.
 
 ### 5.7 Přihlášení, OTP, session a redirect
 
 - **Bez OTP:** `POST …/finish` → `sign_in(user)` → `redirect_to after_sign_in_path_for(user)`.
 - **S OTP:** `POST …/finish` → redirect na `GET …/otp`; OTP formulář → `POST …/otp` →
   `user.validate_and_consume_otp!` → `sign_in(user)`.
+- **E2 — e-mailový kód při prvním přihlášení:** `POST …/complete` po ověření
+  podpisu → `awaiting_email` + e-mail s kódem na adresu z certifikátu; browser
+  `POST …/email_code` → `email_confirmed` → `sign_in` (nebo OTP). Další přihlášení
+  už e-mail nevyžadují. Detail § 12.
 - **FORCE_MFA:** pokud uživatel nemá OTP a je zapnuté `FORCE_MFA`, `sign_in` ho pustí
   a `DashboardController#maybe_redirect_mfa_setup` ho pošle na setup; to je stejné jako
   u hesla. Není to nová díra, ale je to UX krok.
@@ -402,7 +450,7 @@ expires: 2026-10-28T12:34:56Z
 - Načte `token` z query, `resolveSigningOrigin(platformVaultDeps().storage)` (bez
   `server` parametru; server URL je v Nastavení), `new LoginApi(origin, token)`.
 - Zobrazí:
-  - „Přihlášení do DocuSealu“ / „Přidání certifikátu pro přihlášení“
+  - „Přihlášení do DocuSealu“
   - origin serveru
   - kód pro kontrolu (6 číslic)
   - subject certifikátu z vaultu
@@ -410,7 +458,8 @@ expires: 2026-10-28T12:34:56Z
   - pokud není certifikát: „Importovat klíč“ (primary) + vysvětlení
   - pokud je potřeba čtečka: „Připojit čtečku“ (ale dnes stub → chyba)
 - Po úspěchu: „Přihlášeno do <origin>. Vraťte se do prohlížeče.“ + „Zavřít“.
-- Po registraci: „Certifikát byl přidán. Vraťte se do prohlížeče.“
+- Při E2 bez párování server vrátí `email_required`: „Poslali jsme kód na <e-mail>. Dokončete přihlášení v prohlížeči.“ Appka se zavře.
+- Při E2 s párováním se e-mail neposílá; appka dostane `approved`.
 - Chybové texty: `unknown_certificate`, `certificate_in_use`, `revoked`,
   `certificate_expired`, `not_trusted`, `not_qualified`, `signature_invalid`,
   `expired_token`, `used_token`, `unknown_token`, `foreign_server`, `invalid_server`,
@@ -424,10 +473,14 @@ expires: 2026-10-28T12:34:56Z
   (`button_to` na `POST /qes/login/attempts`, `data: { turbo: false }`), jen když
   `QES_LOGIN_ENABLED=true`.
 - **Waiting page:** karta s QR (App Link), custom scheme odkaz, kód, „čeká na
-  potvrzení v appce“, tlačítko „Zrušit“; po `approved` formulář „Přihlásit se“.
-- **Registrace:** sekce v Profilu „Přihlašování certifikátem“ se seznamem certů,
-  „Přidat certifikát“ a „Odvolat“; jen při `QES_LOGIN_ENABLED=true`.
-- **Admin:** v editaci uživatele seznam certů a „Odvolat“; volitelné pro v1.
+  potvrzení v appce“, tlačítko „Zrušit“; po `approved`:
+  - párovaný cert: formulář „Přihlásit se“;
+  - nepárovaný cert (E2): formulář „Zadejte kód z e-mailu“ + „Poslat znovu“;
+    po `email_confirmed` formulář „Přihlásit se“.
+- **Párování:** sekce v Profilu „Přihlašování certifikátem“ zobrazuje seznam
+  párovaných certů a „Odvolat“; žádné „Přidat certifikát“ (E2 se páruje při
+  prvním přihlášení); jen při `QES_LOGIN_ENABLED=true`.
+- **Admin:** v editaci uživatele seznam párování a „Odvolat“; volitelné pro v1.
 - **Audit:** v1 DB + `last_used_at`; samostatná stránka historie přihlášení v1.1.
 - **Bez změny:** `app/views/devise/sessions/new.html.erb` (jen partial), `sessions_controller.rb`
   (heslo/OTP beze změny), `verify_pdf_signature.rb` (bit-identický s upstreamem).
@@ -443,12 +496,17 @@ expires: 2026-10-28T12:34:56Z
 | `QES_LOGIN_DEEP_LINK_BASE` | `dokulachtan://login` | custom scheme |
 | `QES_LOGIN_ATTEMPT_TTL` | `120` | platnost challenge v sekundách |
 | `QES_LOGIN_MAX_CERTIFICATE_ATTEMPTS` | `3` | kolik různých certů lze zkusit v jednom attemptu |
+| `QES_LOGIN_EMAIL_CODE_TTL` | `600` | platnost e-mailového kódu (s) |
+| `QES_LOGIN_EMAIL_CODE_ATTEMPTS` | `5` | pokusy o e-mailový kód |
+| `QES_LOGIN_EMAIL_CODE_RESEND` | `60` | minimální interval pro resend (s) |
+| `QES_LOGIN_REQUIRE_EMAIL_CONFIRMATION` | `true` | E2: první přihlášení vyžaduje e-mailový kód |
 | `QES_LOGIN_CRL_CACHE_TTL` | `3600` | cache CRL (vteřiny) |
 | `QES_LOGIN_RETENTION_DAYS` | `90` | retence auditních attemptů |
 | `QES_PUBLIC_BASE_URL` | už existuje | origin v challenge a odkazy |
 | `QES_LTV_ALLOWED_HOSTS` | už existuje | SSRF allowlist pro CRL |
 
-- **Žádné nové secrets.** Žádný nový TSA, žádný nový volume, žádný Postgres.
+- **Žádné nové secrets.** Žádný nový TSA, žádný nový volume, žádný Postgres;
+  e-mailový kód jde přes existující SMTP.
 - **Staging first:** `QES_LOGIN_ENABLED=true`, test root + PostSignum, `QES_LOGIN_REQUIRE_REVOCATION=true`,
   test CRL na staging hostu. Ověřit `make qes-login-staging`.
 - **Produkce:** až po staging e2e; jen PostSignum, `QES_LOGIN_REQUIRE_QUALIFIED=true`,
@@ -500,7 +558,8 @@ expires: 2026-10-28T12:34:56Z
 
 | Hrozba | Dopad | Mitigace | Zbytkové riziko |
 |---|---|---|---|
-| **Login CSRF**: útočník vytvoří attempt a oběti podstrčí odkaz; oběť podepíše, útočníkův browser se přihlásí jako oběť | útočník vidí data oběti | kód v browseru i appce, origin v challenge, krátký TTL, browser session binding, explicitní „Přihlásit se“; appka varuje, pokud se právě nepřihlašuje | pokud uživatel kód neporovná, riziko zůstává; proto UI musí být explicitní |
+| **Login CSRF**: útočník vytvoří attempt a oběti podstrčí odkaz; oběť podepíše, útočníkův browser se přihlásí jako oběť | útočník vidí data oběti | kód v browseru i appce, origin v challenge, krátký TTL, browser session binding, explicitní „Přihlásit se“; **E2 e-mailový kód jde na adresu z certu, ne útočníkovi** | pokud uživatel kód neporovná a e-mail ignoruje, riziko zůstává; proto UI musí být explicitní |
+| **E-mail v certifikátu není ověřený** (PostSignum QCA policy § 3.2.4) | útočník s kvalifikovaným certem na cizí e-mail | e-mailový kód na adresu z certu (E2); bez kódu se cert nespáruje; samotná shoda e-mailu není důkaz | sdílená schránka; kód může přečíst více lidí; dokumentovat |
 | **Token phishing**: útočník pošle odkaz na vlastní server | podpis challenge pro cizí server | appka ověří origin proti Nastavení; `foreign_server`; challenge obsahuje origin | uživatel může změnit server v Nastavení; dokumentovat |
 | **Replay** challenge | opakované přihlášení | one-time token, `consumed`, TTL, challenge v DB | žádné |
 | **Krádež telefonu / malware** | podpis jako uživatel | biometrie, vault, krátký TTL; bez device attestation | malware s biometrií / root může podepsat; budoucí Play Integrity/App Attest |
@@ -516,7 +575,7 @@ expires: 2026-10-28T12:34:56Z
 
 ### 6.2 Co je potřeba dodržet
 
-1. **Nikdy nepárovat cert podle e-mailu ze subjectu.** Jen explicitní registrace.
+1. **Nikdy nepárovat cert podle e-mailu ze subjectu bez ověření.** PostSignum e-mail v certifikátu neověřuje; E2 vyžaduje e-mailový kód. Samotná shoda e-mailu není důkaz.
 2. **Nikdy neposílat privátní klíč.** Server vidí jen veřejný cert, řetěz a podpis.
 3. **Nikdy nenazývat login QES.** Je to autentizace certifikátem; certifikát může být
    kvalifikovaný, ale podepisuje se login challenge, ne dokument.
@@ -527,6 +586,7 @@ expires: 2026-10-28T12:34:56Z
 7. **Nikdy nedovolit `finish` z appky.** Browser session + `browser_secret`; appka
    jen schválí, browser dokončí.
 8. **Nikdy nezapnout `force` bez break-glass.** V1 `force` ne.
+9. **Nikdy nepoužít e-mail z certifikátu bez e-mailového kódu.** CA e-mail neověřuje; kód prokazuje kontrolu schránky.
 
 ### 6.3 Residual risks
 
@@ -549,10 +609,13 @@ expires: 2026-10-28T12:34:56Z
 | `spec/lib/qes/login/challenge_spec.rb` | prefix, canonical formát, parse, origin, expiry, code |
 | `spec/lib/qes/login/verifier_spec.rb` | platný podpis, špatný podpis, expired cert, untrusted chain, revoked, unknown cert, archived user, replay |
 | `spec/models/qes_login_certificate_spec.rb` | unique fingerprint, revocation, active scope, level info |
-| `spec/models/qes_login_attempt_spec.rb` | stavový automat, token digest, browser secret, expiry, purpose |
-| `spec/requests/qes_login_spec.rb` | start → app fetch → complete → status → finish → `sign_in`; OTP; cancel; replay; wrong session; rate limit; CSRF; disabled; cert in use; unknown cert |
-| `spec/requests/qes_login_certificates_spec.rb` | enroll, list, revoke, authorization |
-| `spec/requests/qes_views_spec.rb` | login button, waiting page, enrollment section |
+| `spec/models/qes_login_attempt_spec.rb` | stavový automat, token digest, browser secret, expiry, purpose, e-mailový kód |
+| `spec/models/qes_login_pairing_spec.rb` | unique fingerprint, revoke, active scope |
+| `spec/requests/qes_login_spec.rb` | start → app fetch → complete → e-mail code → finish → `sign_in`; OTP; cancel; replay; wrong session; rate limit; CSRF; disabled; cert in use; unknown cert; unknown user; missing/ambiguous e-mail |
+| `spec/requests/qes_login_pairings_spec.rb` | list, revoke, authorization |
+| `spec/requests/qes_login_email_code_spec.rb` | send, verify, resend, wrong code, expired code, rate limit |
+| `spec/requests/qes_views_spec.rb` | login button, waiting page, e-mail code form, pairing list |
+| `spec/mailers/qes_login_mailer_spec.rb` | kód, origin, žádný token, žádný odkaz |
 | `spec/jobs/qes/expire_login_attempts_job_spec.rb` | expiry, retence |
 
 ### 7.2 Appka
@@ -560,20 +623,22 @@ expires: 2026-10-28T12:34:56Z
 | Test | Co ověřuje |
 |---|---|
 | `src/lib/loginApi.test.ts` | endpointy, origin, error payload, token jen v paměti |
-| `src/lib/loginCeremony.test.ts` | challenge parse, signer selection, vault unlock, post, error mapping |
+| `src/lib/loginCeremony.test.ts` | challenge parse, signer selection, vault unlock, post, `email_required`, error mapping |
 | `src/lib/loginChallenge.test.ts` | prefix, origin, code, expiry, malformed |
-| `app/login.test.tsx` | UI stavy, success, error, no cert, enroll |
+| `app/login.test.tsx` | UI stavy, success, error, no cert, `email_required` |
 | `src/lib/signingOrigin.test.ts` | beze změny; jen regression |
 
 ### 7.3 E2E a negativní
 
 - `make qes-login-e2e` (nový `scripts/qes_login_e2e.py`): bootstrap účet + test cert pro přihlášení
-  → browser start → app fetch/complete (test cert) → browser finish → ověření `sign_in` a session.
-- `make qes-login-staging`: proti stagingu, test root + test CRL; ověří, že login projde
-  a že `last_used_at` se zapíše.
-- `make qes-login-negative`: N1–N10: špatný podpis, expired cert, revoked cert,
+  → browser start → app fetch/complete (test cert) → server pošle e-mailový kód → e2e ho přečte
+  z `ActionMailer::Base.deliveries` → browser `email_code` → finish → ověření `sign_in` a session;
+  druhé přihlášení už bez e-mailu (párování).
+- `make qes-login-staging`: proti stagingu, test root + test CRL; ověří, že první login
+  projde s e-mailovým kódem, druhé bez, a že `last_used_at` se zapíše.
+- `make qes-login-negative`: N1–N12: špatný podpis, expired cert, revoked cert,
   untrusted chain, unknown cert, replay, expired attempt, wrong browser session,
-  rate limit, OTP fail.
+  rate limit, OTP fail, špatný e-mailový kód, e-mail bez uživatele.
 - Manuálně: Android emulátor + desktop browser QR; staging; produkce s test certem
   (očekávaně `not_trusted`).
 
@@ -589,18 +654,19 @@ expires: 2026-10-28T12:34:56Z
 
 | Fáze | Co | Odhad | Verifikace |
 |---|---|---|---|
-| **P9.1** | Server core: `QesLoginCertificate`, `QesLoginAttempt`, migrace, `Qes::Login::Config`, challenge, verifier, CRL cache, `validate_for_login!` | 3 dny | `make qes-test-qes` + nové lib/model specy |
-| **P9.2** | Browser: start/waiting/finish/otp/cancel, login tlačítko, registrace v Profilu, admin revoke, rate limit, audit | 3 dny | request/view specy; manuálně browser + app |
-| **P9.3** | Appka: `loginApi`, `loginCeremony`, `login.tsx`, challenge parser, error mapping, deep link | 3 dny | `make qes-app-test`, `make qes-app-typecheck` |
-| **P9.4** | Testy: request/model/lib, Jest, e2e, negativní, staging | 3 dny | `make qes-login-e2e`, `make qes-login-negative`, `make qes-login-staging` |
+| **P9.1** | Server core: `QesLoginPairing`, `QesLoginAttempt`, migrace, `Qes::Login::Config`, challenge, verifier, e-mailový kód, CRL cache, `validate_for_login!` | 3 dny | `make qes-test-qes` + nové lib/model specy |
+| **P9.2** | Browser: start/waiting/finish/otp/email_code/cancel, login tlačítko, párování seznam/revoke, rate limit, audit | 2 dny | request/view specy; manuálně browser + app |
+| **P9.3** | Appka: `loginApi`, `loginCeremony`, `login.tsx`, challenge parser, `email_required`, error mapping, deep link (bez enroll) | 2,5 dne | `make qes-app-test`, `make qes-app-typecheck` |
+| **P9.4** | Testy: request/model/lib, mailer, Jest, e2e, negativní, staging | 3 dny | `make qes-login-e2e`, `make qes-login-negative`, `make qes-login-staging` |
 | **P9.5** | Dokumentace, runbook, deploy, feature flag, APK | 1–2 dny | staging + produkce; `/up` 200; login e2e |
-| **Celkem** | | **13–18 člověkodnů** | |
+| **Celkem** | | **12–16 člověkodnů (E2)**; E1 10–13 | |
 
 **Závislosti:**
 
 - P9.1–P9.4 nezávisí na P5 (telefonní klíč).
 - P9 s kartou/QES závisí na P5 reálné MOI SDK; dnes jen `FakeCardSigner` v testech.
 - P9 lze začít po P4/P8; QES pipeline se nemění.
+- E2 vyžaduje existující SMTP (už je) a e-mail v certifikátu; E1 vyžaduje e-mail při každém přihlášení.
 
 **Rebase cost:** ~11 doteků upstreamu (routes, partial, profile, user form, user model,
 AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah do
@@ -621,7 +687,12 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
 | Stará appka bez `/login` | odkaz skončí v „Unmatched Route“ | fallback stránka s „aktualizujte appku“; bump verze |
 | Open redirect v `after_sign_in_path_for` | phishing po loginu | validovat `redir` nebo ignorovat |
 | 2FA | uživatel s TOTP má další krok | zachovat; rate limit; text |
-| Registrace certu | uživatel musí nejdřív heslem | explicitní UI; žádný auto-provisioning |
+| PostSignum neověřuje e-mail v certu | e-mail v certu nelze použít jako identitu | e-mailový kód (E2); bez kódu nespárovat |
+| E-mailový kód nedoručen | první přihlášení selže | resend + rate limit; fallback heslo |
+| Sdílená e-mailová schránka | více lidí může spárovat certy | dokumentovat; admin revoke |
+| Cert bez e-mailu | nelze spárovat | `certificate_email_missing`; cert s e-mailem nebo heslo |
+| Více e-mailů v certu | nejednoznačné | `ambiguous_certificate_email`; v1 fail |
+| Párování certu | uživatel nemusí ručně registrovat | E2 e-mailový kód; žádná ruční registrace |
 | Rebase | Devise a views se mohou změnit | malé doteky, testy, dokumentace |
 
 ### 9.1 Otevřené otázky a doporučení
@@ -633,8 +704,10 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
    biometrii nevidí; TOTP je obrana navíc. Uživatel bez OTP má jen cert + biometrii.
 3. **Vynutit cert login (`force`)?** V1 **ne**. Nejdřív sbírat zkušenosti; break-glass a admin
    bypass by byly potřeba. `AccountConfig::FORCE_SSO_AUTH_KEY` je vzor pro budoucnost.
-4. **Registrace self-service, nebo admin?** V1 **self-service** po přihlášení heslem;
-   admin revoke v editaci uživatele. Hromadný import certů (CSV) je v1.1.
+4. **Párování přes e-mail, nebo ruční registrace?** Doporučuji **E2**: první
+   přihlášení certem + e-mailový kód na adresu z certifikátu + automatické párování;
+   ruční „Přidat certifikát“ odpadá. Admin revoke zůstává. Hromadný import
+   certů (CSV) je v1.1.
 5. **Karta/čip v v1?** **Ne**, dokud není reálná MOI SDK (P5). Dnes jen `FakeCardSigner`
    v testech; login s kartou by v produkci skončil `reader_not_found`.
 6. **QR kód na desktopu?** **Ano**, je to hlavní cesta pro desktop. Na mobilu stačí
@@ -647,6 +720,9 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
    produkce a staging s ručním nastavením serveru.
 10. **Per-account politika?** V1 **ne**; globální ENV. Per-account `AccountConfig` je
     budoucnost pro multi-tenant.
+11. **Párování přes e-mail (E1 vs E2)?** Doporučuji **E2**: e-mailový kód jen při
+    prvním přihlášení, pak párování; další přihlášení už cert + biometrie. E1 (e-mailový
+    kód při každém přihlášení) je jednodušší datový model, ale horší UX. Detail § 12.
 
 ---
 
@@ -658,17 +734,19 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
   staging first, bez `force`.
 - **NO-GO** pro QES/čip login do dokončení P5 reálné čtečky; dnes jen testovací
   `FakeCardSigner`.
+- **GO** pro **E2** (párování přes e-mail) jako preferovanou variantu P9: první
+  přihlášení e-mailem + automatické párování; další už cert + biometrie.
 - **NO** pro nahrazení hesla v v1; cert login je další metoda.
-- **NO** pro auto-provisioning podle e-mailu; jen explicitní registrace.
+- **NO** pro auto-provisioning **bez** e-mailového ověření; E2 s ověřením ano.
 - **NO** pro nazývání „QES login“; je to autentizace certifikátem.
 - **NO** pro zásah do `verify_pdf_signature.rb` a QES podpisové pipeline.
 
 ### 10.2 Co udělat, když bude schváleno
 
 1. Přidat `docs/23-login-with-dokulachtan.md` do mapy v `AGENTS.md` a P9 do `PLAN.md`.
-2. P9.1 server core + migrace + testy; `make qes-test-qes` zelené.
-3. P9.2 browser flow + registrace + OTP + rate limit; request/view specy.
-4. P9.3 appka `login.tsx` + `loginApi` + `loginCeremony`; `make qes-app-test` a typecheck.
+2. P9.1 server core + e-mailový kód + párování + migrace + testy; `make qes-test-qes` zelené.
+3. P9.2 browser flow + e-mailový kód + párování seznam/revoke + OTP + rate limit; request/view specy.
+4. P9.3 appka `login.tsx` + `loginApi` + `loginCeremony` (bez enroll); `make qes-app-test` a typecheck.
 5. P9.4 e2e + negativní + staging; `make qes-login-e2e`, `make qes-login-staging`.
 6. P9.5 dokumentace, runbook, feature flag na produkci; `/up` 200; manuální test.
 7. Teprve potom zvážit `force` a kartu/QES.
@@ -681,6 +759,7 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
 - Nepoužívat heslo k PKCS#12 při přihlášení; jen biometrie.
 - Neukládat privátní klíč, token ani browser secret do logů.
 - Neoznačovat login jako QES.
+- Nepoužívat e-mail z certifikátu bez e-mailového kódu.
 
 ---
 
@@ -688,7 +767,199 @@ AASA, locales, schema, initializer, `certificate_info`, `ltv`), žádný zásah 
 
 „Login with Dokulachtan“ je **proveditelný a bezpečně realizovatelný** jako tenká vrstva nad
 stávající QES infrastrukturou. Nejdražší není kryptografie, ale **bezpečný browser binding,
-registrace certifikátu a UX**, aby uživatel nepodepsal cizí login. Doporučuji P9 spustit
-s telefonním klíčem, feature flagem a stagingem; kartu/QES přidat až po reálné P5. Odhad
-13–18 člověkodnů. Pokud se projekt rozhodne pokračovat, je další krok schválit tento návrh
+párování certifikátu a UX**, aby uživatel nepodepsal cizí login. Doporučuji P9 spustit
+s telefonním klíčem, feature flagem a stagingem; kartu/QES přidat až po reálné P5.
+
+Po zjištění, že PostSignum **neověřuje e-mail v kvalifikovaném certifikátu** (QCA policy
+§ 3.2.4), doporučuji variantu **E2** z § 12: první přihlášení certem + e-mailový kód na
+adresu z certifikátu + automatické párování; další už cert + biometrie. Ruční registrace
+certifikátu odpadá. Odhad **12–16 člověkodnů** (E2), případně 10–13 (E1, e-mail při
+každém přihlášení). Pokud se projekt rozhodne pokračovat, je další krok schválit tento návrh
 a zapsat P9 do `PLAN.md`.
+
+---
+
+## 12. Varianta: párování přes e-mail (bez ruční registrace certifikátu)
+
+### 12.1 Myšlenka a verdikt
+
+Uživatel se **nemusí předem registrovat certifikát** v appce ani v Profilu. Při prvním
+přihlášení certem server z certifikátu přečte e-mail, pošle na něj jednorázový kód a po jeho
+ověření cert **automaticky spáruje** s uživatelem. Další přihlášení už e-mail nevyžadují.
+
+**Verdikt: dobrý nápad, ale jen s e-mailovým kódem.** PostSignum QCA Certification Policy
+(§ 3.2.4 „Non-verified subscriber information“) výslovně říká, že e-mail v kvalifikovaném
+certifikátu je v SAN `rfc822Name`, ale Česká pošta **neověřuje existenci e-mailové adresy ani
+vztah mezi e-mailem a žadatelem**, a proto e-mail **nelze použít jako identifikaci držitele
+certifikátu**. Kdyby server páril cert podle e-mailu bez ověření, kdokoli s kvalifikovaným
+certem na cizí e-mail (CA e-mail neověřuje) by se přihlásil jako ten druhý. E-mailový kód
+tuto díru zavírá.
+
+> „The Czech Post, as the provider of certification services, does not verify the existence
+> of the email address or the actual relationship between the email address and the applicant
+> for a certificate. Therefore, this item cannot be used as the identification of the certificate
+> holder.“ — PostSignum QCA Certification Policy v2.1, § 3.2.4
+> (PDF: `postsignum.cz/files/politiky/QCA_elsign_v2-1_eng.pdf`)
+
+### 12.2 Dvě podvarianty
+
+| | **E1: e-mailový kód při každém přihlášení** | **E2: e-mailový kód jen při prvním přihlášení + párování** |
+|---|---|---|
+| Datový model | žádná tabulka párování; jen `qes_login_attempts` s `email_code_*` | `qes_login_pairings` (fingerprint → user) + `email_code_*` v attemptu |
+| První přihlášení | cert + biometrie + e-mailový kód | cert + biometrie + e-mailový kód → párování |
+| Další přihlášení | cert + biometrie + e-mailový kód | cert + biometrie (+ OTP, pokud je zapnuté) |
+| Revoke certu | jen uživatel/CA; DocuSeal cert neodvolá | „Odvolat“ v Profilu / admin; `revoked_at` |
+| UX | horší (e-mail při každém přihlášení) | dobré (e-mail jen jednou) |
+| Login CSRF | silná mitigace (kód jde oběti) | silná mitigace při prvním párování; dál cert + session binding |
+| Pracnost | 10–13 člověkodnů | 12–16 člověkodnů |
+
+**Doporučeno E2.** E1 je jednodušší datový model, ale e-mail při každém přihlášení je
+otravné a zbytečně drahé. E2 je „párování“ v pravém slova smyslu: jednou e-mailem,
+pak už jen cert + biometrie.
+
+**E3 (e-mailový odkaz místo kódu) nedoporučuji.** Odkaz je bearer token, řeší se jiný
+browser/session, je náchylnější na přeposílání a na otevření v cizím prohlížeči. Kód je
+jednodušší a bezpečnější.
+
+### 12.3 Co se zjednoduší
+
+| Oblast | Původní návrh | E2 | Úspora |
+|---|---|---|---|
+| Registrace certu | Profil → „Přidat certifikát“ → `purpose=enroll` → QR → appka podepíše | žádná ruční registrace; první login e-mailem | UI, controller, app obrazovka, testy |
+| App stav | `unknown_certificate` / `certificate_in_use` / enroll | appka vždy podepíše; server vrátí `email_required` | app obrazovka, error stavy, testy |
+| Datový model | `qes_login_certificates` + enrollment | `qes_login_pairings` (menší, plní se automaticky) | model/controller, ale tabulka zůstává |
+| Admin | revoke v editaci uživatele | revoke v seznamu párování | menší |
+| P9.2 | 3 dny | 2 dny | −1 den |
+| P9.3 | 3 dny | 2,5 dne | −0,5 dne |
+| Celkem | 13–18 | 12–16 (E2) / 10–13 (E1) | −1 až −5 |
+
+**Co se neodstraní:** tabulka párování (E2) a její unique index na fingerprint. Bez ní by
+každé přihlášení bylo E1, nebo by se cert mohl spárovat s více uživateli. Tabulka se ale
+**plní automaticky**, nemá „Přidat“ UI a uživatel ji nevidí jako registraci; vidí jen seznam
+a „Odvolat“.
+
+### 12.4 Nutné změny
+
+#### Server
+
+1. **`Qes::CertificateInfo#emails`** — parsovat SAN `rfc822Name`; vrátit přesně jeden
+   e-mail, normalizovaný na lowercase, US ASCII; bez fallbacku na subject pro PostSignum.
+   Chyby: `certificate_email_missing` (žádný e-mail), `ambiguous_certificate_email` (více).
+   PostSignum QCA policy § 3.1.4 říká, že e-mail v SAN je pouze US ASCII.
+2. **`QesLoginAttempt`** — nové sloupce `certificate_email`, `email_code_digest`,
+   `email_code_expires_at`, `email_code_attempts`, `email_confirmed_at`, `pairing_id`
+   (nullable). `certificate_email` je jen pro audit a párování; nikdy se neloguje.
+3. **`QesLoginPairing`** (E2) — `user_id`, `fingerprint_sha256` (unique), `subject`,
+   `issuer`, `serial`, `not_after`, `paired_at`, `last_used_at`, `revoked_at`.
+   Veřejný cert, žádný privátní klíč. Unique fingerprint; index `[user_id, revoked_at]`.
+   Pokud chceme minimální změnu, lze použít stávající `QesLoginCertificate` a jen ho
+   plnit automaticky; název `Pairing` je ale čitelnější.
+4. **`Qes::Login::EmailConfirmation`** — generování 6místného kódu, uložení jen SHA-256,
+   odeslání, ověření v konstantním čase, TTL 10 min, jednorázový, rate limit 5/5 min,
+   resend 60 s. Kód není token; nikdy se neloguje.
+5. **`Qes::LoginMailer#code`** — existující SMTP; text obsahuje origin, kód a větu
+   „Pokud jste se nepřihlašovali, e-mail ignorujte.“ Žádný odkaz, žádný token.
+6. **`Qes::Login::AttemptsController#email_code`** — `POST`, CSRF, browser session,
+   stav `awaiting_email`; po úspěchu `email_confirmed`. Rate limit.
+7. **`Qes::Login::SessionsController#complete`** — po ověření podpisu: pokud existuje
+   párování pro fingerprint → `approved`; jinak → `awaiting_email` + odeslat e-mail;
+   vrátit `email_required`. Appka jen zobrazí „Dokončete v prohlížeči“.
+8. **`Qes::Login::AttemptManager`** — stavy `approved` → `awaiting_email` →
+   `email_confirmed` → `consumed`; nebo `approved` → `consumed` při existujícím párování.
+   `awaiting_email`/`email_confirmed` mohou expirovat/fail/cancel.
+9. **`Qes::Login::PairingsController`** (E2) — `index` a `destroy`; žádný `create`.
+   Admin revoke v `UsersController#edit`; oprávnění `can :manage, QesLoginPairing`.
+10. **`Qes::Login::ExpireAttemptsJob`** — `awaiting_email`/`email_confirmed` po `expires_at`
+    → `expired`; úklid starých pokusů.
+11. **`Qes::Login::RateLimiter`** — e-mailový kód: 5 / 5 min / user, resend 1 / 60 s.
+12. **`Qes::Login::Config`** — `QES_LOGIN_EMAIL_CODE_TTL=600`,
+    `QES_LOGIN_EMAIL_CODE_ATTEMPTS=5`, `QES_LOGIN_EMAIL_CODE_RESEND=60`,
+    `QES_LOGIN_REQUIRE_EMAIL_CONFIRMATION=true`.
+13. **`config/initializers/qes.rb`** — filtrovat `email_code`; `email_code` nesmí do logu.
+14. **`config/routes.rb`** — `POST /qes/login/attempts/:id/email_code`,
+    `GET/DELETE /qes/login/pairings`; zrušit `certificates` endpointy.
+15. **`db/schema.rb`** — migrace výše.
+16. **`app/lib/qes/ltv.rb`** — volitelná cache CRL (stejná jako v původním návrhu).
+17. **`app/lib/qes/controller_concern.rb`** — limit podpisu (16 KB).
+18. **Testy** — viz § 7; nové `email_confirmation_spec`, `pairing_spec`,
+    `email_code_spec`, `mailer_spec`; e2e čte kód z `ActionMailer::Base.deliveries`.
+
+#### Web UI
+
+- **Login stránka** beze změny (tlačítko „Přihlásit se certifikátem“).
+- **Waiting page** po `approved`:
+  - párovaný cert → „Přihlásit se“;
+  - nepárovaný cert → „Zadejte kód z e-mailu“ + input + „Potvrdit“ + „Poslat znovu“;
+    po `email_confirmed` → „Přihlásit se“.
+- **Profil** — sekce „Přihlašování certifikátem“ zobrazuje seznam párování
+  (subject, issuer, serial, platnost, naposledy použito) a „Odvolat“; žádné
+  „Přidat certifikát“.
+- **Admin** — v editaci uživatele seznam párování a „Odvolat“; volitelné pro v1.
+- **Mail** — nový template `qes_login_code`; origin, kód, žádný odkaz.
+
+#### Appka
+
+- **Žádná enroll obrazovka** ani `purpose=enroll`; appka vždy jen podepíše login challenge.
+- `login.tsx` zobrazí origin + kód + cert subject; po `complete`:
+  - `approved` → „Přihlášeno“;
+  - `email_required` → „Poslali jsme kód na <e-mail>. Dokončete přihlášení
+    v prohlížeči.“ + „Zavřít“.
+- `loginApi` a `loginCeremony` bez `enroll`; `email_required` v typech a error mapě.
+- Testy: `login.test.tsx` bez enroll, s `email_required`; `loginCeremony.test.ts`.
+
+### 12.5 Bezpečnostní analýza
+
+| Hrozba | Dopad | Mitigace | Zbytkové riziko |
+|---|---|---|---|
+| **Cert s cizím e-mailem** (CA e-mail neověřuje) | útočník by se přihlásil jako oběť | e-mailový kód na adresu z certu; bez kódu se nespáruje | sdílená schránka; kód může přečíst více lidí |
+| **Login CSRF** | oběť podepíše útočníkův login | e-mailový kód jde oběti, ne útočníkovi; attacker ho nezná | pokud oběť kód opíše útočníkovi; UI říká „nikomu kód nesdělujte“ |
+| **Phishing** | podpis challenge pro cizí server | origin v challenge + appka ověří proti Nastavení; e-mailový kód | uživatel může změnit server v Nastavení |
+| **Replay** | opakované přihlášení | one-time token, `consumed`, TTL, e-mailový kód one-time | — |
+| **Krádež telefonu / malware** | podpis jako uživatel | biometrie, vault, krátký TTL; bez device attestation | malware s biometrií / root může podepsat; budoucí Play Integrity/App Attest |
+| **Revokovaný cert** | přihlášení revokovaným certem | CRL + `revoked_at`, fail closed | CRL nedostupné → login nedostupný |
+| **Nedůvěryhodný cert** | falešná identita | řetěz k `QES_LOGIN_TRUST_ROOTS`, `QcCompliance` | kompromitovaná CA / trust root |
+| **E-mail nedoručen** | první přihlášení selže | resend + rate limit; fallback heslo | SMTP výpadek; uživatel použije heslo |
+| **Sdílená schránka** | více lidí může spárovat certy | dokumentovat; admin revoke; e-mailový kód | úmysl organizace |
+| **Změna e-mailu uživatele** | párování zůstává na user_id | cert zůstává párovaný; nový cert se páruje na nový e-mail | uživatel může odvolat |
+| **Cert bez e-mailu** | nelze spárovat | `certificate_email_missing`; cert s e-mailem nebo heslo | PostSignum e-mail má, jiné CA nemusí |
+| **Více e-mailů v certu** | nejednoznačné | `ambiguous_certificate_email`; v1 fail | vzácné |
+| **Brute force e-mailového kódu** | uhodnutí kódu | 6 číslic, TTL 10 min, rate limit 5/5 min, jednorázový | distribuovaný útok; WAF |
+| **E-mailový kód v logu** | únik kódu | `filter_parameters :email_code`; nikdy nelogovat | — |
+| **Enumerace uživatelů** | zjištění, kdo má účet | start bez e-mailu; `unknown_user` až po certu a kódu | útočník s kvalifikovaným certem a e-mailem |
+| **E1 bez párování** | nelze odvolat cert v DocuSealu | uživatel/CA; DocuSeal jen disable user | vědomá volba E1 |
+
+**Klíčové pravidlo:** e-mail z certifikátu **není identita**. Je to jen adresa pro
+doručení kódu. Identitu potvrzuje e-mailový kód + kvalifikovaný cert + biometrie.
+
+### 12.6 Pracnost a dopad na P9
+
+| Fáze | E2 | E1 | Poznámka |
+|---|---|---|---|
+| P9.1 server core | 3 dny | 2,5 dne | E2 navíc párování, E1 jen e-mailový kód |
+| P9.2 browser | 2 dny | 2 dny | e-mailový kód místo enroll UI |
+| P9.3 appka | 2,5 dne | 2,5 dne | bez enroll, jen `email_required` |
+| P9.4 testy | 3 dny | 2,5 dne | e2e čte kód z mailu |
+| P9.5 docs/deploy | 1–2 dny | 1–2 dny | mailer, runbook |
+| **Celkem** | **12–16** | **10–13** | |
+
+**Závislosti:** E2 nezávisí na P5 (telefonní klíč). Karta/QES stále závisí na P5.
+**Rebase cost:** ~12 doteků upstreamu (routes, partial, profile, user form, user model,
+AASA, locales, schema, initializer, `certificate_info`, `ltv`, mailer); stále žádný zásah
+do `verify_pdf_signature.rb` ani QES signing pipeline.
+
+### 12.7 Doporučení
+
+- **E2** je preferovaná varianta: první přihlášení e-mailem + automatické párování,
+  další už cert + biometrie (+ OTP, pokud je zapnuté).
+- **E1** jen pokud chceme nulovou tabulku párování a nevadí e-mail při každém přihlášení.
+- **E3** (e-mailový odkaz) ne: kód je bezpečnější a nezávisí na browser session.
+- **Podmínka:** kvalifikovaný cert (`QcCompliance`) + trust root PostSignum/I.CA +
+  CRL; self-signed a cert bez e-mailu se odmítnou.
+- **UI:** žádné „Přidat certifikát“; jen seznam párování a „Odvolat“.
+- **Appka:** žádný enroll; jen `email_required` a „dokončete v prohlížeči“.
+- **Odhad:** 12–16 člověkodnů (E2); 10–13 (E1).
+
+**Závěr k nápadu:** párování přes e-mail je **lepší než ruční registrace**, protože
+odstraňuje enroll UI a zároveň řeší reálný problém, že PostSignum e-mail v certifikátu
+neověřuje. Není to ale „bez registrace“ v datovém modelu: párování (fingerprint → user)
+se musí uložit, jinak se z toho stane E1 s e-mailem při každém přihlášení. Doporučuji E2.
