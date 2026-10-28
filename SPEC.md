@@ -1229,7 +1229,7 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 
 ## 11. Konfigurace
 
-Inicializér `config/initializers/qes.rb` načítá:
+`Qes::Config` v `app/lib/qes.rb` čte ENV s prefixem `QES_`; defaulty jsou české, ENV je override:
 
 | ENV | Default | Význam |
 |---|---|---|
