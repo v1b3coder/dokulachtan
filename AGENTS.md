@@ -219,6 +219,7 @@ docs/           průzkum, návrh, e2e testy, fork workflow, deployment
  19-overeni-pdf-externi.md  externí ověření PDF přes EU DSS (jen appka, volba providera)
  20-audit-2026-10-27-opravy.md  audit druhého kola: nálezy N1–N8, S1–S7 + opravy
  21-audit-testu.md       audit testů: naměřené časy, zastaralé testy, sleep/wait, paralelizace
+ 22-final-audit-fork.md  finální audit: doteky na nesouvisející funkcionalitu, kombinace QES/non-QES
 DESIGN.md       aplikační design (co a proč)
 SPEC.md         detailní specifikace odvozená z DESIGN (model, API, obrazovky, testy)
 PLAN.md         implementační plán (fáze P0–P8 s verifikací)
@@ -595,6 +596,14 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       404 `unknown_token`, `Qes::SessionsController#document` v logu, `Qes::Config` ověřeno na stroji:
       `enabled=true`, `signature_reserve=65536`, `review_ttl=900`, `session_ttl=600`, trust roots 6,
       TSA roots 1, `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`, `tsa_required=true`.
+
+- [x] **Finální audit doteků forku (2026-10-28):** `docs/22-final-audit-fork.md` — upstream sada **647/0**
+      (SQLite) a **655/0** (Postgres 18), `lib/verify_pdf_signature.rb` bit-identický s upstreamem; nálezy
+      R1 (bezpečnostní: tamper po nedůvěryhodném podpisu se nehlásí, `modified: false`), R2 (CAdES podpisy
+      přestaly být trusted přes certy účtu), R3 (`qes` pole v builderu vždy, i při `QES_ENABLED=false`),
+      R4 (tiché neuložení QES šablony / 500), R5 (dotazy `qes_sessions` v non-QES cestách) + R6–R11.
+      Kombinace QES a non-QES u **různých** signerů je záměrně zakázaná (`qes_all_signers_required`);
+      u **stejného** signera lze mít `qes` i `signature` pole (QES krok jde poslední a kryje i vykreslený podpis).
 
 ## Pravidla
 
