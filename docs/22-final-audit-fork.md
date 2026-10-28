@@ -282,6 +282,8 @@ pro „všichni certifikátem“ klíčové).
 
 ## 6. Doporučení (priorita)
 
+> Všechny akční body níže jsou opravené, viz § 8.
+
 1. **R1 opravit před nasazením** — vrací bezpečnostní díru do sdíleného
    ověření PDF. Jednořádkovka: `accepted.presence || verified` pro hranici změn.
 2. **R2 opravit** — CAdES trusted přes certy účtu (zachovat `signing_leaf?`).
