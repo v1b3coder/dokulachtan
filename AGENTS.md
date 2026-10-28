@@ -623,6 +623,17 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`); `ILLEGAL_MODIFICATIONS`
       v pyHanko výstupu je jen u mezikroků s DocTS (skript prošel, `make_exit=0`).
 
+- [x] **Deploy refaktoru touch surface (2026-10-28):** staging **v23**
+      (`deployment-01M61AV6F9WY08H56R0G8E8B60`), produkce **v49**
+      (`deployment-01M61B1JFJR0W49WE6GG966128`), obě z forku `d845ba42` (pushnuto na GitHub i giteu).
+      `/up` 200 na obou; produkce `Qes::Config`: `enabled=true`, `signature_reserve=65536`,
+      `require_ltv=true`, trust roots 6 (PostSignum), TSA roots 1, `tsa_url=http://timestamp.digicert.com`,
+      extensions `[true, true, true]`; `/api/qes/verify`, `/api/qes/documents` i `/api/tools/verify` → 401,
+      `/qes/sessions/unknown/document` → 404 `unknown_token`, `/qes-test/root.crl` → 404.
+      Staging e2e: `make qes-staging-e2e` 2 signeři → 6 signatur (report
+      `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury, podpis appky
+      INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
+
 ## Pravidla modifikací forku
 
 - Refaktor 2026-10-28: 36 → **21** upstream souborů, 783 → **233** řádků, **0** opsaného upstream kódu; detail [docs/23-refaktor-touch-surface.md](docs/23-refaktor-touch-surface.md).
