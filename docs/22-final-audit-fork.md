@@ -90,10 +90,11 @@ upstream: Signature valid / Signed with external certificate / Contains unsigned
 fork:     Signature valid / Signed with external certificate
 ```
 
-Dopad: `POST /api/tools/verify` i webové ověření PDF vrátí `modified: false`;
-`Qes::Verifier.compute_verdict` (`app/lib/qes/verifier.rb:62`) proto u externího
-PDF s přidaným obsahem vrátí **`valid_untrusted`** místo **`invalid`**. Týká se to
-i ověření v appce (docs/16) pro PDF, jehož podpis neřetězí na `QES_TRUST_ROOTS`.
+Dopad: `POST /api/tools/verify` ani webové ověření PDF už nevrátí zprávu
+„Contains unsigned changes after the last signature“; `Qes::Verifier.compute_verdict`
+(`app/lib/qes/verifier.rb:62`) proto u externího PDF s přidaným obsahem vrátí
+**`valid_untrusted`** místo **`invalid`**. Týká se to i ověření v appce (docs/16)
+pro PDF, jehož podpis neřetězí na `QES_TRUST_ROOTS`.
 
 Oprava: hranici změn brát z `(accepted.presence || verified)` (stejně jako upstream),
 `trusted_ranges` použít jen pro QES scope, ne pro `modified`.
