@@ -220,6 +220,7 @@ docs/           průzkum, návrh, e2e testy, fork workflow, deployment
  20-audit-2026-10-27-opravy.md  audit druhého kola: nálezy N1–N8, S1–S7 + opravy
  21-audit-testu.md       audit testů: naměřené časy, zastaralé testy, sleep/wait, paralelizace
  22-final-audit-fork.md  finální audit: doteky na nesouvisející funkcionalitu, kombinace QES/non-QES
+ 23-refaktor-touch-surface.md  refaktor touch surface: před/po statistiky, duplikace, hooky
 DESIGN.md       aplikační design (co a proč)
 SPEC.md         detailní specifikace odvozená z DESIGN (model, API, obrazovky, testy)
 PLAN.md         implementační plán (fáze P0–P8 s verifikací)
@@ -623,6 +624,8 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       v pyHanko výstupu je jen u mezikroků s DocTS (skript prošel, `make_exit=0`).
 
 ## Pravidla modifikací forku
+
+- Refaktor 2026-10-28: 36 → **21** upstream souborů, 783 → **233** řádků, **0** opsaného upstream kódu; detail [docs/23-refaktor-touch-surface.md](docs/23-refaktor-touch-surface.md).
 
 - **Žádná duplikace upstream kódu** — hook jen volá náš kód (`nil` = pokračuj) nebo `super`.
 - **Explicitní seam > prepend s kopií** — malý parametr/větev, výchozí cesta upstreamu beze změny.
