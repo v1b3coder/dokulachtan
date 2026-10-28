@@ -622,6 +622,14 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`); `ILLEGAL_MODIFICATIONS`
       v pyHanko výstupu je jen u mezikroků s DocTS (skript prošel, `make_exit=0`).
 
+## Pravidla modifikací forku
+
+- **Žádná duplikace upstream kódu** — hook jen volá náš kód (`nil` = pokračuj) nebo `super`.
+- **Explicitní seam > prepend s kopií** — malý parametr/větev, výchozí cesta upstreamu beze změny.
+- **`prepend`/`include` jen pro nové chování** — validace, callbacky, asociace, `rescue_from`.
+- **Konfigurace mimo upstream soubory** — i18n, routes, testy, Tailwind, UI komponenty.
+- **Obecné bugfixy do upstreamu**, nový dotek jen s odůvodněním, touch surface budgetem a contract testem; detail [docs/08-fork-workflow.md](docs/08-fork-workflow.md).
+
 ## Pravidla
 
 - Fork zůstává **AGPL-3.0 + attribution**; patch minimální a rebasovatelný.

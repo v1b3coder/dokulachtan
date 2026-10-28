@@ -108,6 +108,18 @@ konfigurace (`deploy/docuseal/fly*.toml` v parent repu, do forku se předávají
 mobilní appka (`mobile/`), skripty a fixtures (`scripts/`, `test/`) — to všechno je v parent repu
 `dokulachtan`, aby patch nad DocuSealem zůstal jen kód.
 
+## Pravidla modifikací upstreamu (2026-10-28)
+
+- **Žádná duplikace upstream kódu ve forku.** Hook smí jen přidat naše chování, ne opsat tělo upstream metody.
+- **Hook = `nil` / `super`.** Early-return hook vrací `nil` (pokračuj upstreamem); wrapper volá `super` a přidá jen naše chování.
+- **Explicitní seam > prepend s kopií.** Když je potřeba změnit upstream metodu, přidej malý parametr/větev s výchozí cestou beze změny; nekopíruj tělo do prependu.
+- **`prepend`/`include` jen pro nové chování.** Validace, callbacky, asociace, `rescue_from`; nikdy ne pro náhradu těla metody.
+- **Konfigurace do vlastních souborů.** i18n (`config/locales/qes.yml`), routes (`routes.prepend` v initializeru), testy (`spec/support`), Tailwind (partial v už skenovaném adresáři).
+- **Obecné bugfixy do upstreamu.** `deep_dup`, `single_sign_reason`, `template_schema` fallback, 2FA flake; ve forku jen do merge.
+- **Žádné kopie celých views** (`prepend_view_path`) a žádné globální Vue/fetch monkey patche bez schválení.
+- **Touch surface budget + contract testy.** Nový modifikovaný upstream soubor jen s odůvodněním; touch surface budget (allowlist + max řádků) musí projít a každý hook kryje `upstream_contract_spec.rb` / `qes_views_spec.rb` / JS testy.
+- **Aktuální nález:** `Qes::ResultAttachments.attach_pdf` v `generate_combined_attachment.rb` je jediná skutečná duplikace — revertovat.
+
 ## Workflow
 
 ```bash
