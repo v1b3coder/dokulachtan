@@ -651,6 +651,17 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury, podpis appky
       INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
 
+- [x] **Český verification trust store (2026-10-28):** fork `cfd36b2c` přidává `config/qes/czech.pem`
+      (29 certů: PostSignum, I.CA, eIdentity, NCA, KB) a odděluje signing `QES_TRUST_ROOTS`
+      (PostSignum) od verification `QES_VERIFICATION_TRUST_ROOTS` (české CA). Produkce **v52**
+      (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
+      (`deployment-01M61RKSP8C594JRPAEKTR3VZT`); staging secret
+      `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`.
+      Ověřeno: prod signing 6 / verification 29, staging signing 7 / verification 30, `/up` 200,
+      `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes-test/root.crl` → 404,
+      `make qes-staging-e2e` (6 signatur) a `make qes-staging-e2e-pdf` (3 signatury) zelené;
+      `make qes-test-qes` 419/0, `make qes-test-fast` 526/0.
+
 - [x] **Defaulty pro český deployment ve forku a zjednodušená produkce (2026-10-28):** fork `b2396604`
       má v `Qes::Config::DEFAULTS` `QES_ENABLED=true`, PostSignum CRL hosty, PostSignum trust roots,
       DigiCert TSA a `require_ltv=true`; produkce **v51** (`deployment-01M61NDWNT8R8VA1HH9GEHBMG1`)

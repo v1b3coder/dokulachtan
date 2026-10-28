@@ -261,8 +261,15 @@ QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48
 6× PostSignum, `tsa_url=http://timestamp.digicert.com`, TSA roots 1, `tsa_required=true`;
 CRL fetch OK (`PostSignum Qualified CA 4`, 21 988 revoked), `/up` 200,
 `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes/sessions/unknown/document` → 404,
-`/qes-test/root.crl` → 404. Staging zatím běží v23 ze staršího forku a explicitní defaulty
-zůstávají; při dalším deployi může použít stejné zjednodušení.
+`/qes-test/root.crl` → 404.
+
+**Český verification trust store (2026-10-28):** produkce **v52**
+(`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
+(`deployment-01M61RKSP8C594JRPAEKTR3VZT`), obě z forku `cfd36b2c`. Signing
+`QES_TRUST_ROOTS` zůstává PostSignum (prod 6; staging test root + 6 PostSignum = 7),
+verification `QES_VERIFICATION_TRUST_ROOTS` je `czech.pem` (prod 29; staging test root + 29 = 30).
+`/up` 200, `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes-test/root.crl` → 404;
+`make qes-staging-e2e` (6 signatur) a `qes-staging-e2e-pdf` (3 signatury) zelené.
 
 Ověřeno 2026-10-18 na novém stagingu: `make qes-staging-e2e` → 4 signatury INTACT, `trusted: true`,
 `trusted_roots` = test root + 6× PostSignum (`test/out/qes-staging-e2e-report.txt`);
