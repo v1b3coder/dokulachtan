@@ -19,7 +19,7 @@ Celkový patch mírně vzrostl (+278 řádků): extensions a separátní i18n js
 soubory ve forku, ne zásahy do upstreamu. Z 233 zbývajících upstream řádků je
 **49 `db/schema.rb`** (nová tabulka), **40 PDF seam**
 (`generate_result_attachments.rb`), **26 `builder.vue`** (save error) a **23 `form.vue`**
-(QES krok). Zbytek jsou 1–14řádkové hooky, helpers a test.
+(QES krok). Zbytek jsou 1–14 řádkové hooky, helpers a test.
 
 ## Co se přesunulo
 
