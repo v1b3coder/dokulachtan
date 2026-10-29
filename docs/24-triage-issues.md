@@ -166,10 +166,6 @@ udělat jako chybu, ne jako průchod.
 
 ## 4. P2 — nízké, provozní a dokumentační
 
-- **#5** `template_errors.rb:11,16,19` — `rescue_from` chytá každou `RecordInvalid` a staví zprávu z `@template.errors`,
-  ne z `error.record.errors`. V praxi dnes `RecordInvalid` v těchto controllerech hází jen `@template.save!`,
-  takže dopad je malý; oprava je ale levná: `raise error unless error.record.is_a?(Template) && error.record.errors.attribute_names.include?(:fields)`
-  a stavět z `error.record.errors`. Test: RecordInvalid z jiného záznamu → upstream chování.
 - **#8** `qes.rb:87-98` — `cast` vrací `raw.presence`, takže `QES_TRUST_ROOTS=` dá `nil` (prázdný signing store)
   a `QES_EXPIRY_JOB_INTERVAL=` dá `0` (expirace se nikdy nespustí). `load_roots` (`:133-142`) neexistující soubor tiše přeskočí.
   Oprava: `from_env` vrací default, když je `ENV[env_name].blank?`, kromě `ltv_allowed_hosts` (prázdná = vypnuto);
@@ -242,7 +238,7 @@ při vydání produkčního APK). Žádná změna kódu.
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |
-| F9 | #5, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
+| F9 | #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
 před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #14, #16.
