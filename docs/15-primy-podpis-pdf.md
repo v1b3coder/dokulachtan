@@ -29,7 +29,7 @@ model jako u QES obřadu pro DocuSeal submission (SPEC § 9).
 | D7 | **Úroveň volí appka** (`ades` default, `qes` se čtečkou) | server vynutí stejné kontroly jako dnes (`Qes::CertificateInfo`, `Qes::Validator.verify_chain!`, `Qes::Ltv.check_revoked!`) |
 | D8 | **Výstup = finální PDF v DocuSealu** (Documents → Download / odkaz / sdílení) | uživatel ho vidí, může stáhnout, sdílet odkazem i smazat; nic se neuklízí vlastním kódem |
 | D9 | **Obřad se spouští s API tokenem** (`POST /s/:slug/qes_sessions`) | appka nepotřebuje prohlížeč; slug je kapabilita (jako podpisový odkaz) |
-| D10 | **Dokončení přes existující API** (`PUT /api/submitters/:id` s `completed: true`) | DocuSeal vygeneruje finální PDF i **auditní stránku**; žádný vlastní kód |
+| D10 | **Dokončení přes session token** (`POST /qes/sessions/:token/complete_submission`, SPEC § 5.3.1) | DocuSeal vygeneruje finální PDF i **auditní stránku**; žádný vlastní kód a žádný plný API token účtu (S1) |
 | D11 | **V1 jen nepodepsaná PDF bez šifrování**; rotace stránek se normalizuje při uploadu | DocuSeal staví výsledek znovu ze stránek, takže původní podpis by zmizel; u otočených stránek by pečeť seděla mimo |
 | D12 | **Žádná nová ENV pro podpis** — reuse `QES_ENABLED`, `QES_TSA_URL`, `QES_TRUST_ROOTS`, `QES_LTV_ALLOWED_HOSTS`, `QES_SESSION_TTL`; nově jen `QES_PDF_MAX_BYTES` (default 25 MB); ověření PDF má samostatný `QES_VERIFICATION_TRUST_ROOTS` | provozní konfigurace zůstává jedna, signing a verification trust store jsou oddělené |
 | D13 | **Offline core (původní varianta A) mimo v1**, ale appka má rozhraní `SessionSource` | ceremoniál se nemění, jde doplnit později |
@@ -56,7 +56,7 @@ appka (S11/S12)                    fork (server)                        TSA / CR
   │ GET /qes/sessions/:token ───────▶ (dnešní obřad, beze změny)
   │ GET …/document → kontrola → biometrie → POST …/certificate → podpis → …/complete
   │◀────────── state: completed ────│  CMS + TSA + LTV + pečeť + validace
-  │ PUT /api/submitters/:id ────────▶ completed: true → finální PDF + audit
+  │ POST …/complete_submission ─────▶ completed → finální PDF + audit
   │ GET /api/submitters/:id ────────▶ documents[].url
   │◀──────────── finální PDF ──────│
   │ share sheet / uložení            │
@@ -132,7 +132,7 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 | dokument k podpisu | `POST /api/templates/:id/submissions` | `send_email: false`, `submitters: [{role, name, email}]` |
 | spuštění obřadu | `POST /s/:slug/qes_sessions` | `field_uuid` → `token` (API token místo session) |
 | obřad | `GET /qes/sessions/:token`, `GET …/document` (kontrola), `POST …/certificate`, `POST …/complete` | SPEC § 5.1–§ 5.4 |
-| dokončení | `PUT /api/submitters/:id` | `completed: true` → PDF + auditní stránka |
+| dokončení | `POST /qes/sessions/:token/complete_submission` | SPEC § 5.3.1 → PDF + auditní stránka |
 | stažení | `GET /api/submitters/:id` | `documents[0].url` (platnost dle `FILE_URLS_EXPIRE_MINUTES`) |
 
 ## 6. Appka (Expo)

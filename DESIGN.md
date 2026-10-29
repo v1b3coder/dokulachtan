@@ -247,8 +247,8 @@ Zaměstnanec dostane PDF mimo DocuSeal (e-mailem, WhatsApp, stažené z portálu
 **standardním tokem DocuSealu**: `POST /api/qes/documents` nahraje PDF a založí šablonu s polem `qes`
 ve složce „Direct signing“; appka zobrazí náhled stránky ze serveru, klepnutím umístí pečeť
 (`PATCH /api/templates/:id`), založí submission a spustí obřad. Pak **dnešní obřad beze změny**
-(`GET /qes/sessions/:token/document` → `certificate` → `complete`) a `PUT /api/submitters/:id`
-s `completed: true` vygeneruje finální PDF i auditní stránku. Server dělá jen obal (TBS, CMS, TSA,
+(`GET /qes/sessions/:token/document` → `certificate` → `complete`) a `POST …/complete_submission`
+vygeneruje finální PDF i auditní stránku. Server dělá jen obal (TBS, CMS, TSA,
 LTV, DSS, pečeť, validace); klíč zůstává v zařízení. Detail:
 [docs/15-primy-podpis-pdf.md](docs/15-primy-podpis-pdf.md).
 

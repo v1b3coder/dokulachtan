@@ -11,7 +11,7 @@ Tok:
   7. appka: POST /api/templates/:id/submissions → submitter
   8. appka: POST /s/:slug/qes_sessions → token (slug je kapabilita)
   9. appka: obřad podpisu KÓDEM APPKY (scripts/qes-app-e2e.ts, beze změny)
- 10. appka: PUT /api/submitters/:id (completed: true) → PDF + audit
+ 10. appka: POST /qes/sessions/:token/complete_submission → PDF + audit (SPEC § 5.3.1)
  11. appka: GET /api/submitters/:id → finální PDF
  12. validace: pyHanko/pdfsig/qpdf; pečeť v místě klepnutí (Pdfium inkoust)
 
@@ -240,11 +240,10 @@ def main() -> int:
     if app_result.get("completed", {}).get("state") != "completed":
         raise SystemExit("Podpis v appce selhal")
 
-    base.log("\n## Appka: PUT /api/submitters/:id (completed)")
-    status, completed = api_request("PUT", f"/api/submitters/{submitter['id']}", api_token,
-                                    {"completed": True})
+    base.log("\n## Appka: POST /qes/sessions/:token/complete_submission")
+    status, completed = api_request("POST", f"/qes/sessions/{token}/complete_submission")
     base.log(f"-> HTTP {status} {json.dumps(completed, ensure_ascii=False)[:300]}")
-    if status != 200 or not completed.get("completed_at"):
+    if status != 200 or not completed.get("completed"):
         raise SystemExit(f"Dokončení submissionu selhalo: {status}")
 
     base.log("\n## Appka: GET /api/submitters/:id (finální PDF)")

@@ -614,10 +614,12 @@ Appka tento endpoint volá s **API tokenem** místo prohlížečové session; to
 odkaz), CSRF kontrola se u něj přeskakuje. Dál je tok shodný s § 5.1–§ 5.4 (`GET /qes/sessions/:token`,
 `POST …/certificate`, `POST …/complete`).
 
-#### 5.8.5 Dokončení a stažení (existující API)
+#### 5.8.5 Dokončení a stažení
 
-1. `PUT /api/submitters/:id` s `{ "completed": true }` → DocuSeal označí submittera jako dokončeného,
+1. `POST /qes/sessions/:token/complete_submission` (§ 5.3.1) → DocuSeal označí submittera jako dokončeného,
    vygeneruje výsledné PDF (`Qes::ResultAttachments` → finální PDF QES session, § 7.6) a **auditní stránku**.
+   Endpoint je vázaný na session token; `PUT /api/submitters/:id` s plným API tokenem účtu se
+   pro dokončení nepoužívá (S1).
 2. `GET /api/submitters/:id` → `documents[0].url` (podepsaná URL s platností dle `FILE_URLS_EXPIRE_MINUTES`)
    → appka PDF stáhne a předá systémovému share sheetu.
 
@@ -632,7 +634,7 @@ App (S11/S12)                        Server
  │ POST /s/:slug/qes_sessions         │  token (X-Auth-Token)
  │ GET /qes/sessions/:token           │  200 payload
  │ POST …/certificate → sign → …/complete │  CMS + TSA + LTV + pečeť + validace
- │ PUT /api/submitters/:id (completed) │  PDF + auditní stránka
+ │ POST …/complete_submission         │  PDF + auditní stránka (session token)
  │ GET /api/submitters/:id → documents │  finální PDF
 ```
 
@@ -1199,8 +1201,8 @@ Pravidla:
    a klepnutím umístí obrys pečeti (velikost `stamp` × měřítko náhledu).
 3. `PATCH /api/templates/:id` (oblast pole) → `POST /api/templates/:id/submissions` →
    `POST /s/:slug/qes_sessions` → token; appka pokračuje na S4 (dnešní obřad, § 9.3/§ 9.4).
-4. Po `completed` (S13) appka zavolá `PUT /api/submitters/:id` s `completed: true` (DocuSeal vygeneruje
-   finální PDF + auditní stránku) a pak `GET /api/submitters/:id` → PDF se stáhne nativně do cache a nabídne
+4. Po `completed` (S13) appka zavolá `POST /qes/sessions/:token/complete_submission` (SPEC § 5.3.1;
+   DocuSeal vygeneruje finální PDF + auditní stránku) a pak `GET /api/submitters/:id` → PDF se stáhne nativně do cache a nabídne
    se **„Stáhnout“** (uložit do telefonu: `MediaStore` na Androidu 10+, SAF na starším Androidu, Files na iOS;
    volitelně **„Uložit jinam…“** se zapamatovanou SAF složkou), **„Otevřít“** (systémový prohlížeč PDF) a
    **„Sdílet“** (systémový share sheet; na Androidu vlastní modul na hlavním vlákně, na iOS `expo-sharing`).
@@ -1539,8 +1541,8 @@ jsou dostupná; pečeť DocuSealu zůstává `UNTRUSTED` (test trust list neobsa
   zůstat zelené.
 - **E2E** `make qes-e2e-pdf` (`scripts/qes_pdf_e2e.py`): bootstrap účtu + API token,
   upload PDF (`POST /api/qes/documents`), náhled stránky, `PATCH` oblast pole, submission,
-  spuštění obřadu, podpis **kódem appky** (`scripts/qes-app-e2e.ts`, reuse), `PUT /api/submitters/:id`
-  (`completed: true`), stažení finálního PDF, validace `pyhanko` (`INTACT:TRUSTED`, pokrytí celého
+  spuštění obřadu, podpis **kódem appky** (`scripts/qes-app-e2e.ts`, reuse), `POST /qes/sessions/:token/complete_submission`
+  (session token, § 5.3.1), stažení finálního PDF, validace `pyhanko` (`INTACT:TRUSTED`, pokrytí celého
   dokumentu), `pdfsig`, `qpdf --check`; report `test/out/qes-pdf-e2e-report.txt`. Ověří se i to, že dokument
   je ve složce „Direct signing“, pole má hodnotu `qes:<id>` a vznikla auditní stránka.
 - **Negativní** (N10–N17, `make qes-negative`): upload bez tokenu → `401`; ne-PDF → `422 invalid_pdf`;

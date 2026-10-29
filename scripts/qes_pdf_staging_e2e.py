@@ -9,7 +9,7 @@ Tok (nativní DocuSeal tok, docs/15 § 5):
   5. POST /api/templates/:id/submissions → submitter
   6. POST /s/:slug/qes_sessions → token (API token)
   7. appka: obřad podpisu KÓDEM APPKY proti stagingu (test cert)
-  8. PUT /api/submitters/:id (completed) → PDF + audit, GET /api/submitters/:id → finální PDF
+  8. POST /qes/sessions/:token/complete_submission → PDF + audit, GET /api/submitters/:id → finální PDF
   9. validace pyHanko/pdfsig/qpdf + pečeť v místě klepnutí (rails runner)
  10. úklid: API token se smaže
 
@@ -250,11 +250,10 @@ def main() -> int:
         if app_result.get("completed", {}).get("state") != "completed":
             raise SystemExit("Podpis v appce selhal")
 
-        log("\n## Appka: PUT /api/submitters/:id (completed)")
-        status, completed = api_request("PUT", f"/api/submitters/{submitter['id']}", api_token,
-                                        {"completed": True})
+        log("\n## Appka: POST /qes/sessions/:token/complete_submission")
+        status, completed = api_request("POST", f"/qes/sessions/{token}/complete_submission")
         log(f"-> HTTP {status} {json.dumps(completed, ensure_ascii=False)[:300]}")
-        if status != 200 or not completed.get("completed_at"):
+        if status != 200 or not completed.get("completed"):
             raise SystemExit(f"Dokončení submissionu selhalo: {status}")
 
         log("\n## Appka: GET /api/submitters/:id (finální PDF)")

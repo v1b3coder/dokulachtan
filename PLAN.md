@@ -381,7 +381,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 - [x] 8.4 Umístění pečeti = oblast pole `qes` (`PATCH /api/templates/:id`, existující API)
       → verify: `make qes-e2e-pdf` (pečeť v místě klepnutí, inkoust 1.0)
 - [x] 8.5 Dokument k podpisu = `POST /api/templates/:id/submissions` (`send_email: false`),
-      dokončení = `PUT /api/submitters/:id` (`completed: true` → PDF + auditní stránka),
+      dokončení = `POST /qes/sessions/:token/complete_submission` (PDF + auditní stránka),
       stažení = `GET /api/submitters/:id` → `documents[0].url` (existující API, žádný kód forku)
       → verify: `make qes-e2e-pdf` (3 signatury, auditní stránka, dokument ve složce)
 - [x] 8.6 Appka: `sign-pdf.tsx` (S11 + S12: picker, upload, náhled, klepnutí, obrys, `place`),
