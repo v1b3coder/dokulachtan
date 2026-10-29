@@ -1,7 +1,8 @@
 # 15 — Přímý podpis PDF (bez DocuSeal submission)
 
-Status: **hotovo** (2026-10-18) — appka jede **standardní DocuSeal tok**; fork přidává jediný endpoint na
-nahrání PDF. Ověřeno `make qes-test-qes` (88/0), `make qes-e2e-pdf` (2 signatury, pečeť v místě klepnutí),
+Status: **hotovo** (2026-10-18, doplněno o DocTS 2026-10-22) — appka jede **standardní DocuSeal tok**;
+fork přidává jediný endpoint na nahrání PDF. Ověřeno `make qes-test-qes`, `make qes-e2e-pdf`
+(3 signatury: appka + pečeť + DocTS, pečeť v místě klepnutí),
 `make qes-negative` (N1–N17), `make qes-e2e`/`make qes-e2e-two` beze změny a na emulátoru (výběr PDF →
 náhled → klepnutí → podpis → stažení a sdílení) i **PDF ze share sheetu** (Android, štítek „Podepsat PDF“ →
 S11 s vybraným souborem → rovnou upload). Navazuje na DESIGN.md § 1/§ 4/§ 7, SPEC.md § 4.8/§ 5.8/§ 9.9.
@@ -23,7 +24,7 @@ model jako u QES obřadu pro DocuSeal submission (SPEC § 9).
 | D2 | **Server vidí PDF, klíč nikdy** | stejný trust model jako dnes; PDF se nahrává na server (jako u každé šablony) |
 | D3 | **Autentizace uploadu API tokenem** (`X-Auth-Token`) | nulový nový auth kód; token je per-user a revokovatelný |
 | D4 | **Fork přidává jen `POST /api/qes/documents`** (upload PDF → šablona s polem `qes`) | jediná věc, kterou existující API neumí (API neumí vytvořit šablonu s dokumentem); zbytek je existující API |
-| D5 | **Umístění pečeti = oblast pole `qes`** (`PATCH /api/templates/:id`) | pole už oblast má; kreslí ho `Qes::TbsDocument#draw_stamp` (pečeť s diakritikou) |
+| D5 | **Umístění pečeti = oblast pole `qes`** (`PATCH /api/templates/:id`) | pole už oblast má; kreslí ho `Qes::Stamp.draw` (pečeť s diakritikou) |
 | D6 | **Náhled stránky generuje DocuSeal** (`preview_images` šablony, Pdfium) | appka nemá PDF renderer; souřadnice klepnutí sedí (normalizovaně 0–1 od shora) |
 | D7 | **Úroveň volí appka** (`ades` default, `qes` se čtečkou) | server vynutí stejné kontroly jako dnes (`Qes::CertificateInfo`, `Qes::Validator.verify_chain!`, `Qes::Ltv.check_revoked!`) |
 | D8 | **Výstup = finální PDF v DocuSealu** (Documents → Download / odkaz / sdílení) | uživatel ho vidí, může stáhnout, sdílet odkazem i smazat; nic se neuklízí vlastním kódem |
@@ -81,7 +82,7 @@ signatura zůstávají v telefonu. Server nikdy nevidí klíč ani PIN/QPIN.
 | `lib/api_path_consider_json_middleware.rb` | multipart upload na `/api/qes/documents` | 2 |
 | `app/controllers/qes/form_sessions_controller.rb` | spuštění obřadu s API tokenem (bez CSRF a prohlížečové session) | 13 |
 
-Nic dalšího se nemění: `qes_sessions`, `qes` pole, kreslení pečeti (`Qes::TbsDocument#draw_stamp`), auditní stránka
+Nic dalšího se nemění: `qes_sessions`, `qes` pole, kreslení pečeti (`Qes::Stamp.draw`), auditní stránka
 i úklid dokumentů jsou upstream.
 
 ## LTV/LTA — co je a co není
@@ -196,19 +197,19 @@ Smazáním dokumentu v UI zmizí i PDF — žádný vlastní úklid QES nad PDF 
 
 ## 8. Testy a verifikace
 
-- **RSpec** `make qes-test-qes` (88/0): `spec/requests/qes_documents_spec.rb` — upload (201, šablona, pole, náhledy),
+- **RSpec** `make qes-test-qes`: `spec/requests/qes_documents_spec.rb` — upload (201, šablona, pole, náhledy),
   chyby (401/422), spuštění obřadu s API tokenem; stávající QES specy zelené.
 - **E2E** `make qes-e2e-pdf` (`scripts/qes_pdf_e2e.py`): upload → náhled → `PATCH` oblast → submission →
   spuštění obřadu → podpis **kódem appky** (`scripts/qes-app-e2e.ts`) → `PUT …/completed` → stažení →
   validace `pyhanko` (`INTACT:TRUSTED`, pokrytí celého dokumentu) + `pdfsig` + `qpdf`; ověří složku „Direct signing“,
   hodnotu pole `qes:<id>`, auditní stránku a pečeť v místě klepnutí (inkoust z Pdfium renderu).
   Report `test/out/qes-pdf-e2e-report.txt`.
-- **Staging** `make qes-staging-e2e-pdf` (release v23+): stejný tok proti <https://dokulachtan.fly.dev>;
+- **Staging** `make qes-staging-e2e-pdf` (release v25+): stejný tok proti <https://dokulachtan-staging.fly.dev>;
   API token se na konci smaže. Report `test/out/qes-pdf-staging-report.txt`.
 - **Negativní** `make qes-negative` (N1–N17): N10 bez tokenu → `401`; N11 ne-PDF → `422 invalid_pdf`;
   N12 příliš velké → `422 file_too_large`; N13 šifrované → `422 encrypted_pdf`; N14 už podepsané → `422 already_signed`;
   N15 nepodporovaná úroveň → `422 invalid_level`; N16 cizí API token → `403`; N17 druhé spuštění obřadu zruší první.
-- **Appka** `make qes-app-test` (212/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
+- **Appka** `make qes-app-test` (223/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
   lokální fork + `adb reverse`): výběr PDF → náhled → klepnutí → podpis → stažení a sdílení.
 - **Appka – uložení a sdílení** (2026-10-25): `__tests__/pdfShare.test.ts` (stažení do cache,
   uložení do telefonu, share sheet, fallback, zrušení); na emulátoru uloženo do
@@ -216,8 +217,7 @@ Smazáním dokumentu v UI zmizí i PDF — žádný vlastní úklid QES nad PDF 
 - **Appka – sdílení** (Android, docs/15 § 6): sdílené PDF → S11 s vybraným souborem → rovnou upload →
   S12; ověřeno na emulátoru (share sheet „Podepsat PDF“, cold start i běžící appka).
 
-**Akceptační kritéria:** (1) `make qes-test-qes` zelené; (2) `make qes-e2e-pdf` zelené (2 signatury: appka +
-pečeť, podpis appky `INTACT:TRUSTED` s pokrytím celého dokumentu, pečeť v místě klepnutí, dokument ve složce
+**Akceptační kritéria:** (1) `make qes-test-qes` zelené; (2) `make qes-e2e-pdf` zelené (3 signatury: appka + pečeť + DocTS, podpis appky `INTACT:TRUSTED` s pokrytím celého dokumentu, pečeť v místě klepnutí, dokument ve složce
 „Direct signing“ s auditní stránkou); (3) `make qes-e2e` a `make qes-e2e-two` beze změny; (4) N10–N17 mají očekávané
 výsledky; (5) appka na emulátoru projde celý tok.
 

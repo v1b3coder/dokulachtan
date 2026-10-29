@@ -1,8 +1,7 @@
 # QES test harness (P0.2)
 
 Ověřený postup, jak spustit RSpec forku bez Postgresu i s ním, a jak ho zrychlit.
-Vše níže je **změřené**, ne odhad (poslední měření 2026-10-27, audit a optimalizace:
-[docs/21-audit-testu.md](../docs/21-audit-testu.md)).
+Vše níže je **změřené**, ne odhad (poslední měření 2026-10-27/28).
 
 ## Image
 
@@ -23,13 +22,13 @@ Produkční image má `BUNDLE_WITHOUT=[:development, :test]`, proto se dev/test 
 
 | Tier | Cíl | Co to je | Kdy |
 |---|---|---|---|
-| **T0** | `make qes-test-qes` | QES vrstva (404 ex) + JS testy kroku | po každé změně QES vrstvy |
+| **T0** | `make qes-test-qes` | QES vrstva (422 ex) + JS testy kroku | po každé změně QES vrstvy |
 | **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (511 ex) | před commitem forku |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (526 ex) | před commitem forku |
 | **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš |
-| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` (647 ex) | před PR / po rebase |
+| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` (659 ex) | před PR / po rebase |
 | **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš |
-| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 (651 ex) | před vydáním, parita s upstream CI |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 (660 ex) | před vydáním, parita s upstream CI |
 
 Proč tři tiery: **69 % času plné sady jde na upstream specy, které fork nemodifikuje**
 (243 ex / 265,7 s z 384,1 s), a `spec/system/signing_form_spec.rb` sám je 35 % sady.
@@ -61,7 +60,7 @@ Proč to jde bez konfliktů: každý kontejner má **vlastní network namespace*
 (ověřeno: `dss_spec` + `lta_spec` paralelně, 4 system workery paralelně).
 
 Bez `parallel_tests` gemu: ten by přidal řádek do `Gemfile`/`Gemfile.lock`, což je dotek
-upstreamu (`docs/08`, `docs/18`). Shell runner dělá totéž bez změny Gemfile.
+upstreamu (`docs/08`). Shell runner dělá totéž bez změny Gemfile.
 
 ## Změřené výsledky
 
@@ -69,17 +68,17 @@ Naměřeno 2026-10-27 (20 CPU, sdílený stroj; `run_time` z JSON reportéru):
 
 | Běh | DB | Výsledek | Čas |
 |---|---|---|---|
-| `make qes-test-qes` | SQLite | 404 ex, 0 failures | **43 s** (+ JS 0,2 s) |
-| `make qes-test-parallel` | SQLite ×4 | 404 ex, 0 failures | **25 s** |
-| `make qes-test-fast` | SQLite | 511 ex, 0 failures | **81 s** |
-| `make qes-test-parallel-fast` | SQLite ×4 | 511 ex, 0 failures | **43 s** |
-| `make qes-test` | SQLite | 647 ex, 0 failures | **3 min 20 s** |
-| `make qes-test-parallel-full` | SQLite ×4 | 647 ex, 0 failures | **90 s** |
-| `make qes-test-postgres` | Postgres 18 | 651 ex, 0 failures | 3 min 37 s |
+| `make qes-test-qes` | SQLite | 422 ex, 0 failures | **43 s** (+ JS 0,2 s) |
+| `make qes-test-parallel` | SQLite ×4 | 422 ex, 0 failures | **25 s** |
+| `make qes-test-fast` | SQLite | 526 ex, 0 failures | **81 s** |
+| `make qes-test-parallel-fast` | SQLite ×4 | 526 ex, 0 failures | **43 s** |
+| `make qes-test` | SQLite | 659 ex, 0 failures | **3 min 20 s** |
+| `make qes-test-parallel-full` | SQLite ×4 | 659 ex, 0 failures | **90 s** |
+| `make qes-test-postgres` | Postgres 18 | 660 ex, 0 failures | 3 min 37 s |
 | `make qes-js-test` | — | 33 ex, 0 failures | 0,2 s |
-| `make qes-app-test` | — | 212 ex, 0 failures | 13 s |
+| `make qes-app-test` | — | 223 ex, 0 failures | 13 s |
 
-Před optimalizacemi (docs/21) byl `qes-test-qes` **100 s** pro 404 examples; dnes
+Před optimalizacemi byl `qes-test-qes` **100 s** pro 404 examples; dnes
 **43 s** sekvenčně a **25 s** paralelně, tedy **4×**.
 
 ## Co testy zdržuje a co s tím
@@ -122,4 +121,4 @@ jen `t.binary`/`text`/`serialize` + `LockEvent` (`unique: connection.supports_pa
 
 - SPEC § 15.1 (harness), § 22 (kompatibilita), PLAN 0.2 (SQLite) a 0.2b (Postgres parita),
   AGENTS #12.
-- `docs/21-audit-testu.md` (naměřené časy, tiery, paralelizace), `DEVELOPMENT.md` (přehled cílů).
+- `DEVELOPMENT.md` (přehled cílů a tierů).

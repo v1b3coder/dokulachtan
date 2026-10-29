@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rozdělí spec soubory do N skupin pro paralelní RSpec (docs/21 § 8, fáze 3).
+"""Rozdělí spec soubory do N skupin pro paralelní RSpec (paralelní runner).
 
 Vstup: seznam spec souborů (jeden na řádek) v souboru nebo na stdin.
 Časy bere z `test/qes/timings.txt` (`<sekundy>\\t<cesta>`); soubor, který tam

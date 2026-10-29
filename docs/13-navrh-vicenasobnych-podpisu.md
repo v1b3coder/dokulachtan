@@ -1,14 +1,15 @@
 # 13 — Návrh: vícenásobné digitální podpisy (firemní podpisy)
 
-Status: **implementováno** (2026-10-17) — fáze 1–4 hotové, `make qes-e2e-two` zelené
-(4 signatury: 2× appka + 2× pečeť). Původní návrh je níže ponechán jako rozhodovací záznam.
+Status: **implementováno** (2026-10-17, doplněno o DocTS 2026-10-22) — fáze 1–4 hotové,
+`make qes-e2e-two` zelené (6 signatur: 2× appka + 2× pečeť + 2× DocTS). Původní návrh je níže
+ponechán jako rozhodovací záznam; aktuální pravidla jsou v SPEC § 4.6 a § 7.1.
 Navazuje na DESIGN.md § 3.1, SPEC.md § 4.1 a § 7, AGENTS.md rozhodnutí #11.
 
 **Oprava (2026-10-17):** stejná osoba může podepsat víc polí téhož dokumentu. `chained_base` proto
 nejdřív bere **vlastní** poslední dokončenou session podepisujícího a teprve pak session předchozího
 submittera; `Qes::ResultAttachments` bere poslední dokončenou session (ta už obsahuje všechny předchozí
 revize). Test: `spec/lib/qes/chain_spec.rb` — „lets the same submitter sign twice with the same certificate“
-(2× podpis appky + 2× pečeť, 4 signatury INTACT). Pole s `qes:<id>` se v UI nahrazuje přehledem
+(2× podpis appky + 2× pečeť + 2× DocTS, 6 signatur INTACT). Pole s `qes:<id>` se v UI nahrazuje přehledem
 podpisu (`submissions/_value.html.erb`, `qes_summary.vue`, `summary_html` z `GET /s/:slug/qes_sessions/:id`).
 
 ## 1. Use case
@@ -94,7 +95,7 @@ session&.final_document&.attached? ? HexaPDF::Document.new(io: StringIO.new(sess
 
 - `nil` (první QES signer) → dnešní `merged_document` (staví se ze šablony + hodnot).
 - nenil (další QES signer) → otevře se předchozí finální PDF, `fill_submitter_fields`
-  dokreslí hodnoty aktuálního signera (skip `qes` polí), `draw_stamp` dokreslí viditelnou
+  dokreslí hodnoty aktuálního signera (skip `qes` polí), `Qes::Stamp.draw` dokreslí viditelnou
   pečeť, `pdf.sign` přidá podpisové pole a zapíše **inkrementálně**.
 
 `page_offsets` se počítá z metadat `submission.schema_documents`
@@ -125,7 +126,8 @@ zůstávají indexy per-attachment (dnešní chování).
 - **Appka (Expo)** — každá session má vlastní deep link a token; pořadí řídí server.
 - **Protokol** `GET/POST /qes/sessions/:token` — per-session, beze změny.
 - **Stavový automat** `QesSession` — per-session, beze změny.
-- **`Qes::Validator`, `Qes::Ltv`, `Qes::CmsBuilder`, `Qes::Seal`** — beze změny.
+- **`Qes::Validator`, `Qes::Ltv`, `Qes::CmsBuilder`, `Qes::Seal`** — architektura zůstává; `Qes::Validator`
+  se rozšířil o řetěz revocation a `Qes::PdfiumTrust` (SPEC § 7.5).
 - **DB** — žádné nové sloupce ani migrace.
 - **API a UI DocuSealu** — beze změny (jen validace šablony a gating).
 
@@ -136,32 +138,27 @@ zůstávají indexy per-attachment (dnešní chování).
 | `find_last_submitter(submission)` vrátí viewera | filtr `reject(&:viewer?)` |
 | `find_last_submitter(submission, submitter:)` spadne při `completed_at = nil` | volat variantu bez `submitter:` a `with_headings` předat explicitně |
 | `maybe_flatten_pdf` / `maybe_rotate_pdf` přepíše podepsaný základ | na podepsaný základ nevolat; případně jen s `incremental: true` |
-| rezerva `QES_SIGNATURE_SIZE` (20 kB) na jeden podpis | rezerva je per session, řetězení ji nezvětšuje |
+| rezerva `QES_SIGNATURE_RESERVE` (64 kB) na jeden podpis | rezerva je per session, řetězení ji nezvětšuje |
 | `EnsureResultGenerated` vytvoří při retry duplicitní attachment | stávající LockEvent guard; QES větev je idempotentní (bere hotovou session) |
 | chyba validace šablony se dnes zobrazí jako 500 | volitelně doplnit 422 + alert v builderu |
 
 ## 7. Ověření (Definition of Done)
 
-1. `make qes-test-qes` — nové specy zelené (56/0).
+1. `make qes-test-qes` — nové specy zelené.
 2. `make qes-e2e` (1 signer) a `make qes-e2e-two` (2 signeři) — finální PDF:
    - **podpisy appky** (ETSI.CAdES.detached) `INTACT:TRUSTED`; poslední pokrývá celý soubor,
    - **pečeti DocuSealu** (adbe.pkcs7.detached, vlastní ESIGN cert) `INTACT:UNTRUSTED` —
      nejsou QES, trust roots QES se na ně nevztahují (pyHanko CLI proto skončí `Error: Validation failed`);
+   - **DocTS** (ETSI.RFC3161) `INTACT:UNTRUSTED` v test trust listu, v Adobe trusted;
    - Pdfium ve forku i `pdfsig` označí všechny signatury `INTACT`.
 3. `pdfsig` / Pdfium — všechny podpisy INTACT (i pečeti).
 4. Manuálně: 3 stakeholders na stagingu, každý podepíše z appky; finální PDF
-   má 3 podpisy + 3 pečeti a všechny platné.
+   má 3 podpisy + 3 pečeti + 3 DocTS a všechny platné.
 5. Stávající jednosigner scénáře beze změny (`make qes-e2e-card`).
 
-## 8. Výsledek implementace (2026-10-17)
+## 8. Výsledek implementace
 
-- Fork `dokulachtan`: commity `381556c` (pořadí), `833992c` (řetězení), `a364101` (validace),
-  `f672524` (specy).
-- `make qes-test` (SQLite): 299 examples, 1 failure — známý upstream flake
-  `spec/system/signing_form_spec.rb:1253`; QES vrstva 56/0.
-- `make qes-e2e-two`: `qes-final.pdf` = 4 signatury (2× appka + 2× pečeť),
-  signer 1 documents = 2 signatury, signer 2 = 4; vše INTACT.
-- Validátor ve forku nově vrací všechny signatury (`intact` = kryptografická platnost
-  všech, `trusted` = jen QES) — bez toho e2e padal na netrusted pečeti DocuSealu.
-- `single_sign_reason` ve forku nesmí `sort_by(&:completed_at)` s `nil` (pečeť se
-  aplikuje před dokončením formuláře) — `nil` se řadí na konec.
+- Řetězení revizí, pořadí signerů a validace všech signatur jsou hotové a kryté
+  `spec/lib/qes/chain_spec.rb`; finální PDF má N podpisů appky + N pečetí + N DocTS.
+- Commity a podrobná historie jsou v gitu forku; aktuální stav dokumentuje
+  [AGENTS.md](../AGENTS.md#stav) a SPEC § 4.6, § 7.1 a § 7.6.

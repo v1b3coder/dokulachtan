@@ -10,7 +10,7 @@ Datum: 2026-10-14
 > - **HexaPDF 1.7 LTV neumí** (`add_validation_info` v něm není, ověřeno ve zdrojích 1.7–1.11);
 >   LTV se řeší CRL v DSS slovníku s VRI (DESIGN § 7.3).
 > - **Úroveň a `key_location` nejsou vlastnosti providera**, ale `QesSession` (dle certifikátu).
-> - **Fáze F1–F4** nahradil plán **P0–P6** v [PLAN.md](../PLAN.md).
+> - **Fáze F1–F4** nahradil plán **P0–P8** v [PLAN.md](../PLAN.md).
 > - Podpis appky je **raw signatura podepsaných atributů CMS**; server ji vkládá do `SignerInfo`
 >   (dvoukrokový protokol, DESIGN § 4 a § 8.2).
 
@@ -27,8 +27,7 @@ a iPhone) dnes není problém. Rozhoduji, že dělat budeme jen varianty A a B.�
 - **B — vlastní klíč na mobilu** (PKCS#12 z iSignum v keystore telefonu) → **AdES**, zdarma.
 
 **Žádný remote QTSP (varianta C vypuštěna), žádný WebCrypto v prohlížeči (B' vypuštěno),
-žádný sidecar.** Vše je self-custody: klíč je buď na kartě, nebo v telefonu. Sidecar
-(dokument 03) zůstává jen jako možný spike, ne produkt.
+žádný sidecar.** Vše je self-custody: klíč je buď na kartě, nebo v telefonu. Sidecar varianta zůstává jen jako možný spike, ne produkt.
 
 Důsledek: **žádná smlouva s QTSP, žádné OAuth, žádné CSC, žádné poplatky za podpis,
 žádná důvěra v poskytovatele.** Jediné náklady jsou čtečka pro variantu A.

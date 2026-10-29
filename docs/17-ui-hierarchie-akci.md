@@ -1,7 +1,7 @@
 # 17 — Hierarchie akcí v appce: audit a návrh uspořádání
 
 **Datum:** 2026-10-22
-**Stav:** realizováno 2026-10-22 (D1–D5 potvrzeny uživatelem)
+**Stav:** realizováno 2026-10-22 (D1–D5 potvrzeny uživatelem); nálezy N1–N19 jsou opravené, pravidla níže platí dál
 **Rozsah:** všech 8 obrazovek appky (`mobile/app/app/*.tsx`), které obsahují tlačítka
 
 ## 1. Příčina
@@ -44,7 +44,7 @@ Důsledky, které lze v appce vidět:
 
 ## 3. Nálezy
 
-| # | Obrazovka | Dnes | Problém |
+| # | Obrazovka | Před změnou (2026-10-22) | Problém |
 |---|---|---|---|
 | N1 | S1 Home | „Importovat jiný klíč“ = plné, první | nejméně častá akce je nejvýš a nejsilnější |
 | N2 | S1 Home | „Podepsat PDF“ a „Ověřit PDF“ = obrys | každodenní akce jsou vizuálně slabší než import |
@@ -70,7 +70,7 @@ Důsledky, které lze v appce vidět:
 
 ### S1 Home
 
-**Dnes:** 1. Importovat jiný klíč (plné), 2. Podepsat PDF, 3. Ověřit PDF, 4. Detail certifikátu,
+**Před změnou (2026-10-22):** 1. Importovat jiný klíč (plné), 2. Podepsat PDF, 3. Ověřit PDF, 4. Detail certifikátu,
 5. Připojit čtečku, 6. Nastavení — vše obrys.
 
 **Nově, klíč nahraný:**
@@ -92,7 +92,7 @@ Důsledky, které lze v appce vidět:
 
 ### S2 Import certifikátu
 
-**Dnes:** Vybrat soubor (plné) → heslo → testovací certifikát (obrys) → chyba → Importovat (plné).
+**Před změnou (2026-10-22):** Vybrat soubor (plné) → heslo → testovací certifikát (obrys) → chyba → Importovat (plné).
 
 **Nově:**
 
@@ -112,7 +112,7 @@ Důsledky, které lze v appce vidět:
 
 ### S3 Detail certifikátu
 
-**Dnes:** detaily → „Smazat certifikát a klíč“ (obrys).
+**Před změnou (2026-10-22):** detaily → „Smazat certifikát a klíč“ (obrys).
 
 **Nově:**
 
@@ -124,7 +124,7 @@ Důsledky, které lze v appce vidět:
 
 ### S7 Nastavení
 
-**Dnes:** URL → token → „Uložit nastavení“ (obrys) → testovací certifikát (obrys) → diagnostika →
+**Před změnou (2026-10-22):** URL → token → „Uložit nastavení“ (obrys) → testovací certifikát (obrys) → diagnostika →
 o aplikaci → „Smazat certifikát a klíč“ (obrys).
 
 **Nově, sekce:**
@@ -143,7 +143,7 @@ o aplikaci → „Smazat certifikát a klíč“ (obrys).
 
 ### S10 Setup (wizard)
 
-**Dnes:** Importovat klíč (plné) → testovací certifikát (obrys) → Nastavit čtečku (obrys).
+**Před změnou (2026-10-22):** Importovat klíč (plné) → testovací certifikát (obrys) → Nastavit čtečku (obrys).
 
 **Nově:**
 
@@ -155,7 +155,7 @@ o aplikaci → „Smazat certifikát a klíč“ (obrys).
 
 ### S11/S12 Podepsat PDF
 
-**Dnes:** Vybrat PDF (plné) → jméno → úroveň → Pokračovat (plné) → Zrušit (obrys);
+**Před změnou (2026-10-22):** Vybrat PDF (plné) → jméno → úroveň → Pokračovat (plné) → Zrušit (obrys);
 v náhledu Podepsat (plné) → Vybrat jiné PDF (obrys) → Zrušit (obrys).
 
 **Nově, výběr:**
@@ -175,7 +175,7 @@ submission + session a přejde na S4), **terciární** „Vybrat jiné PDF“, *
 
 ### S4 Žádost o podpis
 
-**Dnes:** Zkontrolovat dokument (plné) → biometrie + `POST /certificate` + stažení TBS
+**Před změnou (2026-10-22):** Zkontrolovat dokument (plné) → biometrie + `POST /certificate` + stažení TBS
 → Otevřít přesné PDF → Podepsat tento dokument; po úspěchu Stáhnout a sdílet (plné) + Zavřít (plné).
 
 **Nově:**
@@ -198,8 +198,8 @@ Jediná akce „Vyhledat čtečku“ (plné) — beze změny. Vstup se přesouv�
 
 ### S14/S15 Ověřit PDF
 
-**Dnes, výběr:** Ověřit PDF (plné) → Podepsat PDF (obrys) → Zavřít (obrys).
-**Dnes, výsledek:** Uložit do DocuSealu (plné) → Technické detaily → Ověřit jiné PDF → Zavřít.
+**Před změnou (2026-10-22), výběr:** Ověřit PDF (plné) → Podepsat PDF (obrys) → Zavřít (obrys).
+**Před změnou (2026-10-22), výsledek:** Uložit do DocuSealu (plné) → Technické detaily → Ověřit jiné PDF → Zavřít.
 
 **Nově, výběr (PDF ze share sheetu):** jde o symetrickou volbu → **dvě stejně silná** tlačítka
 „Ověřit PDF“ a „Podepsat PDF“, pod nimi **terciární** „Zavřít“ (výjimka z pravidla 1).
@@ -260,7 +260,7 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
   silné volby u share PDF, primární „Ověřit jiné PDF“, uložení sekundární), S8 (sdílené tlačítko).
 - Chyby se zobrazují těsně nad akcí, kterou opravují (S11/S12); „Zrušit“/„Zavřít“ jsou terciární.
 - Aktualizováno SPEC § 9.1, DESIGN § 5.1 a docs/16 (S1, S15).
-- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (60/60).
+- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (223/0).
 
 ## 9. Realizace (2026-10-25)
 
@@ -273,6 +273,6 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
   takže tlačítka po návratu ze sheetu zůstávají použitelná (opravuje N18 pro S4).
 - Po uložení se nabídne „**Otevřít**“ (systémový prohlížeč PDF) a „**Uložit jinam…**“ (SAF picker);
   vybranou složku si appka zapamatuje a příště do ní ukládá přímo (výchozí zůstává Downloads).
-- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (99/99), ručně na emulátoru
+- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (223/0), ručně na emulátoru
   (uložení do `Download/Dokulachtan/`, uložení do Documents + zapamatování, otevření v Drive PDF Viewer,
   share sheet, druhé sdílení i uložení po back).

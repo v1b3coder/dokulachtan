@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 22 issues z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 20 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -22,19 +22,16 @@ jsou označené jako mimo rozsah.
 | 10 | `QES_ENABLED=false` není úplný vypínač | potvrzeno (úzké) | P2 |
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | potvrzeno | P1 |
 | 12 | Account fallback důvěřuje klíči, ne certu | potvrzeno | P1 |
-| 13 | Odkaz nenese adresu serveru | **už opraveno** | — |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | potvrzeno | **P0** |
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | potvrzeno | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 mimo rozsah (config), 18.2 potvrzeno | P1 |
 | 19 | LTV bez revokace mezilehlé CA | potvrzeno | P1 |
-| 20 | Zámek `ExpireSessionsJob` jen v paměti | částečně (testy žijí) | mimo rozsah |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
 | 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
 
-**Uzavřeno:** #13 (opraveno), #20 (mimo rozsah — bez funkčního/bezpečnostního dopadu).
 **Wontfix v kódu:** #18.1 (konfigurace distributora appky), #23.1, #23.2.
 
 ## 2. P0 — bezpečnost a ztráta dat
@@ -280,7 +277,7 @@ a který nic neřeší — když je otisk špatný, je špatná konfigurace, ne 
 
 Co zůstává (config a docs, ne kód):
 1. `deploy/android-release/README.md:69-77` už správně říká, že debug otisk je dočasný a že se „starý debug podpis
-   už nikdy nesmí použít pro distribuci". `docs/09:69-72` a `docs/10-qes.md:243,254` uvádějí debug otisk
+   už nikdy nesmí použít pro distribuci". `docs/09` a `docs/10-qes.md` uvádějí debug otisk
    jako **dočasný** stav s poznámkou, že release APK z CI vyžaduje `80:DC:…:E0`. Dokumentace je tedy v pořádku.
 2. Až se z CI nasadí produkční APK, přepnout `QES_ANDROID_CERT_SHA256` na `80:DC:…:E0` (`fly secrets set`).
    Do té doby App Links na produkci fungují jen pro debug-signed testovací APK — to je vědomá daň za to,
@@ -289,22 +286,10 @@ Co zůstává (config a docs, ne kód):
 **Návrh:** zavřít #18.1 jako mimo rozsah, nechat jen jako položku v deployment checklistu (přepnutí secrets
 při vydání produkčního APK). Žádná změna kódu.
 
-- **#20 Zámek `ExpireSessionsJob` jen v paměti.** Claim o `memory_store` (`production.rb:72`) je pravdivý,
-  ale „smazané testy expirace" **není** — `spec/models/qes_session_spec.rb:90-125`, `spec/requests/qes_session_ttl_spec.rb:30`
-  a `spec/jobs/qes/expire_sessions_job_spec.rb` existují. Dopad je jen zbytečná práce, ne přepis stavu (podmíněný update
-  chrání dokončené stavy) a produkce běží na **1 machine / 1 proces** (`deploy/docuseal/fly.toml`, `processes = ["app"]`,
-  žádný Sidekiq worker) — zámek v `memory_store` je tam dostačující. Reopen, až se pustí víc procesů.
 - **#23.1 Lexikální detekce šifrovaného PDF v appce** (`preparedDocument.ts:49-65`) — jen UX, server kontroluje parserem
   (`pdf_source.rb`). Nebudeme parsovat xref v JS.
 - **#23.2 Paralelní spouštěč testů** (`scripts/qes-test-parallel.sh:125,167`, `scripts/qes_test_groups.py:85`) —
   vývojový nástroj, ne produkt. Opraveno samostatně, až bude potřeba.
-
-## 6. Uzavřené
-
-- **#13 Odkaz pro podpis nenese adresu serveru — už opraveno** (`f1c28c2b` fork, `d33759d` + `2d1088b` parent).
-  `qes/link.rb:14` přidává `server=` do custom scheme, `+native-intent.tsx:20-23` předává origin App Linku
-  a `trustedServers.ts:106-130` (`resolveWorkflowOrigin`) ho ověří přes TOFU seznam; `sign.tsx:229-235`
-  odmítne `foreign_server`, když payload tvrdí jiný origin. Custom scheme i App Link nesou server.
 
 ## 7. Návrh pořadí oprav
 
@@ -325,6 +310,6 @@ před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #3, #14, #16.
 
 ## 8. Poznámky
 
-- Nálezy R3-*/R4-* nejsou v `docs/` zdokumentované (na rozdíl od R1/R2 v `docs/22`);
-  tento dokument je jejich záznam.
+- Nálezy R3-*/R4-* jsou zapsané jen tady; tento dokument je jejich záznam.
+  R1/R2 jsou opravené a kryté `spec/lib/qes/verify_parity_spec.rb` (pravidla v SPEC § 16).
 - Ověření bylo statické (čtení kódu + `apksigner` na build-tools 35/36/37 pro #18.2); testy se nespouštěly.

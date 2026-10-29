@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Externí compliance check PDF přes EU DSS (docs/05 § 5.3, docs/19).
+"""Externí compliance check PDF přes EU DSS (docs/19).
 
 Posílá vygenerované PDF na veřejné demo EU DSS a kontroluje, že je služba
 pozná jako PAdES, že jsou všechny podpisy/razítka kryptograficky v pořádku

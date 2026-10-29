@@ -3,7 +3,7 @@
 Datum: 2026-10-14
 
 Cíl: vysvětlit, co vlastně stavíme, aby bylo jasné, jestli si rozumíme. Odborné termíny
-jsou schválně potlačené — technické detaily jsou v dokumentech 02–05.
+jsou schválně potlačené — technické detaily jsou v [DESIGN.md](../DESIGN.md) a [SPEC.md](../SPEC.md).
 
 ## 1. Co stavíme
 
@@ -50,7 +50,7 @@ Rozdíl je jen v tom, jak silný podpis vznikne a co je k tomu potřeba.
 2. Otevře odkaz a uvidí dokument.
 3. Zkontroluje ho (klidně si ho prolistuje).
 4. Klikne na „Podepsat“.
-5. Telefon si vyžádá otisk prstu nebo PIN.
+5. Telefon si vyžádá otisk prstu nebo obličej (biometrie; PIN zařízení se nepovoluje).
 6. Hotovo — dokument je podepsaný a uložený, firma dostane zprávu.
 
 Pro firmu, která dokument posílá, se nic nemění: jako dnes nahraje dokument do DocuSealu,
@@ -83,5 +83,8 @@ DocuSeal — jedna aplikace, jedna evidence, jeden e-mail. **Nestavíme druhý s
 
 ## 8. Co ještě není
 
-- Úpravy DocuSealu a podpisová appka.
-- Reálný test s českým testovacím certifikátem (I.CA) — máme připravený postup.
+- Reálná čtečka eObčanky (MOI Podpisové SDK) — v appce je zatím stub a fake card pro testy.
+- Kvalifikované časové razítko (nyní DigiCert free, non-qualified).
+- První reálný podpis na produkci s PostSignum certem.
+
+Úpravy DocuSealu, podpisová appka, AdES podpis, přímý podpis PDF i ověření PDF jsou hotové.

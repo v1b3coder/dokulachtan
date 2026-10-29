@@ -81,29 +81,29 @@ Nové soubory (nic z upstreamu):
 Zásahy do upstream souborů (součást logického bloku, do kterého patří; cílem je
 < 10 řádků, výjimky jsou zdůvodněné v [SPEC.md](../SPEC.md) § 14):
 
-- `config/routes.rb` — routes pro QES session (+ AASA, upload/ověření PDF)
-- `app/models/template.rb` — validace `qes_signing_order`
-- `app/models/submission.rb` — `submitters_order: preserved` pro QES šablonu
-- `app/models/submitter.rb` — `has_many :qes_sessions`, `with_signature_fields?`
-- `lib/submitters/submit_values.rb` — validace hodnoty `qes` pole
+- `app/controllers/api/submitters_controller.rb` — lock + boolean + hook
+- `lib/submitters/submit_values.rb` — hooky + `prepend`
 - `lib/submissions/generate_result_attachments.rb` — podepsané PDF + přeskočit `qes` pole
 - `lib/submissions/generate_combined_attachment.rb` — kombinovaný dokument = kopie bez dalšího podpisu
 - `lib/submissions/generate_audit_trail.rb` — QES stránka v auditu
-- `lib/verify_pdf_signature.rb` — `verified/trusted/modified` + TSTInfo v `eContent` (DigiCert)
+- `lib/api_path_consider_json_middleware.rb` — multipart pro upload/ověření PDF
 - `app/views/submissions/_value.html.erb` — přeskočit `qes` pole (`return`, ne `next`)
 - `app/views/submissions/show.html.erb` — přehled podpisu v kartě
 - `app/views/templates/show.html.erb` — panel ověření PDF
+- `app/views/templates/edit.html.erb`, `templates_preview/show.html.erb` — chyba šablony
 - `app/javascript/submission_form/form.vue`, `area.vue` — krok v podpisovém formuláři
-- `app/javascript/template_builder/field_type.vue` — typ pole `qes`
-- `app/javascript/submission_form/i18n.js` — texty kroku
-- `config/locales/i18n.yml` — názvy `qes`
+- `app/javascript/template_builder/field_type.vue`, `field_context_menu.vue`,
+  `dynamic_insert_menu.vue`, `fields.vue`, `builder.vue` — typ pole, volba AdES/QES, gate, save error
+- `app/javascript/application.js` — `withQes`
 - `db/schema.rb` — regenerovaný (obsahuje `qes_sessions`)
-- `lib/api_path_consider_json_middleware.rb` — multipart pro upload/ověření PDF
-- `tailwind.form.config.js` — CSS pro panel ověření
+- `spec/system/signing_form_spec.rb` — 2FA flake (test-only)
+
+Nové soubory jsou v `app/lib/qes/**`, `app/controllers/**/qes_*.rb`, `app/views/**/*qes*`,
+`config/initializers/qes*.rb`, `config/locales/qes.yml` a migrace.
 
 Přesný seznam a počty řádků: [SPEC.md](../SPEC.md) § 14.
 
-**Co ve forku záměrně není:** dokumentace (tento soubor, DESIGN/SPEC/PLAN, audity), Fly
+**Co ve forku záměrně není:** dokumentace (tento soubor, DESIGN/SPEC/PLAN), Fly
 konfigurace (`deploy/docuseal/fly*.toml` v parent repu, do forku se předávají `--config`),
 mobilní appka (`mobile/`), skripty a fixtures (`scripts/`, `test/`) — to všechno je v parent repu
 `dokulachtan`, aby patch nad DocuSealem zůstal jen kód.
@@ -118,7 +118,8 @@ mobilní appka (`mobile/`), skripty a fixtures (`scripts/`, `test/`) — to vše
 - **Obecné bugfixy do upstreamu.** `deep_dup`, `single_sign_reason`, `template_schema` fallback, 2FA flake; ve forku jen do merge.
 - **Žádné kopie celých views** (`prepend_view_path`) a žádné globální Vue/fetch monkey patche bez schválení.
 - **Touch surface budget + contract testy.** Nový modifikovaný upstream soubor jen s odůvodněním; touch surface budget (allowlist + max řádků) musí projít a každý hook kryje `upstream_contract_spec.rb` / `qes_views_spec.rb` / JS testy.
-- **Aktuální nález:** `Qes::ResultAttachments.attach_pdf` v `generate_combined_attachment.rb` je jediná skutečná duplikace — revertovat.
+- **Bez duplikace:** `lib/verify_pdf_signature.rb` je **bit-identický s upstreamem**; orchestrace QES
+  je v `Qes::PdfiumTrust.report` a upstream primitivy jen volá.
 
 ## Workflow
 

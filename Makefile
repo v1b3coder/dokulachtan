@@ -61,7 +61,7 @@ qes-test: qes-test-images ## RSpec na SQLite (jako staging) bez fulltext specu �
 	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
 		bundle exec rspec --exclude-pattern "spec/system/dashboard_spec.rb"' 2>&1 | tee test/out/qes-test-report.txt
 
-# Tiery (docs/21-audit-testu.md § 8): T0 = qes-test-qes, T1 = qes-test-fast,
+# Tiery: T0 = qes-test-qes, T1 = qes-test-fast,
 # T2 = qes-test / qes-test-parallel-full, T3 = qes-test-postgres.
 QES_PARALLEL_WORKERS ?= 4
 
@@ -110,14 +110,14 @@ qes-verify-e2e: ## E2E ověření PDF (docs/16): verify + store + tampered/unsig
 	QES_PDF_E2E_REPORT=qes-verify-e2e-report.txt .venv/bin/python scripts/qes_pdf_e2e.py
 
 # Volitelné: nezávislá kontrola vygenerovaných PDF přes veřejné EU DSS API
-# (docs/05 § 5.3, docs/19). PDF opouští stroj; testovací certy jsou untrusted,
+# (docs/19). PDF opouští stroj; testovací certy jsou untrusted,
 # pro reálný cert použij TRUSTED=1. Nespouští se v běžném CI.
 QES_EU_DSS_PDFS ?= test/out/qes-final.pdf test/out/qes-pdf-final.pdf test/out/qes-staging-*-final.pdf test/out/qes-pdf-staging-final.pdf
 qes-eu-dss-verify: ## EU DSS compliance check PDF (externí API; volitelné, PDF opouští stroj)
 	.venv/bin/python scripts/qes_eu_dss_verify.py --allow-missing $(if $(TRUSTED),--require-trusted,) \
 		--report qes-eu-dss-report.txt $(QES_EU_DSS_PDFS)
 
-qes-negative: ## Negativní scénáře N1–N9 (SPEC § 15.2) → test/out/qes-negative-report.txt
+qes-negative: ## Negativní scénáře N1–N17 (SPEC § 15.2) → test/out/qes-negative-report.txt
 	.venv/bin/python scripts/qes_negative_tests.py
 
 qes-staging-e2e: ## Staging E2E: 2 signeři na https://dokulachtan-staging.fly.dev → 4 signatury

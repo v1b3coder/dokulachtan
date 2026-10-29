@@ -2,6 +2,10 @@
 
 Datum: 2026-10-14
 
+> **Historický průzkum.** Dokument zachycuje stav před implementací forku. Aktuální koncept
+> je v [DESIGN.md](../DESIGN.md), detailní specifikace v [SPEC.md](../SPEC.md); zdejší
+> komerční a právní kontext zůstává jako zdůvodnění rozhodnutí.
+
 Cíl: zjistit, co dnes existuje pro podepisování dokumentů kvalifikovaným certifikátem v ČR,
 co z toho je použitelné pro self-hosted DocuSeal a kde je mezera, kterou má smysl vyplnit.
 

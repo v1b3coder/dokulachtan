@@ -2,9 +2,9 @@
 
 Datum: 2026-10-15
 
-Stav: discovery/verifikace hotová (landscape, rozhodnutí A/B, e2e toolchain, DocuSeal baseline,
-negativní/LTV scénáře, mobile PoC). Níže je seznam rozhodnutí, která ještě chybí, než začneme psát
-kód forku a appky. Doporučení jsou označená „→“.
+Stav: **rozhodnuto a implementováno**. Tento dokument je rozhodovací záznam z doby před
+implementací forku a appky; aktuální stav je v [AGENTS.md](../AGENTS.md#stav) a v [PLAN.md](../PLAN.md).
+Doporučení jsou označená „→“.
 
 ## A. Mobilní appka (varianta B) — rozhodnuto: **Expo**
 
@@ -43,8 +43,8 @@ a PDF. (Ověřeno v mobile PoC: podepisovat atributy, ne digest dokumentu.)
     + stav (čeká na appku / podepsáno).
 11. **Audit.** Zapisovat: subject/issuer/serial certu, čas, hash, úroveň (QES/AdES), výsledek validace;
     ukládat do DocuSeal auditu + vlastní log.
-12. **Varianta A v1.** → **plná implementace v v1** přes oficiální MOI Podpisové SDK v appce
-    (čtečky ACR 3901 U-S1, bR301 BLE, CT 1100, AirID 2, USB OTG); server PKCS#11 neimplementuje
+12. **Varianta A v1.** → **stub + fake card** v appce (rozhraní MOI Podpisové SDK; čtečky ACR 3901 U-S1,
+    bR301 BLE, CT 1100, AirID 2, USB OTG); reálná čtečka je mimo v1. Server PKCS#11 neimplementuje
     (A je client-side). Detail: [DESIGN.md](../DESIGN.md) § 6 a [SPEC.md](../SPEC.md) § 9.4.
 
 ## C. Provoz a bezpečnost
@@ -58,8 +58,9 @@ a PDF. (Ověřeno v mobile PoC: podepisovat atributy, ne digest dokumentu.)
 17. **Token pro appku.** Jednorázový, vázaný na session + hash, TTL 5–10 min, HTTPS only.
 18. **Licence.** Fork zůstává AGPL-3.0 + attribution; mobilní appka vlastní licence.
 
-## D. Co je hotové a co ne
+## D. Co je hotové
 
-- Hotové: průzkum, rozhodnutí, e2e toolchain, DocuSeal baseline, negativní/LTV scénáře, mobile PoC
-  (telefon podepsal digest, server vložil PAdES, validováno).
-- Nehotové: fork (pole `qes`, `Qes::Provider`, hook), mobilní appka, napojení appky na DocuSeal.
+- Průzkum, rozhodnutí, e2e toolchain, DocuSeal baseline, negativní/LTV scénáře a mobile PoC.
+- Fork (pole `qes`, `Qes::Providers`, hooky), mobilní appka a napojení appky na DocuSeal — hotové
+  v P0–P8 kromě reálné čtečky (P5 je stub + fake card); viz [PLAN.md](../PLAN.md)
+  a [AGENTS.md](../AGENTS.md#stav).

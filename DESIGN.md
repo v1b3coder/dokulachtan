@@ -122,7 +122,7 @@ Account
 | `validation_report` | výsledek validace (stav, čas, LTV) |
 | `seal_state` | `none` / `applied` / `failed` (pečeť DocuSealu) |
 | `doc_timestamp_state` | `none` / `applied` / `failed` (DocTS, PAdES-LTA) |
-| `app_metadata` | platforma, verze appky, čtečka, container ref |
+| `app_metadata` | self-reported platforma a verze appky (do auditní stránky) |
 | `signed_document` | PDF s podpisem appky (před pečetí, ActiveStorage) |
 | `final_document` | finální PDF s pečetí (artefakt do `documents`) |
 | `expires_at` | expirace session (5–10 min) |
@@ -244,12 +244,13 @@ jako **nová inkrementální revize** — žádná přestavba stránek, žádný
 ### Přímý podpis PDF (mimo DocuSeal submission, v1.6)
 
 Zaměstnanec dostane PDF mimo DocuSeal (e-mailem, WhatsApp, stažené z portálu) a podepíše ho v appce
-bez šablony, submissionu a submittera. Tok: upload PDF (draft) → náhled stránky ze serveru → klepnutí
-umístí pečeť → `place` postaví TBS a vydá token → **dnešní obřad beze změny** (`GET /qes/sessions/:token`
-→ `certificate` → `complete`) → stažení finálního PDF a sdílení. Server dělá jen obal (TBS, CMS, TSA,
-LTV, DSS, pečeť, validace); klíč zůstává v zařízení. Endpointy: `POST /api/qes/pdf_sessions`,
-`GET /api/qes/pdf_sessions/:id/pages/:page/preview`, `POST /api/qes/pdf_sessions/:id/place`,
-`GET /qes/sessions/:token/download`. Detail: [docs/15-primy-podpis-pdf.md](docs/15-primy-podpis-pdf.md).
+**standardním tokem DocuSealu**: `POST /api/qes/documents` nahraje PDF a založí šablonu s polem `qes`
+ve složce „Direct signing“; appka zobrazí náhled stránky ze serveru, klepnutím umístí pečeť
+(`PATCH /api/templates/:id`), založí submission a spustí obřad. Pak **dnešní obřad beze změny**
+(`GET /qes/sessions/:token/document` → `certificate` → `complete`) a `PUT /api/submitters/:id`
+s `completed: true` vygeneruje finální PDF i auditní stránku. Server dělá jen obal (TBS, CMS, TSA,
+LTV, DSS, pečeť, validace); klíč zůstává v zařízení. Detail:
+[docs/15-primy-podpis-pdf.md](docs/15-primy-podpis-pdf.md).
 
 ---
 
@@ -340,51 +341,79 @@ app/lib/qes/value_validator.rb                 # kontrola formátu hodnoty qes p
 app/lib/qes/session_manager.rb                 # stavový automat
 app/lib/qes/token.rb                           # token (generování, sha256)
 app/lib/qes/tbs_document.rb                    # TBS PDF (spojení dokumentů + podpisové pole)
+app/lib/qes/stamp.rb                           # viditelná pečeť podepisujícího
 app/lib/qes/cms_builder.rb                     # CMS placeholder → signed attrs → finální CMS
 app/lib/qes/certificate_info.rb                 # QCStatements, level, keyUsage
 app/lib/qes/ltv.rb                             # CRL pro DSS (HexaPDF 1.7 LTV neumí)
+app/lib/qes/dss.rb                             # DSS slovník s VRI
+app/lib/qes/doc_timestamp.rb                   # DocTS (PAdES-LTA)
+app/lib/qes/timestamp_token.rb                 # RFC 3161 token (TSTInfo v eContent)
 app/lib/qes/validator.rb                       # Pdfium + pokrytí + úroveň + digest
+app/lib/qes/verifier.rb                        # report pro ověření PDF
+app/lib/qes/pdfium_trust.rb                    # orchestrace ověření (upstream primitivy)
+app/lib/qes/pdf_source.rb                      # kontrola PDF a normalizace rotace
+app/lib/qes/pdf_upload.rb                      # upload PDF (přímý podpis)
 app/lib/qes/seal.rb                            # inkrementální pečeť DocuSealu
 app/lib/qes/result_attachments.rb               # hook: finální PDF → documents
+app/lib/qes/revision_changes.rb                 # hranice změn po podpisu
+app/lib/qes/signing_values.rb                 # snapshot hodnot a defaultů při dokončení
 app/lib/qes/audit_page.rb                      # stránka QES v audit trailu
+app/lib/qes/hooks.rb                           # hooky do generování PDF
+app/lib/qes/extensions.rb, app/lib/qes/extensions/**  # prependy pro nové chování
+app/lib/qes/link.rb, rate_limiter.rb
 app/models/qes_session.rb
 app/controllers/qes/sessions_controller.rb       # app-facing (token)
 app/controllers/qes/form_sessions_controller.rb # browser-facing
 app/controllers/qes/app_controller.rb           # web fallback
-app/controllers/qes/well_known_controller.rb    # AASA s Content-Type: application/json
+app/controllers/qes/well_known_controller.rb    # AASA a assetlinks s Content-Type: application/json
+app/controllers/qes/test_crl_controller.rb      # test CRL jen při QES_TEST_CRL_PATH
+app/controllers/api/qes_documents_controller.rb # upload PDF (přímý podpis)
+app/controllers/api/qes_verifications_controller.rb # ověření PDF
+app/controllers/templates_qes_verifications_controller.rb # panel ověření v template
 app/jobs/qes/expire_sessions_job.rb            # expirace (samo-plánující smyčka)
-app/jobs/qes/embed_signature_job.rb
 app/views/qes/app/show.html.erb                 # fallback stránka s QR
+app/views/submissions/_qes_badge.html.erb
+app/views/submit_form/_qes_summary.html.erb
+app/views/templates/_qes_verification.html.erb
+app/views/templates_qes_verifications/show.html.erb
 app/javascript/submission_form/qes_step.vue      # krok v podpisovém formuláři
-public/.well-known/assetlinks.json              # App Links (statika; AASA servíruje controller)
+app/javascript/submission_form/qes_step_logic.mjs
+app/javascript/submission_form/qes_summary.vue
+app/javascript/template_builder/qes_field_type.js
+app/javascript/template_builder/qes_level_submenu.vue
+config/initializers/qes.rb                     # konfigurace (trust roots, TTL, deep link base)
+config/initializers/qes_routes.rb               # routy mimo upstream `routes.rb`
+config/locales/qes.yml                         # texty (cs/en)
+config/qes/*.pem, config/qes/test-root.crl       # trust roots a test CRL
 db/migrate/…_create_qes_sessions.rb
-config/initializers/qes.rb                     # konfigurace (trust roots, TTL, deep link base, filtr parametrů)
-app/models/qes_pdf_session.rb                   # přímý podpis PDF (bez submission)
-app/lib/qes/page_preview.rb                    # náhled stránky (Pdfium + Vips) pro umístění pečeti
-app/controllers/api/qes_pdf_sessions_controller.rb # upload / preview / place (docs/15)
-db/migrate/…_create_qes_pdf_sessions.rb
+db/migrate/…_add_doc_timestamp_state_to_qes_sessions.rb
+db/migrate/…_add_signing_time_to_qes_sessions.rb
+db/migrate/…_add_expired_at_to_qes_sessions.rb
 ```
 
 Změněné (minimálně, každý vlastní commit, max. 10 řádků):
 ```
-config/routes.rb                                   # + routes (SPEC § 14)
-app/models/template.rb                              # validace qes_signing_order (SPEC § 4.1, § 7.7)
-app/models/submitter.rb                             # has_many :qes_sessions, with_signature_fields?
-lib/submitters/submit_values.rb                     # validace hodnoty qes pole
-lib/submissions/generate_result_attachments.rb        # použít podepsané PDF + přeskočit qes pole
-lib/submissions/generate_combined_attachment.rb       # combined pro QES = kopie finálního PDF bez dalšího podpisu
-lib/submissions/generate_audit_trail.rb              # QES stránka v auditu
-app/views/submissions/_value.html.erb                 # přeskočit qes pole (return, ne next)
-app/javascript/submission_form/form.vue               # krok QesStep
-app/javascript/template_builder/field_type.vue         # ikona + název typu qes (fieldIcons/fieldNames/skipTypes)
-config/locales/i18n.yml                             # texty (cs/en)
-app/lib/qes/tbs_document.rb                          # build_from(base_pdf:, stamp:) + Qes::Stamp
-app/lib/qes/seal.rb                                  # apply(reason:) místo submitter:
-app/lib/qes/providers/mobile_app.rb                  # prepare(signable, field = nil) + session.signable
-app/controllers/qes/sessions_controller.rb            # document_name/signer_name + obě tabulky
-app/lib/qes/token.rb                                 # find v obou tabulkách
-app/jobs/qes/expire_sessions_job.rb                  # expiruje i QesPdfSession
-app/jobs/qes/embed_signature_job.rb                  # lookup v obou tabulkách
+app/controllers/api/submitters_controller.rb            # lock + boolean + hook
+app/javascript/application.js                           # withQes
+app/javascript/submission_form/form.vue                  # krok QesStep
+app/javascript/submission_form/area.vue                  # QES oblast
+app/javascript/template_builder/builder.vue              # save error + withQes
+app/javascript/template_builder/dynamic_insert_menu.vue   # gate
+app/javascript/template_builder/field_context_menu.vue    # volba AdES/QES
+app/javascript/template_builder/field_type.vue           # ikona + název typu qes
+app/javascript/template_builder/fields.vue               # gate
+app/views/submissions/_value.html.erb                   # přeskočit qes pole (return)
+app/views/submissions/show.html.erb                     # přehled podpisu v kartě
+app/views/templates/edit.html.erb                       # banner při chybě šablony
+app/views/templates/show.html.erb                       # panel ověření PDF
+app/views/templates_preview/show.html.erb                # flash při chybě šablony
+db/schema.rb                                           # regenerovaný (obsahuje qes_sessions)
+lib/api_path_consider_json_middleware.rb                # multipart pro upload/ověření PDF
+lib/submissions/generate_audit_trail.rb                 # QES stránka v auditu
+lib/submissions/generate_combined_attachment.rb          # kombinovaný dokument = kopie bez dalšího podpisu
+lib/submissions/generate_result_attachments.rb           # podepsané PDF + přeskočit qes pole
+lib/submitters/submit_values.rb                        # validace hodnoty qes pole
+spec/system/signing_form_spec.rb                        # 2FA flake (test-only)
 ```
 
 **Poznámka:** `app/lib/submissions/...` v DESIGN.md je chyba — soubory jsou v `lib/submissions/`
@@ -398,22 +427,29 @@ app/jobs/qes/embed_signature_job.rb                  # lookup v obou tabulkách
 | GET | `/s/:submit_form_slug/qes_sessions/:id` | prohlížeč | stav (polling) |
 | POST | `/s/:submit_form_slug/qes_sessions/:id/cancel` | prohlížeč | zrušení |
 | GET | `/qes/sessions/:token` | appka (token) | metadata (bez `data_to_sign`) |
+| GET | `/qes/sessions/:token/document` | appka (token) | TBS PDF ke kontrole před podpisem |
 | POST | `/qes/sessions/:token/certificate` | appka (token) | certifikát → `data_to_sign` |
 | POST | `/qes/sessions/:token/complete` | appka (token) | raw signatura → vložení |
+| POST | `/qes/sessions/:token/complete_submission` | appka (token) | dokončení submittera přes session token |
 | POST | `/qes/sessions/:token/abort` | appka (token) | chyba/odmítnutí v appce |
-| GET | `/qes/app?token=…` | prohlížeč | web fallback s QR |
-| POST | `/api/qes/pdf_sessions` | appka (API token) | upload PDF, draft + náhled (docs/15) |
-| GET | `/api/qes/pdf_sessions/:id/pages/:page/preview` | appka (API token) | náhled stránky pro umístění pečeti |
-| POST | `/api/qes/pdf_sessions/:id/place` | appka (API token) | umístění pečeti → TBS + token |
-| GET | `/qes/sessions/:token/download` | appka (token) | finální PDF ke stažení |
+| GET | `/qes/sign`, `/qes/app?token=…` | prohlížeč | App Link / web fallback s QR |
+| POST | `/api/qes/documents` | appka (API token) | upload PDF → šablona „Direct signing“ |
+| POST | `/api/qes/verify` | appka (API token) | ověření PDF (stateless) |
+| POST | `/api/qes/verified_documents` | appka (API token) | uložení do „Verified documents“ |
+| GET | `/templates/:template_id/qes_verification` | prohlížeč | panel ověření PDF v šabloně |
+| GET | `/.well-known/apple-app-site-association` | systém | AASA |
+| GET | `/.well-known/assetlinks.json` | systém | App Links |
+| GET | `/qes-test/root.crl` | test | test CRL, jen když je `QES_TEST_CRL_PATH` |
 
 Token: jednorázový, vázaný na session + hash, TTL 5–10 min, pouze HTTPS; v DB jen `sha256`.
+Dokončený token platí 24 h (`completed_session_ttl`) a vrací stav bez `values`.
 Přesné kontrakty (chyby, idempotence, souběh): [SPEC.md](SPEC.md) § 5, § 6 a § 7.10.
 
 ### 7.3 Joby
 
 - `Qes::ExpireSessionsJob` — expirace neaktivních sessions (samo-plánující smyčka, viz SPEC § 7.8).
 - `Qes::Providers::MobileApp#complete!` — vložení CMS, DSS, pečeť, DocTS, validace (synchronně, idempotentně přes `with_lock`).
+- `Qes::DocTimestamp` — DocTS po pečeti; `Qes::PdfiumTrust.report` — orchestrace ověření PDF.
 
 Notifikace po dokončení (e-mail/webhook) řeší standardní DocuSeal po označení submittera `completed`;
 žádný `Qes::NotifyJob` v v1 není.
@@ -442,12 +478,13 @@ Detail: [SPEC.md](SPEC.md) § 7.4, § 7.6 a § 16.
   (`merged_document`) pro QES submission jsou **kopie téhož** finálního PDF — upstream `sign_pdf`
   v `GenerateCombinedAttachment#call` se pro QES **přeskakuje**, jinak by vznikla další signatura.
   Auditní stránka QES je v samostatném artefaktu `audit_trail` (`EnsureAuditGenerated`).
-- **Při více signerech** finální PDF obsahuje N podpisů appky + N pečetí (pečeť po každé session);
+- **Při více signerech** finální PDF obsahuje N podpisů appky + N pečetí + N DocTS
+  (pečeť a DocTS po každé session);
   každá předchozí revize zůstává INTACT a poslední revize pokrývá celý soubor.
 - **Kritérium hotovo:** podepsaný dokument (před pečetí) obsahuje podpis podepisujícího a nezávislý
   validátor (pyHanko/pdfsig) ho označí jako INTACT/TRUSTED/UNTOUCHED s pokrytím celého dokumentu;
-  finální PDF po pečeti má poslední signaturu (pečeť) pokrývající celý soubor a **všechny předchozí
-  podpisy zůstávají INTACT** (u N signerů: N podpisů appky + N pečetí). K tomu záznam v auditu
+  finální PDF po pečeti a DocTS má poslední signaturu (DocTS) pokrývající celý soubor a **všechny předchozí
+  podpisy zůstávají INTACT** (u N signerů: N podpisů appky + N pečetí + N DocTS). K tomu záznam v auditu
   (stránka QES se všemi session v audit trailu).
   Přesná definice: [SPEC.md](SPEC.md) § 7.6 a § 15.2.
 - Audit trail: události QES se zapíšou jako součást auditu (cert, čas, hash, úroveň, validace).
@@ -586,7 +623,7 @@ Všechny níže uvedené body jsou rozhodnuté ve SPEC.md (potvrzeno 2026-10-15)
 | 12 | Heslo k PKCS#12 při podpisu | **ne** — jen při importu; klíčový materiál se ihned přešifruje, při podpisu jen biometrie | SPEC § 9.5 |
 | 13 | Volba podepisujícího (klíč vs. čip) | **automaticky lokálně**: dle `level_required` (QES → čtečka, AdES → klíč → čtečka → wizard S10), bez ptaní | SPEC § 9.8 |
 | 14 | Více digitálních podpisů (firemní podpisy) | **řetězení PAdES revizí**: všichni signeři mají pole `qes`, striktní pořadí, TBS dalšího = finální PDF předchozího; každý signer vlastní session i dokument | SPEC § 4.6, § 7.11 |
-| 15 | Přímý podpis PDF (mimo submission) | **fork jako obecná služba**: `QesPdfSession`, upload API tokenem, pečeť umístěná klepnutím, výstup ke stažení/sdílení; server vidí PDF, klíč ne | SPEC § 4.8, § 5.8, § 9.9 |
+| 15 | Přímý podpis PDF (mimo submission) | **nativní tok DocuSealu**: `POST /api/qes/documents` založí šablonu s polem `qes`, appka klepnutím umístí pečeť a spustí obřad; finální PDF je v účtu (Documents, „Direct signing“) ke stažení/sdílení; server vidí PDF, klíč ne | SPEC § 4.8, § 5.8, § 9.9 |
 | 16 | Offline core (přímý podpis bez serveru) | **mimo v1**: appka má rozhraní `SessionSource`, takže jde doplnit později bez změny obřadu; cena je ~2000–3500 řádků TS | docs/15 § 2 (D12) |
 
 **Omezení v1.5:** všichni non-viewer signeři šablony s polem `qes` musí mít pole `qes`

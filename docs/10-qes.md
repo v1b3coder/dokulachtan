@@ -1,7 +1,7 @@
 # 10 — QES runbook (ENV, TSA, trust roots, troubleshooting)
 
 Provozní příručka QES vrstvy forku. Vzniká v P0.6, doplňuje SPEC § 11 a § 15.
-Vše níže je **změřené** (2026-10-16), ne odhad.
+Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 
 ## Co je hotové
 
@@ -106,10 +106,10 @@ make qes-test           # RSpec na SQLite (jako staging), celá sada → test/ou
 make qes-test-qes        # jen QES vrstva (rychlá smyčka)
 make qes-test-postgres   # paritní běh celé sady na Postgresu 18
 make qes-e2e             # fork + podpis KÓDEM APPKY (varianta B) → validované PDF
-make qes-e2e-two         # fork + 2 signeři jednoho dokumentu → 4 signatury (2× appka + 2× pečeť)
-make qes-negative        # negativní scénáře N1–N9 (SPEC § 15.2)
+make qes-e2e-two         # fork + 2 signeři jednoho dokumentu → 6 signatur (2× appka + 2× pečeť + 2× DocTS)
+make qes-negative        # negativní scénáře N1–N17 (SPEC § 15.2)
 make qes-staging-e2e     # staging + 2 signeři přes `fly ssh console` (QES_STAGING_SIGNERS=2)
-make qes-staging-same-signer  # staging: stejný podepisující 2 pole → 4 signatury INTACT
+make qes-staging-same-signer  # staging: stejný podepisující 2 pole → 6 signatur INTACT
 make qes-e2e-card        # fork + podpis fake čipem (varianta A, test QSCD cert) → validované PDF
 make qes-app-test        # Jest testy appky (vault, P12, signer, API)
 make qes-app-typecheck   # TypeScript kontrola appky
@@ -125,7 +125,7 @@ harnessu je v `test/qes/README.md`.
 .venv/bin/pyhanko sign validate --trust-replace --trust test/certs/pki/root.crt \
   "test/out/qes-signed.pdf"
 
-# finální PDF (2 signatury: appka + pečeť)
+# finální PDF (3 signatury: appka + pečeť + DocTS)
 .venv/bin/pyhanko sign validate --trust-replace --trust test/certs/pki/root.crt \
   "test/out/qes-final.pdf"
 
@@ -133,12 +133,13 @@ pdfsig "test/out/qes-signed.pdf"     # "Signature is Valid." + "Total document s
 qpdf --check "test/out/qes-final.pdf" # bez chyb
 ```
 
-Očekávané výsledky (`make qes-e2e` a `make qes-e2e-card`, 2026-10-16):
+Očekávané výsledky (`make qes-e2e`, `make qes-e2e-card`, `make qes-e2e-pdf`):
 
 - `qes-signed.pdf` → `Signature1:…:INTACT:TRUSTED,UNTOUCHED` (pokrývá celý dokument),
-- `qes-final.pdf` → dvě signatury; podpis appky `INTACT:TRUSTED,EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS`,
+- `qes-final.pdf` → tři signatury; podpis appky `INTACT:TRUSTED,EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS`,
   pečeť `INTACT:UNTRUSTED,UNTOUCHED` (self-signed cert DocuSealu; v produkci s I.CA rootem trusted),
-- `documents` i `combined_document` v DocuSealu = kopie téhož finálního PDF (žádný třetí podpis),
+  DocTS `TIMESTAMP_TOKEN<INTACT:UNTRUSTED>` (test trust list nemá DigiCert root; v Adobe je trusted),
+- `documents` i `combined_document` v DocuSealu = kopie téhož finálního PDF (žádný další podpis),
 - audit trail obsahuje stránku QES s cert/čas/hash/úrovní/výsledkem validace.
 
 ## Jak dohledat session
@@ -199,13 +200,9 @@ staging od 2026-10-18 běží na volume `dokulachtan_stg_restore` obnoveném ze 
 staging volume (účet `<SMTP_FROM>` i šablona „QES E2E (staging)“ jsou k dispozici), produkce
 na novém prázdném volume `dokulachtan_prod_data` (první účet přes `/setup`).
 
-Staging `https://dokulachtan-staging.fly.dev/` běží s QES vrstvou (`QES_ENABLED=true`). Ověřeno 2026-10-16
-end-to-end: podpis **kódem appky** proti stagingu (`scripts/qes_staging_app_flow.py`),
-finální PDF validované pyHanko (`INTACT:TRUSTED,UNTOUCHED`).
-
 **Stejný podepisující 2 pole (2026-10-17):** `make qes-staging-same-signer` projde na stagingu —
-druhý TBS se řetězí na první finální PDF téhož podepisujícího, finální PDF má 4 signatury
-(2× appka + 2× pečeť) a všechny jsou INTACT; report v `test/out/qes-staging-same-signer-report.txt`.
+druhý TBS se řetězí na první finální PDF téhož podepisujícího, finální PDF má 6 signatur
+(2× appka + 2× pečeť + 2× DocTS) a všechny jsou INTACT; report v `test/out/qes-staging-same-signer-report.txt`.
 
 **Zobrazení přehledu v poli (2026-10-17, release v16):** přehled podpisu se v poli dokumentu
 vykresluje ve zkrácené variantě (`compact` — podbarvení, ikona, úroveň, podepisující, certifikát)
@@ -220,8 +217,8 @@ do **DSS** (`/DSS` s `/CRLs`, `/Certs` a `/VRI` s SHA-1 `/Contents` podpisu appk
 (ETSI `RevocationValues` + Adobe `adbe-revocationInfoArchival`) se nepoužívá — pyHanko unsigned
 atributy nečte a jen zvětšovaly PDF. Po pečeti se přidá **DocTS** (DigiCert TSA, `ETSI.RFC3161`),
 který DSS kryje; offline `pyhanko ades_lta_validation` s `allow_fetching=False` je kritérium.
-Na stagingu CRL DP test certů (`127.0.0.1:8765`) dostupné není a `QES_REQUIRE_LTV=false`, proto
-se do DSS vloží jen certy; reálné PostSignum certy naopak CRL dostanou (jejich CRL DP jsou veřejné
+Na stagingu mají test certy CRL DP i na staging hostu (`QES_TEST_CRL_PATH`) a `QES_REQUIRE_LTV=false`,
+takže CRL je dostupné; `127.0.0.1:8765` se ignoruje. Reálné PostSignum certy CRL dostanou (jejich CRL DP jsou veřejné
 a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkci jsou CRL hosty PostSignum (`crl.postsignum.cz`,
 `crl2.postsignum.cz`, `crl.postsignum.eu`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
 bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` by skončil na
@@ -229,7 +226,7 @@ bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` b
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
 `QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
 
-**Negativní scénáře:** `make qes-negative` (N1–N9) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
+**Negativní scénáře:** `make qes-negative` (N1–N17) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
 
 ```bash
 # staging (deploy/docuseal/fly.staging.toml, APP=dokulachtan-staging)
@@ -254,15 +251,6 @@ QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0
 ```
 
-**Produkce po zjednodušení (2026-10-28):** release **v51**
-(`deployment-01M61NDWNT8R8VA1HH9GEHBMG1`), fork `b2396604`; v secrets zůstávají jen
-`QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256` a SMTP. `Qes::Config` na stroji:
-`enabled=true`, `require_ltv=true`, `ltv_allowed_hosts` = 3 PostSignum hosty, trust roots
-6× PostSignum, `tsa_url=http://timestamp.digicert.com`, TSA roots 1, `tsa_required=true`;
-CRL fetch OK (`PostSignum Qualified CA 4`, 21 988 revoked), `/up` 200,
-`POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes/sessions/unknown/document` → 404,
-`/qes-test/root.crl` → 404.
-
 **Český verification trust store (2026-10-28):** produkce **v52**
 (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
 (`deployment-01M61RKSP8C594JRPAEKTR3VZT`), obě z forku `cfd36b2c`. Signing
@@ -270,11 +258,6 @@ CRL fetch OK (`PostSignum Qualified CA 4`, 21 988 revoked), `/up` 200,
 verification `QES_VERIFICATION_TRUST_ROOTS` je `czech.pem` (prod 29; staging test root + 29 = 30).
 `/up` 200, `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes-test/root.crl` → 404;
 `make qes-staging-e2e` (6 signatur) a `qes-staging-e2e-pdf` (3 signatury) zelené.
-
-Ověřeno 2026-10-18 na novém stagingu: `make qes-staging-e2e` → 4 signatury INTACT, `trusted: true`,
-`trusted_roots` = test root + 6× PostSignum (`test/out/qes-staging-e2e-report.txt`);
-`make qes-staging-e2e-pdf` → 2 signatury INTACT, `trusted: true`
-(`test/out/qes-pdf-staging-report.txt`).
 
 Testovací data na stagingu: šablona **„QES E2E (staging)"** s polem `qes` (úroveň AdES) —
 slouží k vyzkoušení toku z appky (nebo ji smažte).
@@ -311,7 +294,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   podpisové odkazy ho nepoužívají. Server shodný s Nastavením je pro podpisové odkazy
   důvěryhodný bez TOFU (v seznamu je označený „Server z Nastavení“). Odkaz bez serveru skončí `missing_server` (žádný tichý
   fallback do Nastavení); `server_url` z payloadu musí odpovídat originu odkazu, jinak appka
-  vrátí `foreign_server`.
+  vrátí `foreign_server`. Serverová část TOFU je ve forku `f1c28c2b`; na produkci/staging
+  (v52/v25, fork `cfd36b2c`) zatím není nasazená — před použitím TOFU odkazu nasadit.
 
 ### iOS build a instalace na iPhone
 

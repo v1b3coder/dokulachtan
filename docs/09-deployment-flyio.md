@@ -9,11 +9,12 @@ na Fly.io.“ — analýza, nic se nenasazuje.
 region `fra`, staging. Varianta A (eObčanka) je **client-side** (čtečka je u uživatele); server ji
 neimplementuje, v cloudu ji řeší appka / lokální agent.
 
-**Aktualizace (2026-10-18):** prostředí je rozdělené na **produkci** `dokulachtan`
+**Aktualizace (2026-10-29):** prostředí je rozdělené na **produkci** `dokulachtan`
 (volume `dokulachtan_prod_data`, reálné PostSignum CA, `QES_REQUIRE_LTV=true`, bez testovacího
-rootu) a **staging** `dokulachtan-staging` (volume `dokulachtan_staging_data`, testovací root +
-PostSignum CA, `QES_REQUIRE_LTV=false`). Konfigurace jsou v parent repu: `deploy/docuseal/fly.toml` = produkce,
-`fly.staging.toml` = staging (do forku se předávají přes `--config`).
+rootu) a **staging** `dokulachtan-staging` (volume `dokulachtan_stg_restore`, testovací root +
+PostSignum CA, `QES_REQUIRE_LTV=false`). Konfigurace jsou v parent repu:
+`deploy/docuseal/fly.toml` = produkce, `fly.staging.toml` = staging (do forku se předávají přes
+`--config`). Aktuální release a ověření jsou v [AGENTS.md](../AGENTS.md#deployment).
 
 ## TL;DR
 
@@ -52,41 +53,38 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
 **Zvoleno pro obě prostředí: A** (1 app + volume + SQLite; `dokulachtan` = produkce,
 `dokulachtan-staging` = staging).
 
-## Stav nasazení (2026-10-18)
+## Stav nasazení
 
-> Aktuální stav (release, verifikace po nasazení) je v `AGENTS.md` → Deployment; tato sekce
-> popisuje prvotní nasazení. Prostředí jsou dvě (rozdělení 2026-10-18):
+> Aktuální release, konfigurace a ověření jsou v [AGENTS.md](../AGENTS.md#deployment);
+> tato sekce popisuje jen architekturu prostředí.
 
 **Produkce `dokulachtan`** (<https://dokulachtan.fly.dev/>):
 
-- machine `80e9579c6de348`, region `fra`
-- volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty zapnuté) → `/data/docuseal`
-  (nový prázdný volume; starý `dokulachtan_data` s testovacími daty zůstává odpojený)
-- `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (signing: jen reálné PostSignum CA, bez test rootu)
-- `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (verification: PostSignum, I.CA,
-  eIdentity, NCA, KB; v secrets není potřeba)
-- `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=false`, `QES_ENABLED=true`
-- `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
-  (debug fingerprint; prostředí používá lokální bleeding-edge debug build. Release APK z CI by
-  vyžadoval release fingerprint.)
-- healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet)
-- migrace proběhly automaticky při startu; `SECRET_KEY_BASE` a `docuseal.env` na volume
-- SMTP zatím nenastaveno (`deploy/smtp.env` neexistuje)
-- první účet (setup) vytváří uživatel v prohlížeči
+- machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty)
+  → `/data/docuseal`; starý volume `dokulachtan_data` byl smazán 2026-10-18.
+- signing `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA),
+  verification `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (PostSignum, I.CA,
+  eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=true`, `QES_ENABLED=true`.
+- `QES_ANDROID_CERT_SHA256` = fingerprint **Android podpisu testovacího APK** (debug
+  `FA:C6:…:9C`); při nasazení produkčního APK z CI se přepne na release `80:DC:…:E0`.
+- healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet); migrace automaticky při startu;
+  `SECRET_KEY_BASE` a `docuseal.env` na volume.
+- SMTP Brevo nastaveno (`deploy/smtp.prod.env`, gitignored); první účet vytváří uživatel
+  v prohlížeči.
 
 **Staging `dokulachtan-staging`** (<https://dokulachtan-staging.fly.dev/>):
 
-- machine `78111546b1dd68`, volume `dokulachtan_stg_restore` → `/data/docuseal`
-  (obnovený ze snapshotu starého staging volume; účet a šablona „QES E2E (staging)“ k dispozici)
+- machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`
+  (obnovený ze snapshotu starého staging volume; účet a šablona „QES E2E (staging)“ k dispozici).
 - `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`
-  (testovací klíč i reálné PostSignum certy pro podpis)
+  (testovací klíč i reálné PostSignum certy pro podpis).
 - `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`
-  (testovací i reálné české CA pro ověření)
-- `QES_REQUIRE_LTV=false` (testovací CRL DP `127.0.0.1:8765` není dostupné)
-- `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`
-- `QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
-  (debug fingerprint; lokální bleeding-edge debug build. Release APK z CI by vyžadoval release
-  fingerprint z `deploy/android-release/`.)
+  (testovací i reálné české CA pro ověření).
+- `QES_REQUIRE_LTV=false`; testovací CRL je dostupné na
+  `https://dokulachtan-staging.fly.dev/qes-test/root.crl` (`QES_TEST_CRL_PATH`).
+- `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`;
+  `QES_ANDROID_CERT_SHA256=FA:C6:…:9C` (debug fingerprint testovacího APK).
+- SMTP Brevo (stejné creds jako produkce, `deploy/smtp.env`).
 
 ## Konkrétní kroky (až se bude nasazovat)
 
@@ -215,5 +213,6 @@ fronta ve *Real time → Usage and plan → Email queue*.
   App Distribution; TestFlight později). Testovací APK z `deploy/apk/` má výchozí produkci a na staging se
   přepíná v appce *Nastavení → Server URL*; pro App Links na staging je potřeba rebuild APK s hostem
   `dokulachtan-staging.fly.dev`.
-- Deep link: custom scheme `dokulachtan://` stačí pro staging; universal links (https) až s vlastní doménou
-  a soubory `assetlinks.json` / `apple-app-site-association` v `public/`.
+- Deep link: custom scheme `dokulachtan://` funguje vždy; App Links (https) servíruje
+  `Qes::WellKnownController` (`assetlinks.json` a `apple-app-site-association`) a jsou vázané na host
+  zapečený v APK.

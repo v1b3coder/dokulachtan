@@ -6,7 +6,7 @@ zapisuje do DESIGN.md (rozhodnutí #14) a ruší původní omezení „jen jeden
 Oprava 2026-10-17: stejná osoba může podepsat víc polí (§ 4.6 — vlastní session má přednost),
 jinak se druhý podpis zahodil; přehled podpisu se v poli zobrazuje místo `qes:<id>` (§ 13, § 14).
 Vychází z: [DESIGN.md](DESIGN.md) (aplikační design), [docs/04](docs/04-architektura-fork.md),
-[docs/05](docs/05-e2e-testovani.md), [docs/07](docs/07-pred-implementaci.md).
+[docs/07](docs/07-pred-implementaci.md).
 
 > **Závazný je [DESIGN.md](DESIGN.md)** (lidský koncept: co a proč). Tato specifikace je z něj
 > odvozená a rozvádí ho do detailu (*jak přesně*: model, API, obrazovky, testy). Když si dokumenty
@@ -165,7 +165,7 @@ Pro podepisování platí: každý signer má právě jedno pole `qes` a právě
 | `validation_report` | text (JSON) | výsledek validace (§ 7.5) |
 | `seal_state` | string | `none`, `applied`, `failed` |
 | `doc_timestamp_state` | string | `none`, `applied`, `failed` (DocTS, § 7.6) |
-| `app_metadata` | text (JSON) | platforma, verze appky, model čtečky, container ref |
+| `app_metadata` | text (JSON) | self-reported platforma a verze appky (whitelist, jen `android`/`ios` a `X.Y.Z`); jde do auditní stránky |
 | `expires_at` | datetime | `created_at + QES_SESSION_TTL` |
 | `prepared_at` | datetime | session připravena (TBS se staví až při přijetí certifikátu) |
 | `app_opened_at` | datetime | appka si vyzvedla payload |
@@ -296,7 +296,7 @@ Důsledky:
 - **Dokument je vidět v účtu** ve složce „Direct signing“ (Documents) jako běžný dokument: lze ho stáhnout,
   sdílet odkazem, archivovat i smazat; DocuSeal k němu generuje **auditní stránku** (`audit_trail`).
 - **Výsledné PDF** = finální PDF QES session (pečeť appky + pečeť DocuSealu), viz `Qes::ResultAttachments`
-  (§ 7.6); pole `qes` se do výsledku nekreslí (kreslí ho `Qes::TbsDocument#draw_stamp` do TBS).
+  (§ 7.6); pole `qes` se do výsledku nekreslí (kreslí ho `Qes::Stamp.draw` do TBS).
 - **Retence** je věcí DocuSealu (smazání dokumentu v UI smaže i PDF); žádný vlastní úklid QES nad PDF sessions.
 - Patch forku je minimální: `Api::QesDocumentsController#create` (§ 5.8.1) a `Qes::PdfSource`
   (kontrola šifrovaných/už podepsaných PDF a normalizace rotace stránek).
@@ -390,7 +390,7 @@ Request:
   "certificate": "<base64 DER X.509>",
   "chain": ["<base64 DER>", "…"],
   "key_location": "phone_keystore",
-  "app": { "platform": "android", "version": "1.0.0", "reader": null, "container_ref": null }
+  "app": { "platform": "android", "version": "1.3.9" }
 }
 ```
 
@@ -586,7 +586,7 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 
 Appka pošle `fields: [{ …field, areas: [{x, y, w, h, page, attachment_uuid}] }]` — oblast pole
 v normalizovaných souřadnicích 0–1 **od shora** (jako u běžných polí DocuSealu). Server kreslí pečeť
-QES přesně do této oblasti (`Qes::TbsDocument#draw_stamp`, § 7.1); appka clampuje klepnutí do stránky.
+QES přesně do této oblasti (`Qes::Stamp.draw`, § 7.1); appka clampuje klepnutí do stránky.
 
 #### 5.8.3 `POST /api/templates/:id/submissions` — dokument k podpisu (existující API)
 
@@ -869,18 +869,25 @@ a do auditu se zapíše varování.
 
 ### 7.7 Hooky do generování PDF (přesné soubory)
 
-Přesný seznam **20 doteků** upstreamu, jejich změny a počty řádků je v § 14
+Přesný seznam **21 doteků** upstreamu, jejich změny a počty řádků je v § 14
 (jediný zdroj pravdy). Hooky, které fork potřebuje:
 
 - `lib/submissions/generate_result_attachments.rb` — podepsané PDF + přeskočit `qes` pole,
 - `lib/submissions/generate_combined_attachment.rb` — combined = kopie `final_document`,
 - `lib/submissions/generate_audit_trail.rb` — stránka QES v auditu,
-- `lib/verify_pdf_signature.rb` — `verified/trusted/modified` + TSTInfo v `eContent`,
+- `lib/submissions/generate_result_attachments.rb` — podepsané PDF + přeskočit `qes` pole,
+- `lib/submissions/generate_combined_attachment.rb` — combined = kopie `final_document`,
+- `lib/submissions/generate_audit_trail.rb` — stránka QES v auditu,
 - `app/views/submissions/_value.html.erb`, `show.html.erb` — přehled podpisu,
-- `app/views/templates/show.html.erb` — panel ověření PDF,
-- `app/javascript/submission_form/form.vue`, `area.vue`, `field_type.vue`, `i18n.js` — krok a typ pole,
-- `config/routes.rb`, `config/locales/i18n.yml`, `lib/api_path_consider_json_middleware.rb`,
-  `tailwind.form.config.js`, `db/schema.rb`.
+- `app/views/templates/show.html.erb`, `edit.html.erb`, `templates_preview/show.html.erb` — panel a chyby,
+- `app/javascript/submission_form/form.vue`, `area.vue` — krok a oblast formuláře,
+- `app/javascript/template_builder/field_type.vue`, `field_context_menu.vue`,
+  `dynamic_insert_menu.vue`, `fields.vue`, `builder.vue` — typ pole, volba AdES/QES, gate a save error,
+- `app/javascript/application.js` — `withQes`,
+- `lib/api_path_consider_json_middleware.rb`, `db/schema.rb`.
+
+`lib/verify_pdf_signature.rb` **není** dotek: je bit-identický s upstreamem a orchestrace
+ověření je v `Qes::PdfiumTrust.report`.
 
 `Qes::ResultAttachments.call(submitter)`:
 - vezme `final_document` (§ 7.6) a vytvoří `ActiveStorage::Attachment` name `documents`
@@ -1235,7 +1242,7 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 
 | ENV | Default | Význam |
 |---|---|---|
-| `QES_ENABLED` | `false` | vypínač QES (staging/produkce) |
+| `QES_ENABLED` | `true` | vypínač QES (default pro český deployment; `false` pro upstream/ne-QES) |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
@@ -1252,9 +1259,10 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené) |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro assetlinks.json |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
-| `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s] |
+| `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
+| `QES_COMPLETED_SESSION_TTL` | `86400` | platnost dokončeného tokenu [s] (24 h) |
+| `QES_TEST_CRL_PATH` | — | test CRL vystavený na `/qes-test/root.crl` (jen staging) |
 | `QES_PDF_MAX_BYTES` | `26214400` | max. velikost PDF pro přímý podpis [B] |
-| `QES_PDF_PREVIEW_JPEG` | `false` | náhledy stránek jako JPEG místo PNG |
 
 Plánování expiračního jobu: fork nemá `sidekiq-cron` a nové závislosti jsou zakázané (§ 22), proto se
 `Qes::ExpireSessionsJob` plánuje sám sebou: inicializér při bootu zařadí první běh a job na konci přeplánuje
@@ -1296,7 +1304,7 @@ Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO
 `QesSession` **MUSÍ** uchovávat pro každý podpis:
 - `certificate_info` (subject, issuer, serial, platnost, QCStatements, key type/size),
 - `signed_attrs_der`, `signature` (raw), `document_digest`, `signed_pdf_sha256`, `final_pdf_sha256`,
-- `level`, `key_location`, `provider`, `app_metadata` (platforma, verze, čtečka, container ref),
+- `level`, `key_location`, `provider`, `app_metadata` (self-reported platforma a verze appky),
 - časy všech přechodů, `validation_report`, `seal_state`.
 
 Audit trail PDF **MUSÍ** obsahovat stránku QES (§ 7.7) s těmito údaji a s upozorněním, že jde
@@ -1307,53 +1315,57 @@ session z UI a DB. Rozšíření `GET /api/submissions/:id` o `qes` metadata je 
 dohledání je v v1 možné přes `QesSession` v DB a hodnotu pole (kontrolu formátu řeší § 4.4).
 
 V UI se hodnota `qes:<id>` **NESMÍ** zobrazovat jako text: v podpisovém formuláři i v kartě
-podepisujícího se místo ní vykreslí přehled podpisu (`submissions/qes_summary` — platnost, úroveň,
+podepisujícího se místo ní vykreslí přehled podpisu (`submit_form/_qes_summary.html.erb` — platnost, úroveň,
 subject/issuer/serial certifikátu, umístění klíče, čas podpisu, validace, pečeť). Pro pole aktuálního
 podepisujícího vrací stejný HTML `GET /s/:slug/qes_sessions/:id` jako `summary_html` (Vue `qes_summary.vue`);
 pro pole předchozích podepisujících ho vykresluje `submissions/_value.html.erb`. V **poli dokumentu**
 (omezená výška) se používá zkrácená varianta (`compact: true` — ikona, úroveň, podepisující, certifikát,
 bez issuer/serial a auditu) s podbarvením a `overflow-hidden`; plná varianta zůstává v kartě podepisujícího.
 Třídy přehledu **MUSÍ** být v CSS balíčku `form` (content glob `tailwind.form.config.js` zahrnuje
-`app/views/submissions`).
+`app/views/submit_form`, kde partial přehledu žije).
 
 ---
 
 ## 14. Integrační body do DocuSealu
 
-Stav forku při měření (2026-10-23, `vendor/docuseal`, větev `dokulachtan`, base `3c65b0e4`) — **20 doteků
-upstreamu**, 96 souborů (76 nových), 7 179 insertions / 41 deletions. Čísla jsou měřená
-`git diff upstream/master...HEAD --numstat` (2026-10-23).
+Stav forku při měření (2026-10-28, `vendor/docuseal`, větev `dokulachtan`, base `8f8f69f0`) —
+**21 modifikovaných upstream souborů**, +199/−33 řádků. Čísla jsou měřená
+`git diff upstream/master...HEAD --numstat`; všechny nové soubory jsou mimo upstream
+(`app/lib/qes/**`, controllery, views, i18n, migrace).
 
 | # | Soubor | Změna | +/− |
 |---|---|---|---|
-| 1 | `config/routes.rb` | routes pro QES + AASA + upload/ověření PDF | 22/0 |
-| 2 | `app/models/template.rb` | validace `qes_signing_order` (řetězení, pořadí) | 22/0 |
-| 3 | `app/models/submission.rb` | `submitters_order: preserved` pro QES šablonu | 11/0 |
-| 4 | `app/models/submitter.rb` | `has_many :qes_sessions` + `with_signature_fields?` | 2/1 |
-| 5 | `lib/submitters/submit_values.rb` | validace hodnoty `qes` | 2/0 |
-| 6 | `lib/submissions/generate_result_attachments.rb` | hook na podepsané PDF + přeskočit `qes` pole | 29/13 |
-| 7 | `lib/submissions/generate_combined_attachment.rb` | combined pro QES = kopie (+ fallback `template.schema`) | 10/7 |
-| 8 | `lib/submissions/generate_audit_trail.rb` | QES stránka v auditu | 2/0 |
-| 9 | `lib/verify_pdf_signature.rb` | `verified/trusted/modified` + TSTInfo v `eContent` | 24/14 |
-| 10 | `app/views/submissions/_value.html.erb` | vykreslit `qes_summary` místo `qes:<id>` | 7/0 |
-| 11 | `app/views/submissions/show.html.erb` | přehled podpisu v kartě | 11/0 |
-| 12 | `app/views/templates/show.html.erb` | panel ověření PDF | 3/0 |
-| 13 | `app/javascript/submission_form/form.vue` | krok `QesStep` | 16/0 |
-| 14 | `app/javascript/submission_form/area.vue` | oblast kroku v podpisovém formuláři | 13/1 |
-| 15 | `app/javascript/template_builder/field_type.vue` | typ pole `qes` | 6/3 |
-| 16 | `app/javascript/submission_form/i18n.js` | texty kroku | 48/0 |
-| 17 | `config/locales/i18n.yml` | názvy `qes` | 205/0 |
-| 18 | `lib/api_path_consider_json_middleware.rb` | multipart pro upload/ověření PDF | 6/1 |
-| 19 | `tailwind.form.config.js` | CSS pro panel ověření | 2/0 |
-| 20 | `db/schema.rb` | regenerovaný (obsahuje `qes_sessions`) | 46/1 |
+| 1 | `db/schema.rb` | regenerovaný (obsahuje `qes_sessions` a migrace) | 48/1 |
+| 2 | `lib/submissions/generate_result_attachments.rb` | hook na podepsané PDF + `base:`/`page_offsets:` | 27/13 |
+| 3 | `app/javascript/template_builder/builder.vue` | save error + `withQes` | 25/1 |
+| 4 | `app/javascript/submission_form/form.vue` | krok `QesStep` | 22/1 |
+| 5 | `app/javascript/submission_form/area.vue` | oblast kroku v podpisovém formuláři | 13/1 |
+| 6 | `spec/system/signing_form_spec.rb` | 2FA flake (test-only) | 12/2 |
+| 7 | `app/javascript/template_builder/field_context_menu.vue` | volba AdES/QES | 9/1 |
+| 8 | `app/controllers/api/submitters_controller.rb` | lock + boolean + hook | 8/2 |
+| 9 | `app/javascript/template_builder/field_type.vue` | ikona + název typu `qes` | 8/4 |
+| 10 | `lib/submitters/submit_values.rb` | hooky + `prepend` | 6/2 |
+| 11 | `app/views/submissions/show.html.erb` | přehled podpisu v kartě | 4/0 |
+| 12 | `app/views/submissions/_value.html.erb` | přeskočit `qes` pole (`return`) | 4/0 |
+| 13 | `lib/submissions/generate_combined_attachment.rb` | early-return hook + `template.schema` fallback | 3/1 |
+| 14 | `lib/submissions/generate_audit_trail.rb` | QES stránka v auditu | 2/0 |
+| 15 | `lib/api_path_consider_json_middleware.rb` | multipart pro upload/ověření PDF | 2/1 |
+| 16 | `app/javascript/application.js` | `withQes` | 1/0 |
+| 17 | `app/views/templates/show.html.erb` | panel ověření PDF | 1/0 |
+| 18 | `app/javascript/template_builder/dynamic_insert_menu.vue` | gate | 1/1 |
+| 19 | `app/javascript/template_builder/fields.vue` | gate | 1/1 |
+| 20 | `app/views/templates/edit.html.erb` | banner při chybě šablony | 1/1 |
+| 21 | `app/views/templates_preview/show.html.erb` | flash při chybě šablony | 1/1 |
 
-**Pravidlo:** každý dotek **MUSÍ** být vlastní commit s odůvodněním a cílem je < 10 řádků.
+**Pravidlo:** historie forku je rozdělená na logické bloky (feature commity), ne na jednotlivé
+doteky; každý blok drží jednu featuru včetně jejích doteků upstreamu a testů. Cílem je
+**< 10 řádků na dotek**, výjimky jsou zdůvodněné níže.
+
 **Odůvodněné výjimky** (nejde splnit bez rozbití upstream struktury): `generate_result_attachments`
-(signatury `generate_pdfs`/`fill_submitter_fields` + skip `qes`), `template.rb` (validace
-`qes_signing_order`), `routes.rb` (namespace QES), `verify_pdf_signature.rb` (TSTInfo v `eContent`
-+ `last_verified`), `i18n.yml` (názvy `qes`), `db/schema.rb` (generovaný), `form.vue`/`area.vue`
-(krok formuláře) a `generate_combined_attachment.rb` (fallback `template.schema`). Ostatní doteky
-jsou ≤ 10 řádků.
+(PDF seam `base:`/`page_offsets:`), `builder.vue` (save error + `withQes`), `form.vue`/`area.vue`
+(krok a oblast formuláře), `db/schema.rb` (generovaný), `generate_combined_attachment.rb`
+(fallback `template.schema`). `lib/verify_pdf_signature.rb` je **bit-identický s upstreamem**
+(nulový diff); orchestrace je v `Qes::PdfiumTrust.report`.
 
 **Testy doteků:** `spec/lib/qes/upstream_contract_spec.rb` hlídá kontrakty upstream souborů
 (signatury, metody, `Struct`, sloupce, routes), `spec/requests/qes_views_spec.rb` doteky ve views
@@ -1392,7 +1404,7 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 | Doteky upstreamu | `spec/lib/qes/upstream_contract_spec.rb` | signatury/metody/struct upstreamu, na které fork nasedá (rebases je nesmí tiše rozbít) |
 | Doteky ve views | `spec/requests/qes_views_spec.rb` | plný přehled v kartě + zkrácený v poli; QES stránka v auditu |
 | Dotek JS | `spec/javascript/qes_step_logic.test.mjs` | `ERROR_KEYS`, polling/backoff, terminální stavy kroku |
-| Řetězení | `spec/lib/qes/chain_spec.rb` | 2 signeři: TBS 2 nad `final_document` signera 1; oba podpisy INTACT; poslední pokrývá celý soubor; varianta se 2 přílohami (`page_offsets`); **stejný submitter 2× se stejným certifikátem** → TBS 2 nad jeho `final_document`, 4 signatury INTACT, `documents` = poslední revize |
+| Řetězení | `spec/lib/qes/chain_spec.rb` | 2 signeři: TBS 2 nad `final_document` signera 1; oba podpisy INTACT; poslední pokrývá celý soubor; varianta se 2 přílohami (`page_offsets`); **stejný submitter 2× se stejným certifikátem** → TBS 2 nad jeho `final_document`, 6 signatur INTACT, `documents` = poslední revize |
 | Pořadí | `spec/models/submission_spec.rb` | `submitters_order: random` u QES šablony → vynuceno `preserved` |
 | Well-known | `spec/requests/qes_well_known_spec.rb` | AASA `Content-Type: application/json`, `assetlinks.json` platný JSON |
 
@@ -1419,7 +1431,7 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 **E2E pro dva podpisy jednoho dokumentu (v1.5):** `make qes-e2e-two` (nebo `QES_E2E_SIGNERS=2 make qes-e2e`)
 spustí bootstrap se 2 submitters (šablona `submitters_order: preserved`, každý s vlastním polem `qes`)
 a obřad pro každého zvlášť v pořadí. Kritéria navíc:
-- `qes-final.pdf` má **2 podpisy appky + 2 pečeti** (4 signatury), všechny `INTACT`,
+- `qes-final.pdf` má **2 podpisy appky + 2 pečeti + 2 DocTS** (6 signatur), všechny `INTACT`,
 - poslední signatura pokrývá celý soubor, první dvě revize zůstávají UNTOUCHED,
 - `documents` signera 1 obsahuje revizi 1 (1 podpis + 1 pečeť), `documents` signera 2 revizi 2 (2 + 2),
 - `combined_document` = revize 2,
@@ -1429,15 +1441,16 @@ a obřad pro každého zvlášť v pořadí. Kritéria navíc:
 
 **Stejný podepisující, víc polí `qes` (v1.5):** pokryto RSpec testem `chain_spec.rb`
 („lets the same submitter sign twice with the same certificate“) — druhý TBS navazuje na první finální PDF
-téhož podepisujícího, 4 signatury `INTACT`, `documents` = poslední revize. E2E skript `qes_e2e.py`
+téhož podepisujícího, 6 signatur `INTACT`, `documents` = poslední revize. E2E skript `qes_e2e.py`
 tento scénář neověřuje (bootstrap dělá jedno pole na submittera); na stagingu ho ověřuje
-`make qes-staging-same-signer` (`scripts/qes_staging_same_signer_check.py`, 4 signatury `INTACT`).
+`make qes-staging-same-signer` (`scripts/qes_staging_same_signer_check.py`, 6 signatur `INTACT`).
 Texty kroku `QesStep` (`Podepsáno ({level})`, `Odkaz vyprší za {minutes} min`) **MUSÍ** skládat sám
 `qes_step.vue` (`doneText`/`expiresInText`), protože kořenový `t` v `form.vue` neinterpoluje.
 
 Negativní scénáře (rozšíření `scripts/negative_tests.py`):
 
-- `make qes-negative` spustí `scripts/qes_negative_tests.py` proti forku (N1–N9) → `test/out/qes-negative-report.txt`.
+- `make qes-negative` spustí `scripts/qes_negative_tests.py` proti forku (N1–N17) → `test/out/qes-negative-report.txt`;
+  N10–N17 pokrývají přímý podpis PDF (docs/15 § 8).
 - `make qes-e2e` a `make qes-e2e-two` jsou pozitivní scénáře (1 a 2 signeři).
 
 | # | Scénář | Kritérium ||---|---|---|
@@ -1452,12 +1465,12 @@ Negativní scénáře (rozšíření `scripts/negative_tests.py`):
 | N9 | změna PDF po vložení | validace `intact=false` |
 
 **Staging e2e se dvěma signery (v1.5):** `make qes-staging-e2e` (`QES_STAGING_SIGNERS=2`)
-provede bootstrap, obřad a dokončení na <https://dokulachtan.fly.dev> přes `fly ssh console`
-a podepíše KÓDEM APPKY; finální PDF se stáhne a validuje. Kritéria: 4 signatury
-(2× appka + 2× pečeť), všechny INTACT, `documents` signera 1 = 2, signera 2 = 4;
-`openssl verify` test certu proti test trust rootu = OK. **Omezení stagingu:** nemá CRL
-server (CRL DP test certů je `127.0.0.1:8765`), takže LTV/revokační data chybí a pyHanko
-označí řetěz jako `UNTRUSTED`; LTV s CRL serverem pokrývá lokální `make qes-e2e-two`.
+provede bootstrap, obřad a dokončení na <https://dokulachtan-staging.fly.dev> přes `fly ssh console`
+a podepíše KÓDEM APPKY; finální PDF se stáhne a validuje. Kritéria: 6 signatur
+(2× appka + 2× pečeť + 2× DocTS), všechny INTACT, `documents` signera 1 = 3, signera 2 = 6;
+`openssl verify` test certu proti test trust rootu = OK. **Staging:** test CRL je na
+`https://dokulachtan-staging.fly.dev/qes-test/root.crl` (`QES_TEST_CRL_PATH`), takže LTV data
+jsou dostupná; pečeť DocuSealu zůstává `UNTRUSTED` (test trust list neobsahuje její cert).
 
 ### 15.3 Appka — testy
 
@@ -1477,19 +1490,19 @@ označí řetěz jako `UNTRUSTED`; LTV s CRL serverem pokrývá lokální `make 
 1. `make verify`, `make qes-test` (SQLite) a `make qes-test-postgres` (Postgres 18) zelené (fork RSpec + fixtures).
 2. `make qes-e2e` zelené: finální PDF v DocuSealu má **platný podpis podepisujícího**
    (`signed_document` před pečetí: `pyHanko` → `INTACT:TRUSTED,UNTOUCHED` s pokrytím celého dokumentu,
-   `pdfsig` → valid) a **druhou** signaturu (pečeť DocuSealu) v pozdější revizi, která pokrývá celý
-   finální soubor.
-2b. `make qes-e2e-two` zelené: **dva podpisy jednoho dokumentu** — 4 signatury (2× appka + 2× pečeť),
+   `pdfsig` → valid), **druhou** signaturu (pečeť DocuSealu) a **třetí** (DocTS) v pozdějších
+   revizích; poslední pokrývá celý finální soubor.
+2b. `make qes-e2e-two` zelené: **dva podpisy jednoho dokumentu** — 6 signatur (2× appka + 2× pečeť + 2× DocTS),
    všechny `INTACT`, poslední pokrývá celý soubor, gating pořadí vrací `409 awaiting_previous_signer`.
 3. Audit trail obsahuje QES stránku se subject/issuer/serial, časem, hashem, úrovní a výsledkem validace.
-4. Negativní scénáře N1–N9 mají očekávané výsledky.
+4. Negativní scénáře N1–N17 mají očekávané výsledky.
 5. Appka (B): import PKCS#12, biometrie, podpis → validace na serveru (e2e na emulátoru s test certem).
 6. Appka (A): fake card mód testuje celý tok; manuální test s reálnou čtečkou a eObčankou zdokumentován.
 7. Universal links ověřené na Androidu (assetlinks.json) i iOS (AASA) — minimálně Android v1.
 8. AdES **NIKDY** není zapsán jako QES (test N5/N6 + kontrola auditu).
-9. Staging `https://dokulachtan.fly.dev/` běží s `QES_ENABLED=true` a healthcheckem;
-   `make qes-staging-e2e` se dvěma signery projde (4 signatury INTACT, test cert
-   ověřený vůči test trust rootu; LTV chybí kvůli absenci CRL serveru).
+9. Staging `https://dokulachtan-staging.fly.dev/` běží s `QES_ENABLED=true` a healthcheckem;
+   `make qes-staging-e2e` se dvěma signery projde (6 signatur INTACT, test cert
+   ověřený vůči test trust rootu; test CRL je na staging hostu, pečeť zůstává UNTRUSTED).
 10. Dokumentace: SPEC.md, PLAN.md, `docs/10-qes.md` (provozní runbook) a README aktualizované.
 11. Appka volí podepisujícího **automaticky** dle § 9.8 (pro QES čtečka, pro AdES klíč → čtečka → wizard)
     a při podpisu se **nikdy** nezadává heslo k PKCS#12 (test v § 15.3).
@@ -1510,7 +1523,7 @@ označí řetěz jako `UNTRUSTED`; LTV s CRL serverem pokrývá lokální `make 
   příliš velké → `422 file_too_large`; šifrované → `422 encrypted_pdf`; už podepsané → `422 already_signed`;
   nepodporovaná úroveň → `422 invalid_level`; cizí API token → `403`; druhé spuštění obřadu zruší první.
 - **Akceptační kritéria**: (1) `make qes-test-qes` zelené; (2) `make qes-e2e-pdf` zelené
-  (2 signatury: appka + pečeť, podpis appky `INTACT:TRUSTED` s pokrytím celého dokumentu,
+  (3 signatury: appka + pečeť + DocTS, podpis appky `INTACT:TRUSTED` s pokrytím celého dokumentu,
   pečeť na klepnutém místě, dokument ve složce „Direct signing“ s auditní stránkou);
   (3) `make qes-e2e` a `make qes-e2e-two` beze změny; (4) N10–N17 mají
   očekávané výsledky; (5) appka na emulátoru: výběr PDF → náhled → klepnutí → podpis → stažení a sdílení.
@@ -1621,10 +1634,10 @@ Nové soubory forku (vše v `app/lib/qes/` — Rails autoloaduje `app/**`):
 | `db/migrate/*_add_doc_timestamp_state_to_qes_sessions.rb` | DocTS stav (§ 7.6) | — |
 | `config/initializers/qes.rb` | konfigurace (§ 11) | — |
 
-Změněné soubory upstreamu: tabulka v § 7.7 (**20 souborů**, každý vlastní commit);
-pro přímý podpis PDF navíc jen `config/routes.rb` (routes), `config/locales/i18n.yml` (hlášky),
-`Qes::Config` (limit velikosti), `ApiPathConsiderJsonMiddleware` (multipart upload)
-a `Qes::FormSessionsController` (API token místo prohlížečové session, docs/15 § 6).
+Změněné soubory upstreamu: tabulka v § 14 (**21 souborů**, logické bloky, ne jednotlivé doteky);
+pro přímý podpis PDF se nemění žádný další upstream soubor — `Qes::Config` (limit velikosti)
+a `Qes::FormSessionsController` (API token místo prohlížečové session) jsou nové soubory
+a multipart povoluje `lib/api_path_consider_json_middleware.rb`.
 
 Appka (Expo): struktura v § 9.7; `mobile/app/src/lib/…` + `mobile/app/src/modules/eop-signing-sdk/`.
 
@@ -1668,7 +1681,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 **`spec/lib/qes/chain_spec.rb`** (nové, § 4.6)
 1. TBS 2. signera se staví otevřením `final_document` signera 1 (ne přestavbou stránek);
    v základu je viditelná pečeť signera 1 a TBS 2 má nové podpisové pole.
-2. Po `complete!` obou signerů má finální PDF 4 signatury (2× appka + 2× pečeť), všechny
+2. Po `complete!` obou signerů má finální PDF 6 signatur (2× appka + 2× pečeť + 2× DocTS), všechny
    `intact`, poslední pokrývá celý soubor; `documents` signera 1 = revize 1, signera 2 = revize 2.
 3. Varianta se dvěma přílohami: `page_offsets` mapuje stránky globálně a pečeť signera 2 je na správné
    stránce (kontrola obsahem/overlayem).

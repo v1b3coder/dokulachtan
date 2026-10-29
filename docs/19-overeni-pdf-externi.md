@@ -208,7 +208,7 @@ dokument vrací `500 DSSDocument is null`. Po opravě se používá původní
 - `__tests__/pdfApi.test.ts`: lokální report má `provider: "local"`.
 - `__tests__/verifyPdf.test.ts`: externí texty, `canStore`, `originLabel`,
   `revocationLabel`.
-- `make qes-app-test` 77/77, `make qes-app-typecheck` zelené.
+- `make qes-app-test` 223/0, `make qes-app-typecheck` zelené.
 - `make qes-eu-dss-verify` (volitelné): nezávislý compliance check vygenerovaných
   PDF přes EU DSS API; test certy untrusted, `TRUSTED=1` pro reálný cert;
   report `test/out/qes-eu-dss-report.txt`. PDF opouští stroj, nespouštět v CI.

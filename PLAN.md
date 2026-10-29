@@ -32,21 +32,19 @@ opustil zařízení.
 | **P7** | Vícenásobné digitální podpisy (firemní podpisy): pořadí + řetězení revizí + e2e se 2 podpisy | `make qes-e2e-two` zelené, SPEC § 4.6 a § 15.2 |
 | **P8** | Přímý podpis PDF nativním tokem: upload → náhled → pečeť → obřad → PDF v účtu (+ sdílení PDF do appky) | `make qes-e2e-pdf` zelené, docs/15 |
 
-## Stav implementace (2026-10-18)
+## Stav implementace (2026-10-29)
 
 | Fáze | Stav | Důkaz |
 |---|---|---|
-| P0 | **hotová** | `make qes-test` (262 examples, 1 upstream flake), `make qes-test-postgres` (247/0), runbook `test/qes/README.md` |
+| P0 | **hotová** | `make qes-test` (659/0), `make qes-test-postgres` (660/0), runbook `test/qes/README.md` |
 | P1 | **hotová** | `spec/models/qes_session_spec.rb` (5), `spec/lib/qes/token_spec.rb` (3), `Qes::SessionManager` |
 | P2 | **hotová** | `spec/lib/qes/pipeline_spec.rb` (9): TBS, signed attrs, CMS, LTV, validace, pečeť |
-| P3 | **hotová** (bez `QesStep.vue` a typu pole v builderu) | `make qes-e2e` zelené: `qes-signed.pdf` = `INTACT:TRUSTED,UNTOUCHED`, `qes-final.pdf` = 2 signatury |
+| P3 | **hotová** | `make qes-e2e` zelené: `qes-signed.pdf` = `INTACT:TRUSTED,UNTOUCHED`, `qes-final.pdf` = 3 signatury |
 | P4 | **hotová** (appka `mobile/app`: vault, P12, softwareSigner, api, signer, deep link, obrazovky, `make qes-app-test`) | `make qes-e2e` podepisuje KÓDEM APPKY (`src/lib/*`), `biometric_prompts: 1` |
 | P5 | **stub** (`StubCardSigner` + `FakeCardSigner`); MOI SDK / reálná čtečka mimo rozsah | `src/lib/cardSigner.ts` |
 | P6 | **hotová** — `qes-e2e`, `qes-e2e-two`, `qes-negative`, `qes-staging-e2e` | `test/out/qes-negative-report.txt`, `test/out/qes-staging-e2e-report.txt` |
-| P7 | **hotová** — pořadí, řetězení TBS, validace všech signatur; `make qes-e2e-two` zelené (4 signatury) | `test/out/qes-e2e-two-report.txt` |
-| P8 | **hotová** (nativní tok, přepsáno 2026-10-18) — přímý podpis PDF: šablona s polem `qes` + submission; sdílení PDF ze share sheetu (Android, „Podepsat PDF“); `make qes-test-qes` 88/0, `make qes-e2e-pdf` (2 signatury, pečeť v místě klepnutí), `make qes-negative` N1–N17, ověřeno i na emulátoru | `test/out/qes-pdf-e2e-report.txt`, `test/out/qes-negative-report.txt` |
-
-Zbývá: `QesStep.vue` a typ pole v builderu (UI), `docs/10-qes.md` rozšířit o provozní zkušenosti.
+| P7 | **hotová** — pořadí, řetězení TBS, validace všech signatur; `make qes-e2e-two` zelené (6 signatur) | `test/out/qes-e2e-two-report.txt` |
+| P8 | **hotová** (nativní tok, přepsáno 2026-10-18) — přímý podpis PDF: šablona s polem `qes` + submission; sdílení PDF ze share sheetu (Android, „Podepsat PDF“); `make qes-test-qes` 422/0, `make qes-e2e-pdf` (3 signatury, pečeť v místě klepnutí), `make qes-negative` N1–N17, ověřeno i na emulátoru | `test/out/qes-pdf-e2e-report.txt`, `test/out/qes-negative-report.txt` |
 
 
 ---
@@ -136,7 +134,7 @@ s fixtures z `test/certs/`. Nové moduly v `app/lib/qes/`, testy v `spec/lib/qes
       QCStatements OID `0.4.0.1862.1.1`/`0.4.0.1862.1.4`, `keyUsage`, platnost, key type/size
       → verify: `spec/lib/qes/certificate_info_spec.rb` — AdES/QES/none, expirace, keyUsage
 - [ ] 2.2 `Qes::TbsDocument.build(submitter, field)` (SPEC § 7.1): spojení `schema_documents`, podpisové
-      pole `Sig1` na pozici `qes` pole, rezerva `QES_SIGNATURE_SIZE`, `external_signing` vrací placeholder CMS
+      pole `Sig1` na pozici `qes` pole, rezerva `QES_SIGNATURE_RESERVE`, `external_signing` vrací placeholder CMS
       → verify: `spec/lib/qes/tbs_document_spec.rb` — PDF má `Sig1`, `/ByteRange` pokrývá vše, `/Contents` má rezervu
 - [ ] 2.3 `Qes::PlaceholderSignedDataCreator` (SPEC § 7.2): zachytí `signed_attrs_der`, vrátí placeholder
       → verify: `spec/lib/qes/cms_builder_spec.rb` — `signed_attrs_der` je DER `SET`, deterministický při stejném `signing_time`
@@ -300,18 +298,18 @@ Cíl: všechna akceptační kritéria SPEC § 15.4 splněna a doložena.
       (pyHanko `--trust test/certs/pki/root.crt` + pdfsig + qpdf) → kontrola 2 signatur
       v `GET /api/submissions/:id/documents` (bez `merge=true`) i v `combined_document`
       → verify: `make qes-e2e` zelené, report v `test/out/qes-e2e-report.txt`
-- [x] 6.2 `scripts/qes_negative_tests.py` (SPEC § 15.2 N1–N9) — hotové
-      → verify: `make qes-negative` → report v `test/out/qes-negative-report.txt` (N1–N9 OK)
+- [x] 6.2 `scripts/qes_negative_tests.py` (SPEC § 15.2 N1–N17) — hotové
+      → verify: `make qes-negative` → report v `test/out/qes-negative-report.txt` (N1–N17 OK)
 - [ ] 6.3 CI: `make verify` + `make qes-test` na každý commit; `make qes-e2e` v separátním jobu
       → verify: CI zelené (lokálně/Gitea Actions)
 - [ ] 6.4 Staging: `QES_ENABLED=true`, `QES_TRUST_ROOTS`, `QES_TSA_URL` přes `fly secrets`;
       `fly deploy` z forku; healthcheck `/up`
       → verify: `curl https://dokulachtan.fly.dev/up` → 200; `fly logs` bez chyb
 - [x] 6.5 Staging e2e se dvěma signery (SPEC § 15.2): `make qes-staging-e2e`
-      → verify: 4 signatury INTACT, `openssl verify` vůči test trust rootu OK; LTV na stagingu
+      → verify: 6 signatur INTACT, `openssl verify` vůči test trust rootu OK; LTV na stagingu
       chybí (CRL DP test certů = `127.0.0.1:8765`), proto pyHanko `INTACT:UNTRUSTED`
 - [ ] 6.6 Dokumentace: `docs/10-qes.md` (runbook: ENV, TSA, trust roots, troubleshooting,
-      rotace certů, limity) + aktualizace README a AGENTS.md (stav P0–P6); texty dle SPEC § 21,
+      rotace certů, limity) + aktualizace README a AGENTS.md (stav P0–P8); texty dle SPEC § 21,
       kompatibilita dle SPEC § 22
       → verify: odkazy fungují, `make qes-e2e` v runbooku
 - [ ] 6.7 Upstream PR příprava (F4, volitelné): rozhraní `Qes::Provider` + hook jako malý patch
@@ -340,7 +338,7 @@ Cíl: dokument podepsaný **všemi** stakeholdery, každý vlastním certifikát
       → verify: chain spec bod 2 (druhá session najde finální PDF předchůdce)
 - [x] 7.5 E2E se dvěma podpisy jednoho dokumentu: `make qes-e2e-two`
       (bootstrap 2 submitteři, `submitters_order: preserved`, obřad pro každého zvlášť, finální PDF
-      se 4 signaturami: 2× appka + 2× pečeť; `pyhanko validate` bez `--fetch` trusted)
+      se 6 signaturami: 2× appka + 2× pečeť + 2× DocTS; `pyhanko validate` bez `--fetch` trusted)
       → verify: `test/out/qes-e2e-two-report.txt`
 - [x] 7.6 Dokumentace: DESIGN § 3.1/§ 4/§ 7.4/§ 12, SPEC § 4.1/§ 4.6/§ 7.1/§ 7.6/§ 7.7/§ 15,
       PLAN P7, AGENTS.md #11, `docs/10-qes.md`
@@ -348,18 +346,18 @@ Cíl: dokument podepsaný **všemi** stakeholdery, každý vlastním certifikát
 - [x] 7.7 Oprava řetězení pro stejného podepisujícího (stejná osoba, víc polí): `chained_base`
       nejdřív použije vlastní poslední dokončenou session, teprve pak předchozího submittera;
       test „lets the same submitter sign twice with the same certificate“ (2× podpis + 2× pečeť, 4 INTACT)
-      → verify: `spec/lib/qes/chain_spec.rb` zelené, `make qes-test-qes` (59/0),
-      `make qes-staging-same-signer` (staging, 4 signatury INTACT)
+      → verify: `spec/lib/qes/chain_spec.rb` zelené, `make qes-test-qes` (422/0),
+      `make qes-staging-same-signer` (staging, 6 signatur INTACT)
 - [x] 7.8 Oprava zobrazení: pole s `qes:<id>` zobrazuje přehled podpisu (`submissions/_value.html.erb`,
       `qes_summary.vue` + `summary_html` z `GET /s/:slug/qes_sessions/:id`)
       → verify: `spec/requests/qes_sessions_spec.rb` (summary pro dokončenou session i pro předchozího signera)
 - [x] 7.9 Oprava formátování a textů: `compact` varianta přehledu (podbarvení, `overflow-hidden`)
       pro pole v dokumentu, glob `app/views/submissions` v `tailwind.form.config.js` (třídy v CSS balíčku
       `form`), `qes_step.vue` skládá `Podepsáno ({level})` a `Odkaz vyprší za {minutes} min` sám
-      → verify: `make qes-test-qes` (59/0), webpack build, prohlížeč na stagingu (žádné `{{level}}`,
+      → verify: `make qes-test-qes` (422/0), webpack build, prohlížeč na stagingu (žádné `{{level}}`,
       oba přehledy formátované)
 
-**⏸️ Checkpoint 7**: `make qes-e2e-two` zelené, finální PDF má 4 signatury (2× appka + 2× pečeť),
+**⏸️ Checkpoint 7**: `make qes-e2e-two` zelené, finální PDF má 6 signatur (2× appka + 2× pečeť + 2× DocTS),
 `pyhanko validate` bez `--fetch` označí všechny jako trusted, `docs/13` odsouhlaseno.
 
 ---
@@ -373,7 +371,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 - [x] 8.1 `POST /api/qes/documents` (`Api::QesDocumentsController#create`): multipart PDF → šablona ve složce
       „Direct signing“ s jedním podepisujícím a jedním polem `qes`; limit velikosti (`QES_PDF_MAX_BYTES`),
       magic bytes, `content_type`, šifrovaná / už podepsaná PDF → `422`
-      → verify: `spec/requests/qes_documents_spec.rb` (88/0 se stávajícími specy)
+      → verify: `spec/requests/qes_documents_spec.rb` zelené se stávajícími specy
 - [x] 8.2 `Qes::PdfSource`: kontrola PDF (šifrovaná/už podepsaná) + normalizace rotace stránek
       → verify: spec v 8.1 (šifrované/už podepsané → `422`, otočené stránky sedí)
 - [x] 8.3 Spuštění obřadu s API tokenem: `Qes::FormSessionsController` přijme `X-Auth-Token` (bez CSRF
@@ -384,7 +382,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 - [x] 8.5 Dokument k podpisu = `POST /api/templates/:id/submissions` (`send_email: false`),
       dokončení = `PUT /api/submitters/:id` (`completed: true` → PDF + auditní stránka),
       stažení = `GET /api/submitters/:id` → `documents[0].url` (existující API, žádný kód forku)
-      → verify: `make qes-e2e-pdf` (2 signatury, auditní stránka, dokument ve složce)
+      → verify: `make qes-e2e-pdf` (3 signatury, auditní stránka, dokument ve složce)
 - [x] 8.6 Appka: `sign-pdf.tsx` (S11 + S12: picker, upload, náhled, klepnutí, obrys, `place`),
       `pdfApi.ts` (klient + `stampArea`), `pdfShare.ts`, `settings.tsx` (API token), S13 (stažení a sdílení)
       → verify: `make qes-app-test` (44/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie):
@@ -397,7 +395,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 - [x] 8.8 Negativní N10–N17 (`scripts/qes_negative_tests.py`) + dokumentace (`docs/15`, SPEC/PLAN/AGENTS)
       → verify: `make qes-negative` zelené, report `test/out/qes-negative-report.txt`
 
-**⏸️ Checkpoint 8**: `make qes-e2e-pdf` zelené, finální PDF má 2 signatury (appka + pečeť), podpis appky
+**⏸️ Checkpoint 8**: `make qes-e2e-pdf` zelené, finální PDF má 3 signatury (appka + pečeť + DocTS), podpis appky
 `INTACT:TRUSTED` s pokrytím celého dokumentu, dokument je v účtu ve složce „Direct signing“ s auditní stránkou;
 `make qes-e2e` a `make qes-e2e-two` beze změny — **splněno 2026-10-18**.
 

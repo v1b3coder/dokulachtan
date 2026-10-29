@@ -1,6 +1,6 @@
 # 16 — Ověření PDF
 
-Status: **implementováno a nasazeno** (2026-10-22) — produkce release **v35**, staging **v9**, APK **1.3.2** (versionCode 10); server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno a nasazeno 2026-10-23 — staging **v12**, produkce **v38**.
+Status: **implementováno a nasazeno** (2026-10-22) — produkce **v52**, staging **v25**, APK **1.3.9**; server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno 2026-10-23.
 Navazuje na DESIGN.md § 1/§ 4/§ 7, SPEC.md § 7.5 a docs/15 (přímý podpis PDF).
 
 ## 1. Use case
@@ -25,7 +25,7 @@ a hledat v appce. Výsledek se zobrazí v appce, PDF zůstává v zařízení a 
 | D3 | **Bez automatického ukládání**: ověření PDF jen přečte v paměti; do složky „Verified documents“ se uloží **jen na tlačítko** | ověření je read-only; uživatel kontroluje, co zůstane na serveru; složka dá historii, download/share/delete bez nového modelu |
 | D4 | **HTTP 200 i pro negativní verdikt** (`unsigned`, `invalid`, `valid_untrusted`); 422 jen pro nepřečtené PDF, šifrované PDF a příliš velký soubor | „ověření proběhlo“ je úspěch requestu; špatný podpis není chyba API |
 | D5 | `verdict` = `valid` / `valid_untrusted` / `valid_unqualified` / `invalid` / `unsigned`; zvlášť `intact`, `trusted`, `modified`, `level`, `coverage`, `origin` | appka potřebuje jednoduchý verdikt i technické detaily; pole se nesmí míchat |
-| D6 | **`modified` = `VerifyPdfSignature` (`unsigned_changes?`)**, ne jen `coverage` z `Qes::Validator` | DSS/LTV aktualizace po podpisu je legitimní a `coverage` ji označí jako `partial`; naopak přidaná stránka po podpisu musí být `invalid` |
+| D6 | **`modified` = `Qes::PdfiumTrust.report`** (hranice změn za posledním ověřeným podpisem), ne jen `coverage` z `Qes::Validator` | DSS/LTV aktualizace po podpisu je legitimní a `coverage` ji označí jako `partial`; naopak přidaná stránka po podpisu musí být `invalid` |
 | D7 | **Trust pro ověření = `QES_VERIFICATION_TRUST_ROOTS`** (výchozí `czech.pem`: PostSignum, I.CA, eIdentity, NCA, KB); signing trust store `QES_TRUST_ROOTS` zůstává PostSignum | ověření cizích PDF a přijetí certu při podpisu jsou dvě různé politiky; přidání českých CA je konfigurační rozhodnutí, ne změna kódu |
 | D8 | **Revokace se v v1 nekontroluje** (`revocation: "not_checked"`) | korektní revokace potřebuje LTV/časové razítko; při podpisu už `Qes::Ltv.check_revoked!` běží; verifikace nesmí kvůli CRL zdržovat nebo padat |
 | D9 | **`origin` = `docuseal` / `external`** podle `CompletedDocument.sha256` **scoped na účet** | uživatel chce vědět „je to PDF z našeho DocuSealu?“; hash je už dnes v `CompletedDocument` (upstream `/api/tools/verify`) |
@@ -44,7 +44,7 @@ tlačítko (D13) — PDF se neukládá při každém ověření.
 ```
 appka (S14/S15)                    fork (server)                     trust roots
   │ POST /api/qes/verify ──────────▶ ověří PDF (Qes::PdfSource)
-  │   (multipart, X-Auth-Token)      Qes::Validator + VerifyPdfSignature
+  │   (multipart, X-Auth-Token)      Qes::Validator + Qes::PdfiumTrust.report
   │                                  ├─ intact / trusted / coverage / level
   │                                  ├─ modified (unsigned changes)
   │                                  ├─ seal (DocuSeal)
@@ -59,7 +59,7 @@ Privátní klíč, biometrie ani PIN se ověřování netýkají. Server PDF **n
 do Documents se dostane jen na tlačítko „Uložit do DocuSealu“ (D13).
 
 **Co se reuse beze změny:** `Qes::Validator`, `Qes::PdfSource` (jen rozšíříme `validate!`),
-`VerifyPdfSignature`, `CompletedDocument`, `Qes::RateLimiter`, `ApiBaseController` (API token),
+`Qes::PdfiumTrust`, `CompletedDocument`, `Qes::RateLimiter`, `ApiBaseController` (API token),
 `ApiPathConsiderJsonMiddleware` (jen přidáme výjimku pro multipart).
 
 ## 4. Server
@@ -147,9 +147,9 @@ Poznámky:
 
 - `signatures[].trusted` = řetěz k `QES_VERIFICATION_TRUST_ROOTS` (platí pro `kind: "qes"`, tj. `ETSI.CAdES.detached`);
   u `kind: "seal"` je vždy `false` — pečeť má vlastní `seal.trusted` proti certům účtu;
-- `seal` = agregát z `VerifyPdfSignature` (`adbe.pkcs7.detached`, certy účtu DocuSeal);
-- `messages` = texty z `VerifyPdfSignature` (pro „Technické detaily“);
-- `modified` = `VerifyPdfSignature#unsigned_changes?` (DSS/LTV je povoleno, přidaná stránka ne).
+- `seal` = agregát z `Qes::PdfiumTrust.report` (`adbe.pkcs7.detached`, certy účtu DocuSeal);
+- `messages` = texty z `Qes::PdfiumTrust.report` (pro „Technické detaily“);
+- `modified` = `Qes::PdfiumTrust.report` (DSS/LTV je povoleno, přidaná stránka ne).
 
 ### 4.3 Verdikt
 
@@ -192,8 +192,11 @@ module Qes
     module_function
 
     def call(pdf_bytes, name:, account: nil)
-      report = Qes::Validator.call(pdf_bytes, trust_roots: Qes.trust_roots,
-                                   trusted_certs: account ? Accounts.load_trusted_certs(account) : [])
+      report = Qes::Validator.call(
+        pdf_bytes,
+        trust_roots: Qes.verification_trust_roots,
+        trusted_certs: trusted_certs_for(account)
+      )
       pdfium = report[:pdfium]
       signatures = report[:signatures]
       qes = signatures.select { |s| s[:kind] == 'qes' }
@@ -202,7 +205,10 @@ module Qes
 
       {
         file: { name:, size: pdf_bytes.bytesize, sha256: Digest::SHA256.hexdigest(pdf_bytes) },
-        verdict: compute_verdict(signatures, qes, modified),
+        verdict: compute_verdict(signatures, qes, modified,
+                                inspection: report[:inspection],
+                                coverage_valid: report[:coverage_valid]),
+        inspection: report[:inspection],
         intact: report[:intact],
         trusted: report[:trusted],
         modified:,
@@ -225,7 +231,7 @@ end
 `signature_payload` jen vybere `kind`, `level`, `intact`, `trusted`, `coverage`, `common_name`, `subject`,
 `issuer`, `serial`, `signing_time`, `not_before`, `not_after`, `chain`. `origin` je `docuseal`, když
 `CompletedDocument` (scoped na `account`) má stejný `sha256`; jinak `external`. `seal.trusted` se
-počítá z `VerifyPdfSignature` proti `Accounts.load_trusted_certs(account)`, zatímco `signatures[].trusted`
+počítá z `Qes::PdfiumTrust.report` proti `Accounts.load_trusted_certs(account)`, zatímco `signatures[].trusted`
 proti `QES_VERIFICATION_TRUST_ROOTS` (dvě různé důvěry). `messages` patří k pečeti (`seal`), ne k podpisu
 podepisujícího — texty „signed with trusted certificate“ u QES by jinak mátly.
 
@@ -234,13 +240,13 @@ podepisujícího — texty „signed with trusted certificate“ u QES by jinak 
 | Soubor | Změna | ~řádků |
 |---|---|---|
 | `app/controllers/api/qes_verifications_controller.rb` | **nový**: upload + ověření + JSON; `store` navíc uloží PDF | 100 |
-| `app/lib/qes/verifier.rb` | **nový**: orchestrace `Qes::Validator` + `VerifyPdfSignature` + verdikt + `origin` | 80 |
+| `app/lib/qes/verifier.rb` | **nový**: orchestrace `Qes::Validator` + `Qes::PdfiumTrust` + verdikt + `origin` | 80 |
 | `app/lib/qes/verified_documents.rb` | **nový**: template ve složce „Verified documents“ + report v preferences | 50 |
 | `app/lib/qes/validator.rb` | `verify_one`: `kind`, `common_name` (CN), `subject` (plný subject), `issuer`, `serial`, `not_before`, `not_after`, `chain`, `trusted` jen pro `qes`; `call`: `modified`, `trusted_certs:`; `pdfium_report`: `verified`, `trusted`, `modified` | 35 |
 | `app/lib/qes/pdf_source.rb` | `validate!(data, allow_signed: false)` | 2 |
-| `app/lib/qes.rb` | `Qes.trust_roots` (jeden zdroj pro ověření i pečeť) | 10 |
-| `lib/verify_pdf_signature.rb` | `SignatureStruct` + `verified`, `trusted`, `modified` | 10 |
-| `config/routes.rb` | `resources :qes_verifications, only: %i[create], path: 'qes/verify'` + `post 'qes/verified_documents'` + `resource :qes_verification` pod `resources :templates` | 3 |
+| `app/lib/qes.rb` | `trust_roots` (signing), `verification_trust_roots` (ověření) a `tsa_trust_roots` | 10 |
+| `lib/verify_pdf_signature.rb` | **bit-identický s upstreamem** (nulový diff); `Qes::PdfiumTrust` ho jen volá | 0 |
+| `config/initializers/qes_routes.rb` | **nový**: `resources :qes_verifications` + `post 'qes/verified_documents'` + `resource :qes_verification` pod `resources :templates` | 3 |
 | `lib/api_path_consider_json_middleware.rb` | povolit multipart na `/api/qes/verify` a `/api/qes/verified_documents` | 2 |
 | `app/controllers/templates_qes_verifications_controller.rb` | **nový**: náhled uloženého PDF v Turbo modalu | 14 |
 | `app/views/templates/_qes_verification.html.erb` | **nový**: panel s reportem, náhledem a stažením PDF | 143 |
@@ -431,7 +437,7 @@ async storeVerifiedDocument(file: PdfUpload): Promise<PdfVerification> {
 | Cizí PDF v cizím účtu | `origin` se počítá jen v rámci `current_account`; žádná data z cizího účtu |
 | Falešná pečeť „DocuSeal“ | `seal.trusted` se počítá proti `Accounts.load_trusted_certs(account)` (ne jen podle CN) |
 | Falešný „trusted“ podpis | `Qes::Validator#trusted` jen proti `QES_VERIFICATION_TRUST_ROOTS`, ne proti account certům |
-| Záměna podepsaného obsahu | `modified` z `VerifyPdfSignature` (DSS je povoleno, přidaná stránka ne) |
+| Záměna podepsaného obsahu | `modified` z `Qes::PdfiumTrust.report` (DSS je povoleno, přidaná stránka ne) |
 | Únik tokenu | token jen v hlavičce, nikdy se neloguje; PDF se neloguje |
 
 **Soukromí:** server vidí PDF obsah (stejně jako při podpisu). Při ověření se PDF **neukládá**;
@@ -511,10 +517,10 @@ PDF opouští stroj; nespouštět v běžném CI.
 
 ### 7.4 Akceptační kritéria
 
-1. `make qes-test-qes` zelené (nové specy součástí; 124/0).
-2. `make qes-test-postgres` zelené (372/0); `make qes-test` 368/1, jediná chyba je známý upstream flake `signing_form_spec.rb:1253`.
+1. `make qes-test-qes` zelené (nové specy součástí).
+2. `make qes-test-postgres` zelené (660/0); `make qes-test` 659/0.
 3. `make qes-verify-e2e` zelené (valid/docuseal, store, tampered invalid, unsigned).
-4. `make qes-app-test` a `make qes-app-typecheck` zelené (60/0 + tsc).
+4. `make qes-app-test` a `make qes-app-typecheck` zelené (223/0 + tsc).
 5. Na emulátoru projde ověření v appce i ze share sheetu („Dokulachtan“ → „Ověřit PDF“).
 6. Verify po sobě nezanechá PDF v ActiveStorage ani nový template.
 7. Store uloží PDF do „Verified documents“ a report do `preferences['qes_verification']`.
