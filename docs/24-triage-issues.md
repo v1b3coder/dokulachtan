@@ -13,7 +13,7 @@ jsou označené jako mimo rozsah.
 |---|---|---|---|
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
-| 8 | Prázdná ENV vypne default bez varování | potvrzeno | P2 |
+| 8 | Prázdná ENV vypne default bez varování | rejected (jen tichý skip souboru; precedence zůstává) | P3 |
 | 9 | Důvěra na úrovni kořene širší než TSL | opraveno (anchory = vydávající CA) | P2 |
 | 10 | `QES_ENABLED=false` není úplný vypínač | opraveno (feature gate ve všech hoocích) | P2 |
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | potvrzeno | P1 |
@@ -166,11 +166,12 @@ udělat jako chybu, ne jako průchod.
 
 ## 4. P2 — nízké, provozní a dokumentační
 
-- **#8** `qes.rb:87-98` — `cast` vrací `raw.presence`, takže `QES_TRUST_ROOTS=` dá `nil` (prázdný signing store)
-  a `QES_EXPIRY_JOB_INTERVAL=` dá `0` (expirace se nikdy nespustí). `load_roots` (`:133-142`) neexistující soubor tiše přeskočí.
-  Oprava: `from_env` vrací default, když je `ENV[env_name].blank?`, kromě `ltv_allowed_hosts` (prázdná = vypnuto);
-  initializer zaloguje počet kořenů v každém store a seznam nenalezených souborů; při `QES_ENABLED=true` a nule
-  signing kořenů odmítnout start. Test: `QES_TRUST_ROOTS=` → default; `QES_EXPIRY_JOB_INTERVAL=` → 60.
+- **#8** `qes.rb:87-100` — `cast` vrací `raw.presence`, takže `QES_TRUST_ROOTS=` dá `nil` (prázdný signing store).
+  **Rejected (2026-10-29):** existující proměnná znamená nastavenou hodnotu — prázdný seznam nemá jinou syntaxi
+  a `from_env` s `blank?` → default by rozbil `QES_TSA_URL=` (`docs/10-qes.md:45`) i `QES_LTV_ALLOWED_HOSTS=`.
+  **Opraveno jen tichý skip:** `load_roots` zaloguje `trust root file not found: <cesta>` (jednou za cestu
+  a proces), initializer vypíše počet certů v každém store a `error` při prázdném signing store (fork `056ecc43`).
+  Fail-fast záměrně ne — shodil by celou instanci. Test: `spec/lib/qes/config_spec.rb`.
 - **#9** `config/qes/czech.pem`, `validator.rb` — `store.verify` s kořeny jako trust anchors důvěřoval celému podstromu;
   kvalifikovanost se brala jen z QCStatements listu. **Opraveno (2026-10-29):** bundle obsahuje jen
   15 vydávajících CA z TSL (žádný root) a `verified_chain` nastavuje `X509_V_FLAG_PARTIAL_CHAIN`, takže
