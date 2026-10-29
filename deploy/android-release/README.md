@@ -56,7 +56,7 @@ stejnými názvy.
 3. Po buildu workflow ověří `apksigner verify --print-certs` proti
    `ANDROID_RELEASE_CERT_SHA256`; když otisk nesedí, release se nevytvoří.
 4. Lokální `./gradlew assembleRelease` bez těchto proměnných použije debug
-   keystore — to je záměr, ne produkce.
+   keystore — to je záměr, ne produkční podpis.
 5. `mobile/app/plugins/withApkSize.js` při prebuildu nastaví velikost APK: komprimované
    `.so` (`expo.useLegacyPackaging=true`), `shrinkResources` a výchozí ABI `x86_64` pro
    emulátor a testy. Release APK pro telefony je jen `arm64-v8a` (`-PreactNativeArchitectures=arm64-v8a`,
@@ -65,7 +65,7 @@ stejnými názvy.
 
 ## Nasazení a migrace
 
-- Fly (staging i produkce) má `QES_ANDROID_CERT_SHA256` nastavený na **debug** fingerprint
+- Obě privátní instance na Fly (staging i produkce) mají `QES_ANDROID_CERT_SHA256` nastavený na **debug** fingerprint
   `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`,
   protože prostředí používají lokální bleeding-edge debug build.
 - Pokud na Fly nasadíš release APK z CI, přepni `QES_ANDROID_CERT_SHA256` na release fingerprint

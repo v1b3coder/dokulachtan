@@ -14,7 +14,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | Hooky do DocuSealu (documents, combined, audit, hodnota pole) | hotové (SPEC § 7.7) |
 | Appka (Expo): vault, podpis, automatická volba podepisujícího | hotové (SPEC § 9, `mobile/app`) |
 | Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); `FakeCardSigner` (test QSCD cert) umí celý A tok |
-| TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkci; v CI/testech prázdné |
+| TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkční instanci; v CI/testech prázdné |
 
 ## Konfigurace (ENV)
 
@@ -87,7 +87,7 @@ make qes-test-qes
 
 Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt` a
 `QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures). V CI `QES_TSA_URL` prázdné
-(testy bez TSA); staging/produkce DigiCert free, I.CA test TSA jen lokálně. Tajemství jen přes
+(testy bez TSA); staging i produkční instance DigiCert free, I.CA test TSA jen lokálně. Tajemství jen přes
 `fly secrets` / `.env`, nikdy do repa.
 
 TSA trust roots: `QES_TSA_TRUST_ROOTS` je **povinné**, kdykoli je `QES_TSA_URL` nastavené —
@@ -137,7 +137,7 @@ Očekávané výsledky (`make qes-e2e`, `make qes-e2e-card`, `make qes-e2e-pdf`)
 
 - `qes-signed.pdf` → `Signature1:…:INTACT:TRUSTED,UNTOUCHED` (pokrývá celý dokument),
 - `qes-final.pdf` → tři signatury; podpis appky `INTACT:TRUSTED,EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS`,
-  pečeť `INTACT:UNTRUSTED,UNTOUCHED` (self-signed cert DocuSealu; v produkci s I.CA rootem trusted),
+  pečeť `INTACT:UNTRUSTED,UNTOUCHED` (self-signed cert DocuSealu; na produkční instanci s I.CA rootem trusted),
   DocTS `TIMESTAMP_TOKEN<INTACT:UNTRUSTED>` (test trust list nemá DigiCert root; v Adobe je trusted),
 - `documents` i `combined_document` v DocuSealu = kopie téhož finálního PDF (žádný další podpis),
 - audit trail obsahuje stránku QES s cert/čas/hash/úrovní/výsledkem validace.
@@ -186,18 +186,20 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 
 ## Prostředí (Fly.io)
 
-Od 2026-10-18 jsou nad stejným forkem dvě prostředí:
+Od 2026-10-18 jsou nad stejným forkem dvě prostředí. Obě jsou **privátní instance uživatele**
+(self-hosted software), ne centrální služba; uvedené URL jsou adresy těchto instancí a v jiném nasazení
+se mění. „Produkce“ = instance s produkčním kódem, ne veřejná služba ani konkrétní URL.
 
-| Prostředí | App / URL | Volume | Trust roots | LTV |
+| Prostředí | Instance / adresa | Volume | Trust roots | LTV |
 |---|---|---|---|---|
-| **Produkce** | `dokulachtan` / <https://dokulachtan.fly.dev/> | `dokulachtan_prod_data` | jen PostSignum CA (`config/qes/postsignum.pem`) | `QES_REQUIRE_LTV=true` |
-| **Staging** | `dokulachtan-staging` / <https://dokulachtan-staging.fly.dev/> | `dokulachtan_stg_restore` | test root + PostSignum CA | `QES_REQUIRE_LTV=false` |
+| **Produkce** (privátní instance uživatele) | `dokulachtan` / <https://dokulachtan.fly.dev/> | `dokulachtan_prod_data` | jen PostSignum CA (`config/qes/postsignum.pem`) | `QES_REQUIRE_LTV=true` |
+| **Staging** (privátní instance uživatele) | `dokulachtan-staging` / <https://dokulachtan-staging.fly.dev/> | `dokulachtan_stg_restore` | test root + PostSignum CA | `QES_REQUIRE_LTV=false` |
 
-Konfigurace pro deploy: `deploy/docuseal/fly.toml` = produkce, `fly.staging.toml` = staging
+Konfigurace pro deploy: `deploy/docuseal/fly.toml` = produkční instance, `fly.staging.toml` = staging
 (oba v parent repu, do forku se předávají přes `--config`).
 Starý volume `dokulachtan_data` (testovací data prvotního stagingu) zůstává odpojený;
 staging od 2026-10-18 běží na volume `dokulachtan_stg_restore` obnoveném ze snapshotu starého
-staging volume (účet `<SMTP_FROM>` i šablona „QES E2E (staging)“ jsou k dispozici), produkce
+staging volume (účet `<SMTP_FROM>` i šablona „QES E2E (staging)“ jsou k dispozici), produkční instance
 na novém prázdném volume `dokulachtan_prod_data` (první účet přes `/setup`).
 
 **Stejný podepisující 2 pole (2026-10-17):** `make qes-staging-same-signer` projde na stagingu —
@@ -219,11 +221,11 @@ atributy nečte a jen zvětšovaly PDF. Po pečeti se přidá **DocTS** (DigiCer
 který DSS kryje; offline `pyhanko ades_lta_validation` s `allow_fetching=False` je kritérium.
 Na stagingu mají test certy CRL DP i na staging hostu (`QES_TEST_CRL_PATH`) a `QES_REQUIRE_LTV=false`,
 takže CRL je dostupné; `127.0.0.1:8765` se ignoruje. Reálné PostSignum certy CRL dostanou (jejich CRL DP jsou veřejné
-a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkci jsou CRL hosty PostSignum (`crl.postsignum.cz`,
+a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkční instanci jsou CRL hosty PostSignum (`crl.postsignum.cz`,
 `crl2.postsignum.cz`, `crl.postsignum.eu`) i I.CA (`qcrldp1.ica.cz`, `qcrldp2.ica.cz`, `crldp1.ica.cz`,
 `crldp2.ica.cz`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
 bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` by skončil na
-`ltv_unavailable` (ověřeno na produkci 2026-10-18). Podpis certem I.CA navíc potřebuje její roots
+`ltv_unavailable` (ověřeno na produkční instanci 2026-10-18). Podpis certem I.CA navíc potřebuje její roots
 v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL PostSignum Qualified CA 4 má
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
 `QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
@@ -247,7 +249,7 @@ QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dok
 #   explicitní hodnota nahrazuje default → kdo na stagingu podepisuje certem I.CA,
 #   musí sem doplnit i její hosty (qcrldp1/qcrldp2/crldp1/crldp2.ica.cz)
 
-# produkce (deploy/docuseal/fly.toml, APP=dokulachtan)
+# produkce = privátní instance uživatele (deploy/docuseal/fly.toml, APP=dokulachtan)
 # Defaulty pokrývají QES_ENABLED, signing trust roots (PostSignum),
 # verification trust roots (české CA), LTV hosty, TSA i require_ltv.
 # Explicitně zůstává jen veřejná URL a fingerprint Android podpisu APK.
@@ -255,7 +257,7 @@ QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0
 ```
 
-**Český verification trust store (2026-10-28):** produkce **v52**
+**Český verification trust store (2026-10-28):** produkční instance **v52**
 (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
 (`deployment-01M61RKSP8C594JRPAEKTR3VZT`), obě z forku `cfd36b2c`. Signing
 `QES_TRUST_ROOTS` zůstává PostSignum (prod 6; staging test root + 6 PostSignum = 7),
@@ -286,7 +288,7 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
 - `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **debug** podpisu (lokální bleeding-edge build);
   release APK z CI by vyžadoval release fingerprint (`deploy/android-release/`).
-  Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkci teď sedí.
+  Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkční instanci teď sedí.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan-staging.fly.dev"`
   → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
 - **TOFU (trust on first use):** podpisový odkaz nese origin serveru (HTTPS host nebo `server`
@@ -298,7 +300,7 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   podpisové odkazy ho nepoužívají. Server shodný s Nastavením je pro podpisové odkazy
   důvěryhodný bez TOFU (v seznamu je označený „Server z Nastavení“). Odkaz bez serveru skončí `missing_server` (žádný tichý
   fallback do Nastavení); `server_url` z payloadu musí odpovídat originu odkazu, jinak appka
-  vrátí `foreign_server`. Serverová část TOFU je ve forku `f1c28c2b`; na produkci/staging
+  vrátí `foreign_server`. Serverová část TOFU je ve forku `f1c28c2b`; na produkčních instancích
   (v52/v25, fork `cfd36b2c`) zatím není nasazená — před použitím TOFU odkazu nasadit.
 
 ### iOS build a instalace na iPhone

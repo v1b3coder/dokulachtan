@@ -1,6 +1,6 @@
 # 16 — Ověření PDF
 
-Status: **implementováno a nasazeno** (2026-10-22) — produkce **v52**, staging **v25**, APK **1.3.9**; server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno 2026-10-23.
+Status: **implementováno a nasazeno** (2026-10-22) — produkční instance **v52**, staging **v25**, APK **1.3.9**; server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno 2026-10-23.
 Navazuje na DESIGN.md § 1/§ 4/§ 7, SPEC.md § 7.5 a docs/15 (přímý podpis PDF).
 
 ## 1. Use case
@@ -526,11 +526,11 @@ PDF opouští stroj; nespouštět v běžném CI.
 7. Store uloží PDF do „Verified documents“ a report do `preferences['qes_verification']`.
 8. Store s tampered/unsigned PDF → `422 not_verifiable`, počet templateů se nezmění.
 9. Bez API tokenu → `401`; rate limit → `429`; šifrované PDF → `422`.
-10. Na stagingu i produkci ověřeno reálným requestem: staging test cert → `valid` + `origin=docuseal`,
-    store → template 30, tampered → `invalid`, unsigned → `unsigned`; produkce test cert →
+10. Na stagingu i produkční instanci ověřeno reálným requestem: staging test cert → `valid` + `origin=docuseal`,
+    store → template 30, tampered → `invalid`, unsigned → `unsigned`; produkční instance test cert →
     `valid_untrusted` (root jen z `QES_VERIFICATION_TRUST_ROOTS`), unsigned → `unsigned`; `/up` 200 na obou.
 11. V appce (APK 1.2.0) na emulátoru ověřeno: Home → „Ověřit PDF“ → staging PDF →
-    žlutý verdikt „Podpis je platný, ale certifikát není důvěryhodný“ (produkce, test cert),
+    žlutý verdikt „Podpis je platný, ale certifikát není důvěryhodný“ (produkční instance, test cert),
     soubor, podpisy a „Uložit do DocuSealu“; sdílení i otevření PDF otevírá S14 s volbou.
 12. Web UI: template s `qes_verification` zobrazí panel s verdiktem a metadaty, náhled PDF
     v modalu a stažení PDF; normální template panel nezobrazí; request spec zelený.
@@ -559,7 +559,7 @@ PDF opouští stroj; nespouštět v běžném CI.
    „Ověřit PDF“; share sheet zůstává „Podepsat PDF“.
 2. **Revokace:** v1 nechat `not_checked` (doporučeno), nebo hned best-effort CRL?
    Doporučeno nechat na další fázi; korektní revokace potřebuje LTV/časové razítko.
-3. **Trust roots:** přidat do produkce I.CA (a tím ověřovat i I.CA podpisy), nebo zůstat jen
+3. **Trust roots:** přidat do produkční instance I.CA (a tím ověřovat i I.CA podpisy), nebo zůstat jen
    PostSignum? Doporučeno rozhodnout provozně; kód se nemění.
 4. **Detail výsledku:** jednoduchý verdikt + rozbalitelné technické detaily (doporučeno), nebo
    jen jednoduchý verdikt? Doporučeno s detaily pro diagnostiku.

@@ -49,8 +49,10 @@ a PDF. (Ověřeno v mobile PoC: podepisovat atributy, ne digest dokumentu.)
 
 ## C. Provoz a bezpečnost
 
-13. **Deployment (staging).** → **varianta A**: 1 Fly app `dokulachtan` + volume + SQLite, region `fra`;
-    konfigurace `deploy/docuseal/fly*.toml` v parent repu. Detail: [09 — Deployment na Fly.io](09-deployment-flyio.md).
+13. **Deployment (dvě privátní instance).** → **varianta A**: 1 Fly app + volume + SQLite, region `fra`;
+    `dokulachtan` = produkce, `dokulachtan-staging` = staging; obě jsou privátní instance uživatele
+    (self-hosted software), ne centrální služba. Konfigurace `deploy/docuseal/fly*.toml` v parent repu.
+    Detail: [09 — Deployment na Fly.io](09-deployment-flyio.md).
 14. **Varianta A je client-side.** Čtečka je u uživatele; server PKCS#11 neimplementuje. V cloudu ji
     řeší appka / lokální agent (nebo A jen v self-hosted/LAN).
 15. **Kde běží příjem podpisu.** → součást forku (žádný sidecar): `POST /qes/sessions/:token/complete`.

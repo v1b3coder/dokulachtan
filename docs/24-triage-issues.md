@@ -251,7 +251,7 @@ Co zůstává (config a docs, ne kód):
    už nikdy nesmí použít pro distribuci". `docs/09` a `docs/10-qes.md` uvádějí debug otisk
    jako **dočasný** stav s poznámkou, že release APK z CI vyžaduje `80:DC:…:E0`. Dokumentace je tedy v pořádku.
 2. Až se z CI nasadí produkční APK, přepnout `QES_ANDROID_CERT_SHA256` na `80:DC:…:E0` (`fly secrets set`).
-   Do té doby App Links na produkci fungují jen pro debug-signed testovací APK — to je vědomá daň za to,
+   Do té doby App Links na produkční instanci fungují jen pro debug-signed testovací APK — to je vědomá daň za to,
    že je testovací APK veřejně ke stažení. Odkaz jde vždy i přes custom scheme, takže podepsat se dá i bez App Links.
 
 **Návrh:** zavřít #18.1 jako mimo rozsah, nechat jen jako položku v deployment checklistu (přepnutí secrets

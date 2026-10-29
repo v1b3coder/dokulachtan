@@ -14,7 +14,7 @@ opustil zařízení.
 - **Malé commity**: Conventional Commits; každý zásah do upstream souboru vlastní commit (max. 10 řádků).
 - **Větev**: `dokulachtan` ve forku (`vendor/docuseal`), lineární historie, rebase na upstream.
 - **Jeden krok = jedna ověřitelná změna**; po každém kroku `make qes-test` (nebo cílený test).
-- **Nic se nenasazuje na produkci**; staging až v poslední fázi.
+- **Nic se nenasazuje na produkční instanci**; staging až v poslední fázi.
 - **Všechny nové soubory** v `app/lib/qes/`, `app/models/qes_session.rb`, `app/controllers/qes/`,
   `app/jobs/qes/`, `app/views/qes/`, `mobile/app/`; upstream jen dle tabulky v SPEC § 14.
 
@@ -201,7 +201,8 @@ Cíl: browser ↔ server ↔ appka přes HTTP; finální PDF v DocuSealu.
       → verify: v builderu lze přidat `qes` pole, uloží se do `fields`
 - [ ] 3.12 `public/.well-known/assetlinks.json` (statika) + `Qes::WellKnownController` pro AASA
       s `Content-Type: application/json` (SPEC § 6.6, 7.7)
-      → verify: `curl -i https://dokulachtan.fly.dev/.well-known/assetlinks.json` → 200 JSON;
+      → verify: `curl -i https://<instance>/.well-known/assetlinks.json` → 200 JSON
+      (instance `dokulachtan`; adresa se v každém nasazení mění);
       `curl -i .../apple-app-site-association` → `Content-Type: application/json`
 - [ ] 3.13 `Qes::ValueValidator` + hook v `lib/submitters/submit_values.rb` `validate_values!` (SPEC § 4.4)
       — hodnota `qes` pole smí být jen `"qes:<id>"` s `completed` session téhož submittera
@@ -302,9 +303,9 @@ Cíl: všechna akceptační kritéria SPEC § 15.4 splněna a doložena.
       → verify: `make qes-negative` → report v `test/out/qes-negative-report.txt` (N1–N17 OK)
 - [ ] 6.3 CI: `make verify` + `make qes-test` na každý commit; `make qes-e2e` v separátním jobu
       → verify: CI zelené (lokálně/Gitea Actions)
-- [ ] 6.4 Staging: `QES_ENABLED=true`, `QES_TRUST_ROOTS`, `QES_TSA_URL` přes `fly secrets`;
+- [ ] 6.4 Nasazení (staging i produkce): `QES_ENABLED=true`, `QES_TRUST_ROOTS`, `QES_TSA_URL` přes `fly secrets`;
       `fly deploy` z forku; healthcheck `/up`
-      → verify: `curl https://dokulachtan.fly.dev/up` → 200; `fly logs` bez chyb
+      → verify: `curl https://<instance>/up` → 200 (u nás instance `dokulachtan`); `fly logs` bez chyb
 - [x] 6.5 Staging e2e se dvěma signery (SPEC § 15.2): `make qes-staging-e2e`
       → verify: 6 signatur INTACT, `openssl verify` vůči test trust rootu OK; LTV na stagingu
       chybí (CRL DP test certů = `127.0.0.1:8765`), proto pyHanko `INTACT:UNTRUSTED`
@@ -407,7 +408,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 | MOI SDK nepodporuje Android 15 / nové Expo | A na mobilu nefunguje | Otestovat v kroku 5.1 na emulátoru s reálnou verzí; fallback: A jen na desktopu |
 | `pyHanko` neuzná naše LTV v CMS | Akceptační kritérium 2 | Ověřit v kroku 2.7; fallback: DSS dictionary (další práce) |
 | FreeTSA/TSA nedostupné v CI | Testy TSA padají | TSA vypnout v CI (`QES_TSA_URL` prázdné), test s TSA jen lokálně |
-| Universal links na `fly.dev` neověřené | Deep link neotevře appku | Custom scheme fallback (SPEC § 10.3); vlastní doména v produkci |
+| Universal links na `fly.dev` neověřené | Deep link neotevře appku | Custom scheme fallback (SPEC § 10.3); vlastní doména na produkční instanci |
 | Zablokovaný PIN/QPIN při testech s reálnou kartou | Karta nepoužitelná | Testovat nejdřív fake card mód; reálný test až po dohodě |
 | Rebase na upstream rozbije hooky | Fork se rozbije | Hooky jsou malé a izolované (SPEC § 14); `make qes-test` po každém rebase |
 | Pdfium render náhledu v produkčním image chybí/je pomalý | Přímý podpis nejde | Ověřit v 8.4 na test image (`libpdfium.so` už je); fallback: pevná pozice pečeti bez náhledu |

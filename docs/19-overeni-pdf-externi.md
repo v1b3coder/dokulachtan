@@ -222,6 +222,6 @@ dokument vrací `500 DSSDocument is null`. Po opravě se používá původní
   pro kontrolu změn a pečeti použij lokální ověření v DocuSealu.
 - **Externí report se neukládá**; store je jen pro lokální ověření.
 - **Testovací certy nejsou v EU trusted listu** → externí ověření vyjde
-  `valid_untrusted`; produkce s PostSignum certem → `valid`.
+  `valid_untrusted`; produkční instance s PostSignum certem → `valid`.
 - **Web UI se nemění**; externí report se v webu nezobrazí.
 - **Bez dávkového ověření**; jedno PDF na request.

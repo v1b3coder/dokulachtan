@@ -523,6 +523,9 @@ jinak `foreign_server`.
 }
 ```
 
+Pozn.: `server_url` v příkladech výše je adresa **konkrétní instance** (zde instance uživatele), ne centrální
+server; v každém nasazení se mění. Appka se řídí originem odkazu a TOFU (§ 8.1), ne pevně zapsanou adresou.
+
 **Krok 2** — podepsané atributy (`POST /qes/sessions/:token/certificate` s certifikátem):
 
 ```json
@@ -594,10 +597,14 @@ Přesný seznam ENV (včetně `QES_ENABLED`, `QES_SIGNATURE_SIZE`, `QES_TSA_REQU
 
 ## 11. Provoz
 
-- **Staging:** Fly app `dokulachtan` (varianta A: 1 machine + volume + SQLite), region `fra`;
-  healthcheck `/up`; auto-stop.
-- **Produkce (návrh):** Postgres (managed) + S3/Tigris pro ActiveStorage, více strojů, SMTP,
-  vlastní doména (kvůli universal links), zálohy.
+Vyvíjíme **self-hosted software**: neexistuje centrální instance, každý uživatel si DocuSeal s naším forkem
+nasadí u sebe. „Produkce“ níže proto znamená **privátní instanci uživatele s produkčním kódem**, ne veřejnou
+službu; adresa instance se v každém nasazení mění.
+
+- **Produkce (instance uživatele):** dnes Fly app `dokulachtan` (varianta A: 1 machine + volume + SQLite),
+  region `fra`; healthcheck `/up`; SMTP, zálohy snapshotem volume. Větší nasazení (Postgres + S3/Tigris,
+  více strojů, vlastní doména kvůli universal links) je volba, ne požadavek.
+- **Staging (instance uživatele):** Fly app `dokulachtan-staging`, stejná varianta A, jen testovací data.
 - **Observability:** `fly logs`, události sessions, validační reporty, chybovost providerů.
 - **Mobil:** Expo; build EAS nebo lokálně; distribuce interně (APK / Firebase App Distribution).
 

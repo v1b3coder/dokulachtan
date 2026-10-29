@@ -94,8 +94,9 @@ Reporty jdou do `test/out/`. E2E potřebuje `.venv` a klon forku z `make fork-se
 | `make smtp-test` | pošle testovací e-mail (`TO=`) |
 | `make check-public` | ověří, že lokální tajemství nejsou v tracked souborech |
 
-Konfigurace prostředí je v `deploy/docuseal/`: `fly.toml` = produkce, `fly.staging.toml` = staging.
-Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Stránka s APK je
+Konfigurace prostředí je v `deploy/docuseal/`: `fly.toml` = produkční instance, `fly.staging.toml` = staging.
+Produkce = **privátní instance uživatele s produkčním kódem** (dnes Fly app `dokulachtan`), ne centrální
+služba; adresa instance se v každém nasazení mění. Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Stránka s APK je
 v `deploy/apk/`; hotový APK najdeš v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest).
 Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 

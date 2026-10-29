@@ -28,7 +28,7 @@ Konvence: **MUSÍ** = povinné v v1, **MĚL BY** = doporučené, **NESMÍ** = za
 | 2 | **Varianta A** — eObčanka přes BLE čtečku, QES | kompletní, včetně integrace MOI SDK |
 | 3 | Server: pole `qes`, `QesSession`, API, joby, audit | ve forku DocuSealu |
 | 4 | Expo appka: obrazovky S1–S9, úložiště klíče, biometrie | Android first, iOS později |
-| 5 | Universal links + custom scheme fallback | vlastní doména pro produkci |
+| 5 | Universal links + custom scheme fallback | vlastní doména pro produkční instanci |
 | 6 | Pečeť DocuSealu inkrementálně **nad** podpisem appky | viz § 7.6 |
 | 7 | Validace výsledku (Pdfium interně, pyHanko/pdfsig v testech) | viz § 15 |
 | 8 | Audit: QES záznam v audit trail + vlastní data v DB | viz § 13 |
@@ -364,6 +364,9 @@ Server ověří token (existuje, neexpirovaný, ne v terminálním stavu), sessi
 }
 ```
 
+Pozn.: `server_url` je adresa **konkrétní instance** (zde instance uživatele), ne centrální server;
+v každém nasazení se mění. Appka se řídí originem odkazu a TOFU (§ 8.1), ne pevně zapsanou adresou.
+
 Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 session_not_active`.
 
 ### 5.1a `GET /qes/sessions/:token/document` — nepodepsaný TBS pro kontrolu
@@ -647,6 +650,9 @@ Request: `{ "field_uuid": "…", "provider": "mobile_app" }`
 }
 ```
 
+Pozn.: `universal_link`, `fallback_url` i `server` v `custom_scheme_link` nesou adresu **konkrétní instance**
+(zde instance uživatele), ne centrální server; v každém nasazení se mění.
+
 Pravidla: existující aktivní session se zruší a založí nová; odpověď **NESMÍ** obsahovat token
 při žádném dalším volání (jen digest v DB); `field_uuid` **MUSÍ** patřit submitterovi a být typu `qes`.
 `universal_link` míří na `/qes/sign` (App Links / Universal Links, § 10.1), `fallback_url` na
@@ -862,7 +868,7 @@ Uprostřed řetězu (session N, N < poslední) je poslední signaturou právě p
 
 **Dokumentový timestamp (DocTS, PAdES-LTA):** po pečeti se přidá **nová inkrementální revize**
 s podpisovým polem typu `DocTimeStamp` (`SubFilter ETSI.RFC3161`) a RFC 3161 tokenem z TSA
-(`QES_TSA_URL`, produkce DigiCert free/AATL). DocTS kryje celý dokument včetně DSS a pečeti;
+(`QES_TSA_URL`, produkční instance DigiCert free/AATL). DocTS kryje celý dokument včetně DSS a pečeti;
 řetězení DocTS je evidence record pro LTA. Když `QES_TSA_REQUIRED=true` a TSA selže, session
 **MUSÍ** skončit `tsa_unavailable`; při `false` se DocTS přeskočí (`doc_timestamp_state=failed`)
 a do auditu se zapíše varování.
@@ -1270,8 +1276,8 @@ Plánování expiračního jobu: fork nemá `sidekiq-cron` a nové závislosti j
 přes `LockEvent` (§ 7.8).
 
 Pro testy a staging: `QES_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures) a
-`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (verification fixtures); produkce I.CA rooty;
-`QES_TSA_URL` prázdné v CI (testy bez TSA), FreeTSA/I.CA jen lokálně/produkce.
+`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (verification fixtures); produkční instance I.CA rooty;
+`QES_TSA_URL` prázdné v CI (testy bez TSA), FreeTSA/I.CA jen lokálně/produkční instance.
 
 Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO_PUBLIC_QES_FAKE_CARD`
 (dev mód pro variantu A bez hardwaru). Tajemství jen přes `fly secrets` / `.env`; **NESMÍ** být v repu.
@@ -1579,7 +1585,7 @@ Kde je co v DESIGN.md opravené (řetěz DESIGN → SPEC):
 1. Push notifikace (`expo-notifications`) — až F2+.
 2. Hromadné podepisování více dokumentů jedním obřadem (jeden dokument s více podpisy je v rozsahu, § 4.6).
 3. Více certifikátů v appce (v1: import nahrazuje; u A výběr kontejneru je povinný).
-4. iOS build + Universal Links na produkci (potřebuje macOS/Xcode).
+4. iOS build + Universal Links na produkční instanci (potřebuje macOS/Xcode).
 5. Desktop varianta A (lokální agent) — zvážit později.
 6. `GET /api/submissions/:id` rozšíření o QES metadata.
 7. DSS / ETSI conformance checker jako noční CI job (v1 stačí pyHanko + pdfsig).
@@ -1865,21 +1871,24 @@ použijí anglicky (fallback).
 
 ## 22. Příloha E — kompatibilita a provozní požadavky
 
+Pozn.: „produkce“ níže = **privátní instance uživatele s produkčním kódem** (self-hosted software),
+ne centrální služba; adresa instance se v každém nasazení mění.
+
 | Věc | Požadavek |
 |---|---|
 | Ruby/Rails | verze z pinu forku (`vendor/docuseal.rev`); patch nesmí měnit `Gemfile`/`Gemfile.lock` |
 | HexaPDF | 1.7.0 z `Gemfile.lock`; API `Signing.embed_signature` a `SignedDataCreator` (§ 7.2, 7.3) |
 | Nové závislosti | žádné (jen stdlib `openssl`, `active_support`, existující `hexapdf`); TSA/OCSP přes `Net::HTTP` |
-| DB | SQLite (staging) i PostgreSQL (produkce): žádné `jsonb`/pole; JSON v `text` + `serialize`, binární v `t.binary` |
-| ActiveStorage | `disk` (staging) i S3 (později); `has_one_attached` + `metadata` |
+| DB | SQLite v obou privátních instancích (staging i produkce); kód musí být DB-agnostický, volitelně PostgreSQL pro větší nasazení: žádné `jsonb`/pole; JSON v `text` + `serialize`, binární v `t.binary` |
+| ActiveStorage | `disk` v obou privátních instancích (volume), S3 volitelně pro větší nasazení; `has_one_attached` + `metadata` |
 | Joby | Sidekiq embedovaný v Pumě (single-tenant); joby krátké a idempotentní (§ 7.10) |
 | Timeouty | `POST /complete` max 15 s (Puma default 30 s); TSA/OCSP v jobu, ne v requestu |
 | Prohlížeče | Chrome/Edge/Safari/Firefox (poslední 2 verze); QR + WebShare API jen jako progressive enhancement |
 | Expo | SDK 58 (dev build pro A), `minSdkVersion 24`; MOI AAR vyžaduje `compileSdk 35+` (SDK 58 staví s `compileSdk 37`) |
 | Android | 8.0+ (API 26) pro BLE čtečky; **v1 = Android** (App Links ověřené); iOS až F2 (AASA + `QES_IOS_TEAM_ID` je příprava, § 6.6) |
 | Rebase | po každém rebase upstreamu spustit `make qes-test` + `make qes-e2e`; hooky jsou malé (§ 7.7) |
-| Produkce | Postgres + S3 + SMTP + vlastní doména (universal links) + zálohy (§ 11) |
+| Produkční instance | dnes varianta A (SQLite + volume + SMTP + zálohy snapshotem); volitelně Postgres + S3 + vlastní doména (universal links) pro větší nasazení (§ 11) |
 | Test harness | `make qes-test` = **SQLite** (parita se stagingem) + test image s Ruby 4.0.5 a `libpdfium.so`; `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada). `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3` (POZOR: `DATABASE_URL=sqlite3:…` neprojde — `database.yml` `production:` sekce je pro sqlite URL prázdná), `SCHEMA=tmp/qes-test-schema.rb` chrání `db/schema.rb` (gem default `dump_schema_after_migration = true`, DocuSeal ho vypíná jen v `production.rb:127`); na SQLite nelze `db:schema:load` (Postgres dump s `btree_gin`/`tsvector`/`using: :gin`), jen `db:migrate`. Změřeno 2026-10-27: SQLite 646/1 (známý upstream flake), Postgres 650/0 — `test/qes/README.md` |
-| SQLite v testech | **Primární** (staging = SQLite; § 22 vyžaduje DB-agnostický kód): 3 Postgres-specific migrace mají `return unless adapter_name == 'PostgreSQL'`, `LockEvent` používá `unique: connection.supports_partial_index?` → idempotence funguje i na SQLite. Jediný spec závislý na Postgresu: `spec/system/dashboard_spec.rb:53` (fulltext) → vyloučit `--exclude-pattern`, ověřit v `qes-test-postgres` |
+| SQLite v testech | **Primární** (obě privátní instance = SQLite; § 22 vyžaduje DB-agnostický kód): 3 Postgres-specific migrace mají `return unless adapter_name == 'PostgreSQL'`, `LockEvent` používá `unique: connection.supports_partial_index?` → idempotence funguje i na SQLite. Jediný spec závislý na Postgresu: `spec/system/dashboard_spec.rb:53` (fulltext) → vyloučit `--exclude-pattern`, ověřit v `qes-test-postgres` |
 | Assety v testech | `make qes-test-assets` zkopíruje `public/packs` z produkčního image → `public/packs-test` (pro `spec/system`); `chromium` jen v system image, `libpdfium.so` v obou (pro `VerifyPdfSignature`) |
 | Plánování jobů | bez `sidekiq-cron`: samo-plánující smyčka `perform_in` + atomický cache lock `unless_exist` (§ 7.8) |

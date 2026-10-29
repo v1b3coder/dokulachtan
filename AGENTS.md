@@ -69,14 +69,41 @@ na server. Výsledkem je upravený DocuSeal (fork) + mobilní appka.
     Detail: `docs/15-primy-podpis-pdf.md`, SPEC § 4.8/§ 5.8/§ 9.9.
 16. **Defaulty pro český deployment jsou ve forku** (rozhodnutí uživatele 2026-10-28): `QES_ENABLED=true`,
     PostSignum CRL hosty, PostSignum trust roots, DigiCert TSA a `QES_REQUIRE_LTV=true` jsou
-    výchozí v `Qes::Config::DEFAULTS`; ENV je jen override. Produkce tak v secrets drží jen
+    výchozí v `Qes::Config::DEFAULTS`; ENV je jen override. Produkční instance tak v secrets drží jen
     `QES_PUBLIC_BASE_URL` a `QES_ANDROID_CERT_SHA256`; staging přepisuje trust roots,
     `QES_REQUIRE_LTV=false`, test CRL a allowlist. Detail: SPEC § 7.4 a § 11, `docs/10-qes.md`.
 
 ## Deployment
 
+### Prostředí: co znamená „produkce“
+
+Vyvíjíme **self-hosted software** (fork DocuSealu + appka), ne centrální službu. Neexistuje jedna
+„naše produkce“, ke které by se připojovali cizí uživatelé — každý si instanci nasadí u sebe. Proto:
+
+- **Produkce** = **privátní instance uživatele s produkčním kódem**. Dnes Fly app `dokulachtan`
+  v osobním Fly účtu. `https://dokulachtan.fly.dev/` je jen adresa této konkrétní instance,
+  **ne adresa produktu, centrální API ani „náš server“**.
+- **Staging** = druhá privátní instance téhož uživatele (`dokulachtan-staging`) pro testování; není to veřejná beta
+  ani demo pro uživatele.
+- **Vývoj** = lokální běh a testy; žádná veřejná instance.
+- **`RAILS_ENV=production`** / `production.rb` / `database.yml` → `production:` je jen prostředí Rails,
+  ne „produkce“ v tomto smyslu.
+- **Upstream DocuSeal SaaS** (<https://www.docuseal.com>) je cizí služba, ne naše produkce.
+
+Pravidla pro agenty:
+
+- Nepředpokládej centrální URL ani centrální backend. Když dokument potřebuje konkrétní adresu, označ ji
+  jako „adresa konkrétní instance“ a připomeň, že se v každém nasazení mění (`QES_PUBLIC_BASE_URL`,
+  server URL v appce, `app` ve `fly*.toml`).
+- Proti produkční instanci nic netestuj a nic na ní nespouštěj, pokud to zadání výslovně nechce; výchozí je
+  lokální běh a testy (`make qes-test`, `make qes-e2e`).
+- `make deploy-prod` je nasazení na produkční instanci uživatele, ne release do centrální služby ani publikace
+  pro všechny uživatele.
+- Adresa uživatelovy instance nesmí být ve forku ani v serverovém kódu výchozí hodnotou pro cizí nasazení;
+  v appce je výchozí server URL věcí konkrétního buildu (viz Testovací APK níže).
+
 **Dvě prostředí, varianta A — 1 Fly app + volume + SQLite** (bez Postgresu), region `fra`.
-Konfigurace v parent repu: `deploy/docuseal/fly.toml` = produkce, `fly.staging.toml` = staging;
+Konfigurace v parent repu: `deploy/docuseal/fly.toml` = produkční instance, `fly.staging.toml` = staging;
 do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-staging`).
 
 ### Android podpisy vs. certifikáty — nepřekrývat
@@ -97,19 +124,22 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 
 **Pravidlo pro texty:** vždy piš „Android podpis APK“ nebo „certifikát pro podpis dokumentů“; samotné „certifikát“ nebo „produkční certifikát“ je zakázané, protože oba významy se pletou.
 
-| Prostředí | App / URL | Volume | Trust roots | LTV |
+| Prostředí | Instance / adresa (mění se podle nasazení) | Volume | Trust roots | LTV |
 |---|---|---|---|---|
-| **Produkce** | `dokulachtan` / <https://dokulachtan.fly.dev/> | `dokulachtan_prod_data` | jen PostSignum CA | `true` |
-| **Staging** | `dokulachtan-staging` / <https://dokulachtan-staging.fly.dev/> | `dokulachtan_stg_restore` | test root + PostSignum CA | `false` |
+| **Produkce** (privátní instance uživatele) | `dokulachtan` / <https://dokulachtan.fly.dev/> | `dokulachtan_prod_data` | jen PostSignum CA | `true` |
+| **Staging** (privátní instance uživatele) | `dokulachtan-staging` / <https://dokulachtan-staging.fly.dev/> | `dokulachtan_stg_restore` | test root + PostSignum CA | `false` |
 
-**Produkce `dokulachtan`**:
+Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`app` ve `fly*.toml`,
+`QES_PUBLIC_BASE_URL`, server URL v appce).
+
+**Produkce — instance `dokulachtan`**:
 
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty) → `/data/docuseal`;
   starý volume `dokulachtan_data` byl smazán 2026-10-18.
 - Release **v52** (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), fork `cfd36b2c`.
 - `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 29 českých CA
   (`config/qes/czech.pem`), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
-  TSA roots 1, `tsa_required=true`; CRL fetch z produkce OK.
+  TSA roots 1, `tsa_required=true`; CRL fetch z produkční instance OK.
 - V secrets jen `QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256` a SMTP; ostatní defaulty
   jsou ve forku (`QES_ENABLED=true`, PostSignum CRL hosty a trust roots, DigiCert TSA).
 - healthcheck `/up` 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
@@ -122,7 +152,7 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
   `FA:C6:…:9C`), ne certifikátu dokumentu; při nasazení produkčního APK z CI se přepne na
   `80:DC:…:E0`.
 
-**Staging `dokulachtan-staging`**:
+**Staging — instance `dokulachtan-staging`**:
 
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`;
   obnovený ze snapshotu starého staging volume, má účet `<SMTP_FROM>` a šablonu
@@ -138,7 +168,7 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 - Ověřeno: `make qes-staging-e2e` 2 signeři → 6 signatur INTACT (report
   `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury,
   podpis appky INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
-- SMTP Brevo free (300 e-mailů/den), stejné creds jako produkce (`deploy/smtp.env`);
+- SMTP Brevo free (300 e-mailů/den), stejné creds jako produkční instance (`deploy/smtp.env`);
   ověřeno `make smtp-check` a `make smtp-test`.
 
 **Testovací APK:** <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> (Fly app
@@ -146,7 +176,7 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 s **testovacím certifikátem pro podpis dokumentů** (E2E) a stub čtečky; **produkční PostSignum
 cert se do APK nepeče** — uživatel ho importuje jako `.p12`, nebo použije čtečku.
 Verze v repu **1.3.9** (versionCode 10309; na Fly **1.3.8**). Výchozí server URL v buildu
-je **produkce**; na staging se přepíná v appce *Nastavení → Server URL* a odkaz se otevírá
+je adresa **produkční instance uživatele** (ne centrální server); na staging se přepíná v appce *Nastavení → Server URL* a odkaz se otevírá
 custom scheme `dokulachtan://sign?token=…` (funguje vždy). App Links (HTTPS) jsou vázané na host
 zapečený v buildu (`dokulachtan.fly.dev`), proto by staging vyžadoval rebuild APK s hostem
 `dokulachtan-staging.fly.dev`. APK se nasazuje `cd deploy/apk && fly deploy -a dokulachtan-download`
@@ -158,9 +188,9 @@ zapečený v buildu (`dokulachtan.fly.dev`), proto by staging vyžadoval rebuild
 - SMTP: **Brevo free** (300 e-mailů/den) nasazeno na obou prostředích 2026-10-18 — `SMTP_FROM=<SMTP_FROM>`
   (registrační adresa účtu = ověřený sender; doménu Brevo přepíše na `@<id>.brevosend.com`, protože
   `example.com` autentizované není), stejné přihlašovací údaje (`deploy/smtp.env` / `deploy/smtp.prod.env`, oba gitignored) →
-  `make smtp-setup APP=…` (`SMTP_FILE=deploy/smtp.prod.env` pro produkci), `make smtp-check APP=…`,
+  `make smtp-setup APP=…` (`SMTP_FILE=deploy/smtp.prod.env` pro produkční instanci), `make smtp-check APP=…`,
   `make smtp-test APP=… TO=adresa@example.com`.
-- Detail a varianty (Postgres/S3/produkce): [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md),
+- Detail a varianty (Postgres/S3/větší nasazení): [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md),
   QES runbook [docs/10-qes.md](docs/10-qes.md).
 
 ```bash
@@ -168,7 +198,7 @@ zapečený v buildu (`dokulachtan.fly.dev`), proto by staging vyžadoval rebuild
 fly apps create dokulachtan-staging --org personal
 fly volumes create dokulachtan_stg_restore --region fra --size 1 -a dokulachtan-staging
 make deploy-staging                    # staging (deploy/docuseal/fly.staging.toml)
-make deploy-prod                       # produkce (deploy/docuseal/fly.toml)
+make deploy-prod                       # produkční instance (deploy/docuseal/fly.toml)
 ```
 
 ## Mapa repa
@@ -282,7 +312,7 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.
 - Testy: tiery T0–T3 a paralelní runner; QES 422/0, appka 223/0, JS 33/0,
   T2 659/0 a T3 660/0 (2026-10-28).
-- Nasazeno: produkce **v52** (`dokulachtan`, fork `cfd36b2c`), staging **v25**
+- Nasazeno: produkční instance **v52** (`dokulachtan`, fork `cfd36b2c`), staging **v25**
   (`dokulachtan-staging`, fork `cfd36b2c`); `/up` 200 na obou.
 
 **Zbývá**
@@ -290,10 +320,10 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 - Reálná čtečka eObčanky (P5 je stub/fake card; MOI SDK) — jinak je tok A hotový.
 - Kvalifikované časové razítko (nyní DigiCert free, non-qualified).
 - Produkční APK podepsaný release keystorem a přepnutí `QES_ANDROID_CERT_SHA256`
-  na release fingerprint; testovací APK je debug-signed. Do té doby App Links na produkci
+  na release fingerprint; testovací APK je debug-signed. Do té doby App Links na produkční instanci
   používají debug fingerprint (triage #18.1).
-- První reálný podpis na produkci s PostSignum certem.
-- TOFU ve forku `f1c28c2b` (origin serveru v podpisovém odkazu) — na produkci/staging
+- První reálný podpis na produkční instanci s PostSignum certem.
+- TOFU ve forku `f1c28c2b` (origin serveru v podpisovém odkazu) — na produkčních instancích
   zatím není nasazený; před použitím TOFU odkazu nasadit.
 - Otevřené nálezy z triage: [docs/24-triage-issues.md](docs/24-triage-issues.md).
 
@@ -313,3 +343,5 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 - Klíč nikdy neopustí telefon/čip; server vidí jen hash a podpis.
 - AdES se nikdy nesmí vydávat za QES (kontrola QCStatements `QcSSCD`).
 - Tajemství (SMTP, klíče) jen přes `fly secrets` / `.env`, nikdy do repa.
+- **„Produkce“ = privátní instance uživatele** s produkčním kódem (dnes Fly app `dokulachtan`), ne centrální
+  služba ani konkrétní URL; `RAILS_ENV=production` je jen prostředí Rails. Adresa instance se v každém nasazení mění.

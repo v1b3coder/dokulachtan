@@ -85,6 +85,6 @@ DocuSeal — jedna aplikace, jedna evidence, jeden e-mail. **Nestavíme druhý s
 
 - Reálná čtečka eObčanky (MOI Podpisové SDK) — v appce je zatím stub a fake card pro testy.
 - Kvalifikované časové razítko (nyní DigiCert free, non-qualified).
-- První reálný podpis na produkci s PostSignum certem.
+- První reálný podpis na produkční instanci s PostSignum certem.
 
 Úpravy DocuSealu, podpisová appka, AdES podpis, přímý podpis PDF i ověření PDF jsou hotové.

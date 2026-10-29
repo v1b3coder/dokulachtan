@@ -1,7 +1,7 @@
 # Test certificates
 
 Tento adresář obsahuje testovací certifikáty, CRL a listové testovací klíče
-a PKCS#12. Jsou to **jen testovací** materiály — neplatí pro produkci a nesmí
+a PKCS#12. Jsou to **jen testovací** materiály — neplatí pro produkční instanci a nesmí
 se použít s reálnými daty.
 
 - `ica/*.pem` — veřejné I.CA testovací root/qualified certy.
@@ -16,6 +16,6 @@ se použít s reálnými daty.
 
 **Trust anchor stagingu** (`root.key`) je v `test/certs-private/` (gitignored),
 protože jeho veřejný cert je trust root stagingu. Staging je testovací prostředí
-a nesmí obsahovat reálná data; produkce důvěřuje pouze PostSignum CA.
+a nesmí obsahovat reálná data; produkční instance důvěřuje pouze PostSignum CA.
 
 Cestu k privátnímu root klíči lze přepsat přes `TEST_PKI_DIR` v `.env.local`.

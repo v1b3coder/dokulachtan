@@ -12,8 +12,10 @@ neimplementuje, v cloudu ji řeší appka / lokální agent.
 **Aktualizace (2026-10-29):** prostředí je rozdělené na **produkci** `dokulachtan`
 (volume `dokulachtan_prod_data`, reálné PostSignum CA, `QES_REQUIRE_LTV=true`, bez testovacího
 rootu) a **staging** `dokulachtan-staging` (volume `dokulachtan_stg_restore`, testovací root +
-PostSignum CA, `QES_REQUIRE_LTV=false`). Konfigurace jsou v parent repu:
-`deploy/docuseal/fly.toml` = produkce, `fly.staging.toml` = staging (do forku se předávají přes
+PostSignum CA, `QES_REQUIRE_LTV=false`). Jsou to **dvě privátní instance uživatele** (self-hosted
+software), ne centrální služba; `https://dokulachtan.fly.dev/` je jen adresa produkční instance, ne adresa
+produktu. Konfigurace jsou v parent repu:
+`deploy/docuseal/fly.toml` = produkční instance, `fly.staging.toml` = staging (do forku se předávají přes
 `--config`). Aktuální release a ověření jsou v [AGENTS.md](../AGENTS.md#deployment).
 
 ## TL;DR
@@ -21,7 +23,7 @@ PostSignum CA, `QES_REQUIRE_LTV=false`). Konfigurace jsou v parent repu:
 **Ano.** Fork používá upstream Dockerfile a náš patch pro variantu B **nepřidává žádné systémové
 závislosti** (PAdES dělá HexaPDF, který už v image je). Kontejner je self-contained: web (Puma)
 + joby (Sidekiq) + Redis + automatické migrace. Na Fly tedy stačí **1 app + 1 volume** a databáze
-(SQLite na volume pro staging, Postgres pro produkci). Mobilní appka (Expo) se nasazuje zvlášť,
+(SQLite na volume v obou prostředích; Postgres je volba pro větší nasazení). Mobilní appka (Expo) se nasazuje zvlášť,
 není to kontejner.
 
 ## Co kontejner potřebuje (zjištěno z forku)
@@ -50,15 +52,16 @@ není to kontejner.
 
 Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro produkci: **C** nebo **E**.
 
-**Zvoleno pro obě prostředí: A** (1 app + volume + SQLite; `dokulachtan` = produkce,
-`dokulachtan-staging` = staging).
+**Zvoleno pro obě prostředí: A** (1 app + volume + SQLite; `dokulachtan` = produkce (instance uživatele),
+`dokulachtan-staging` = staging). Obě jsou privátní instance uživatele s produkčním kódem, ne centrální
+služba; „produkce“ tu neznamená konkrétní veřejné URL.
 
 ## Stav nasazení
 
 > Aktuální release, konfigurace a ověření jsou v [AGENTS.md](../AGENTS.md#deployment);
 > tato sekce popisuje jen architekturu prostředí.
 
-**Produkce `dokulachtan`** (<https://dokulachtan.fly.dev/>):
+**Produkce — instance `dokulachtan`** (<https://dokulachtan.fly.dev/> — adresa této instance):
 
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty)
   → `/data/docuseal`; starý volume `dokulachtan_data` byl smazán 2026-10-18.
@@ -72,7 +75,7 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
 - SMTP Brevo nastaveno (`deploy/smtp.prod.env`, gitignored); první účet vytváří uživatel
   v prohlížeči.
 
-**Staging `dokulachtan-staging`** (<https://dokulachtan-staging.fly.dev/>):
+**Staging — instance `dokulachtan-staging`** (<https://dokulachtan-staging.fly.dev/> — adresa této instance):
 
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`
   (obnovený ze snapshotu starého staging volume; účet a šablona „QES E2E (staging)“ k dispozici).
@@ -84,11 +87,11 @@ Doporučení pro staging: **A** (nejjednodušší) nebo **D** (externí DB). Pro
   `https://dokulachtan-staging.fly.dev/qes-test/root.crl` (`QES_TEST_CRL_PATH`).
 - `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`;
   `QES_ANDROID_CERT_SHA256=FA:C6:…:9C` (debug fingerprint testovacího APK).
-- SMTP Brevo (stejné creds jako produkce, `deploy/smtp.env`).
+- SMTP Brevo (stejné creds jako produkční instance, `deploy/smtp.env`).
 
 ## Konkrétní kroky (až se bude nasazovat)
 
-1. `deploy/docuseal/fly.toml` (produkce) / `fly.staging.toml` (staging) v parent repu: `[build] dockerfile`,
+1. `deploy/docuseal/fly.toml` (produkce = instance uživatele) / `fly.staging.toml` (staging) v parent repu: `[build] dockerfile`,
    `[http_service] internal_port = 3000`, `[[vm]] shared-cpu-1x 1GB`, `[[mounts]]` s vlastním volume,
    healthcheck na `/up`. `release_command` netřeba — migrace běží při startu.
 2. Secrets: `HOST` (veřejná URL), případně `DATABASE_URL`, SMTP. `SECRET_KEY_BASE` se vygeneruje sám
@@ -123,7 +126,7 @@ Dřívější pokus s `staging@example.com` / `noreply@example.com` se nedoruči
 | Prostředí | App | `SMTP_FROM` | Ověřeno |
 |---|---|---|---|
 | Staging | `dokulachtan-staging` | `<SMTP_FROM>` | STARTTLS + auth OK, `MAIL FROM` 250, `RCPT TO` 250 |
-| Produkce | `dokulachtan` | `<SMTP_FROM>` | totéž |
+| Produkce (instance) | `dokulachtan` | `<SMTP_FROM>` | totéž |
 
 Vyplnit stačí 6 hodnot (`SMTP_AUTHENTICATION` a `SMTP_ENABLE_STARTTLS` mají rozumný default):
 
@@ -140,9 +143,9 @@ Dvě cesty, jak je zadat (tajemství nikdy do repa):
 
 1. **UI DocuSealu** — `/settings/email` (Settings → Email). Uloží se zašifrovaně v DB na volume,
    nepotřebuje redeploy a DocuSeal při uložení sám pošle testovací e-mail na `from_email`.
-2. **fly secrets** — vyplň `deploy/smtp.env` (staging) nebo `deploy/smtp.prod.env` (produkce), oba gitignored,
+2. **fly secrets** — vyplň `deploy/smtp.env` (staging) nebo `deploy/smtp.prod.env` (produkční instance), oba gitignored,
    vzory `deploy/smtp*.env.example`, a spusť `make smtp-setup APP=dokulachtan-staging`
-   (produkce: `APP=dokulachtan SMTP_FILE=deploy/smtp.prod.env`); pak `make smtp-check APP=…`
+   (produkční instance: `APP=dokulachtan SMTP_FILE=deploy/smtp.prod.env`); pak `make smtp-check APP=…`
    a `make smtp-test APP=… TO=adresa@example.com` — testovací e-mail se posílá na `TO=`, protože
    `SMTP_FROM` (např. `example.com` bez MX) nemusí umět přijímat poštu.
 
@@ -210,8 +213,8 @@ fronta ve *Real time → Usage and plan → Email queue*.
 
 - Build: EAS (cloud) nebo lokálně `npx expo run:android` (SDK + Gradle jsou k dispozici).
 - Staging: APK s `EXPO_PUBLIC_API_URL` na staging URL; distribuce interně (přímý APK / Firebase
-  App Distribution; TestFlight později). Testovací APK z `deploy/apk/` má výchozí produkci a na staging se
-  přepíná v appce *Nastavení → Server URL*; pro App Links na staging je potřeba rebuild APK s hostem
+  App Distribution; TestFlight později). Testovací APK z `deploy/apk/` má výchozí adresu produkční instance
+uživatele a na staging se přepíná v appce *Nastavení → Server URL*; pro App Links na staging je potřeba rebuild APK s hostem
   `dokulachtan-staging.fly.dev`.
 - Deep link: custom scheme `dokulachtan://` funguje vždy; App Links (https) servíruje
   `Qes::WellKnownController` (`assetlinks.json` a `apple-app-site-association`) a jsou vázané na host
