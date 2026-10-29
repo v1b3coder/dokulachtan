@@ -22,7 +22,7 @@ jsou označené jako mimo rozsah.
 | 15 | Dvě připravené revize nad jedním PDF | opraveno (aktivní revize pod zámkem + unikátní index) | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | opraveno (snapshot při vzniku, `level` ze submissionu) | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
-| 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 potvrzeno (latentní) | P2 |
+| 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 opraveno | P2 |
 | 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
 | 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
@@ -32,16 +32,19 @@ jsou označené jako mimo rozsah.
 
 ## 2. P0 — bezpečnost a ztráta dat
 
-### #18.2 CI extrahuje prázdný otisk
+### #18.2 CI extrahuje prázdný otisk — **opraveno**
 
-`.github/workflows/android-release.yml:111` parsuje `apksigner verify --print-certs` jako `awk -F': ' '{print $3}'`.
+`.github/workflows/android-release.yml:111` parsoval `apksigner verify --print-certs` jako `awk -F': ' '{print $3}'`.
 Ověřeno lokálně: build-tools **35/36** tisknou `Signer #1 certificate SHA-256 digest: <hex>` → `$3` je prázdné
 → správně podepsaný APK je odmítnut. Build-tools **37** tiskne `V2 Signer: certificate SHA-256 digest: <hex>` → `$3` funguje.
 **Korekce triage (2026-10-29):** run `40491396716` (v1.3.9, 2026-10-27) prošel s `APK SHA-256: 80dc86ef…c3e0`
 a publikovaný APK je podepsaný release klíčem — runner tedy vybírá build-tools 37+, ne 36. Nález je
 **latentní** (parser je špatný pro ≤36, ale dnes release neblokuje), ne „dnes rozbitý“.
 
-Oprava: `grep -oE '[0-9a-fA-F]{64}' | head -1` místo `awk`, plus test formátu v CI (obě varianty výstupu).
+**Oprava (2026-10-29):** `scripts/apk_fingerprint.sh` vytáhne první 64hex pole (ne sloupec), takže funguje
+na obou formátech; workflow ho volá místo `awk`, před buildem běží `make apk-fingerprint-test`
+(`scripts/apk_fingerprint_test.sh` — oba formáty, ignorování SHA-1, chybějící otisk = nenulový exit).
+Ověřeno lokálně na reálném `apksigner` 34/35/36/37 a na release APK v1.3.9.
 
 ### #14 Dokončení přes token relace nehlídá stav submissionu — **opraveno**
 
@@ -294,7 +297,7 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 |---|---|---|
 | F3 | #14, #15 | stav submissionu a souběh revizí; potřebuje migraci (částečný index) |
 | F4 | #16, #4 | snapshot polí a `required`; jeden hook, dva testy |
-| F5 | #18.2 | CI `awk` — extrakce otisku z `apksigner` (workflow, ne kód forku) |
+| F5 | #18.2 | hotovo: `scripts/apk_fingerprint.sh` + test v CI |
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |

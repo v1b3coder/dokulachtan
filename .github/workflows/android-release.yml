@@ -28,6 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ověřit parser otisku (#18.2)
+        run: ./scripts/apk_fingerprint_test.sh
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -108,7 +111,8 @@ jobs:
             exit 1
           fi
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)"
-          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK_NAME" | awk -F': ' '/SHA-256/{print $3; exit}' | tr 'A-F' 'a-f')"
+          echo "apksigner: $APKSIGNER"
+          ACTUAL="$("$APKSIGNER" verify --print-certs "$APK_NAME" | ./scripts/apk_fingerprint.sh)"
           EXPECTED="$(printf '%s' "$ANDROID_RELEASE_CERT_SHA256" | tr -d ':' | tr 'A-F' 'a-f')"
           echo "APK SHA-256: $ACTUAL"
           if [ "$ACTUAL" != "$EXPECTED" ]; then
