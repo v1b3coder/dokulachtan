@@ -14,8 +14,8 @@ jsou označené jako mimo rozsah.
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
 | 8 | Prázdná ENV vypne default bez varování | potvrzeno | P2 |
-| 9 | Důvěra na úrovni kořene širší než TSL | potvrzeno (policy) | P2 |
-| 10 | `QES_ENABLED=false` není úplný vypínač | potvrzeno (úzké) | P2 |
+| 9 | Důvěra na úrovni kořene širší než TSL | opraveno (anchory = vydávající CA) | P2 |
+| 10 | `QES_ENABLED=false` není úplný vypínač | opraveno (feature gate ve všech hoocích) | P2 |
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | potvrzeno | P1 |
 | 12 | Account fallback důvěřuje klíči, ne certu | potvrzeno | P1 |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | potvrzeno | **P0** |
@@ -171,13 +171,25 @@ udělat jako chybu, ne jako průchod.
   Oprava: `from_env` vrací default, když je `ENV[env_name].blank?`, kromě `ltv_allowed_hosts` (prázdná = vypnuto);
   initializer zaloguje počet kořenů v každém store a seznam nenalezených souborů; při `QES_ENABLED=true` a nule
   signing kořenů odmítnout start. Test: `QES_TRUST_ROOTS=` → default; `QES_EXPIRY_JOB_INTERVAL=` → 60.
-- **#9** `config/qes/czech.pem`, `validator.rb` — `store.verify` s kořeny jako trust anchors důvěřuje celému podstromu;
-  kvalifikovanost se bere jen z QCStatements listu. Rozhodnutí: buď README „důvěra v kořeny z TSL, ne validace podle TSL",
-  nebo do verification store dávat přímo vydávající CA z TSL. Dnes dokumentace mluví o kořenech — doplnit větu a zavřít.
+- **#9** `config/qes/czech.pem`, `validator.rb` — `store.verify` s kořeny jako trust anchors důvěřoval celému podstromu;
+  kvalifikovanost se brala jen z QCStatements listu. **Opraveno (2026-10-29):** bundle obsahuje jen
+  15 vydávajících CA z TSL (žádný root) a `verified_chain` nastavuje `X509_V_FLAG_PARTIAL_CHAIN`, takže
+  řetěz končí na vydávající CA. Testy: `trust_roots_spec` (žádný self-signed, 15) a `validator_spec`
+  (list pod CA mimo anchory není trusted). Detail: `docs/10-qes.md`, SPEC § 7.5.
 - **#10** `extensions.rb:9-25`, `initializers/qes_routes.rb`, `create_from_submitters.rb:13`, `expire_sessions_job.rb` —
-  při `QES_ENABLED=false` zůstávají routy i prepend extensions; `required` rewrite běží dál; už naplánovaný job
-  se plánuje dál. Oprava: hook začínat `return super unless Qes.enabled?` (hlavně `create_from_submitters`) a v README
-  napsat, že změna vyžaduje restart.
+  při `QES_ENABLED=false` zůstávaly routy i prepend extensions; `required` rewrite běžel dál; už naplánovaný job
+  se plánoval dál. **Opraveno (2026-10-29):** `QES_ENABLED` je feature gate forku ve všech hoocích —
+  `template.rb` (validace pořadí), `submission.rb` (vynucení `preserved`), `create_from_submitters.rb`
+  (`required` ze snapshotu), `submit_values.rb` (zámek řádku), `expire_sessions_job.rb` (`perform` i `reschedule!`)
+  a čtyři endpointy bez guardu (`/qes/sign`, `.well-known/*`, `/qes-test/root.crl`,
+  `templates/:id/qes_verification`) přes `Qes::ControllerConcern` → 404.
+  Záměrně **není** gate v `Extensions.install!`: prependy zůstávají (jinak by zmizel
+  `has_many :qes_sessions, dependent: :destroy` a smazání submittera by spadlo na FK) a jsou inertní.
+  Důsledek feature gate je destruktivní a je popsaný v `docs/10-qes.md`: s vypnutým QES se použije
+  upstream generátor, takže regenerované PDF u dokončeného podpisu ztratí QES revizi (uložený
+  `final_document` zůstává). Testy: `template_spec`, `submission_spec`, `expire_sessions_job_spec`,
+  `qes_disabled_spec` (4×), `qes_template_errors_spec`; bez guardů 8/8 červených, s guardy T0 447/1
+  (1 flaky `qes_session_documents_spec` na hranici sekundy v `expires_at`).
 - **#22** `pdfShare.ts:106` — `downloadPdf` předá URL z API rovnou `File.downloadFileAsync` bez kontroly schématu/origin.
   Dopad nízký (přesměrování podepsanou URL jinému hostu nepředá), ale chybí vazba na server z Nastavení.
   Oprava: před stažením ověřit `https` a host proti serveru z Nastavení (nebo nakonfigurovanému úložišti),

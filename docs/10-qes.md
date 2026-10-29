@@ -20,7 +20,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 
 | ENV | Default | Význam |
 |---|---|---|
-| `QES_ENABLED` | `true` | vypínač QES; `false` jen pro upstream/ne-QES instanci |
+| `QES_ENABLED` | `true` | feature gate forku: `false` = chování upstream DocuSealu (viz níže) |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
@@ -29,7 +29,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
-| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF (PEM, čárkou oddělené) |
+| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: vydávající CA českých kvalifikovaných certů pro ověření cizích PDF (PEM, čárkou oddělené; anchory, ne rooty) |
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepište |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
@@ -46,42 +46,72 @@ staging přepisuje verification trust roots, `QES_REQUIRE_LTV`, test CRL a allow
 Kdo nechce TSA, dá `QES_TSA_URL=` a `QES_TSA_REQUIRED=false`. `QES_ENABLED=false` vypne QES
 na upstream/ne-QES instanci.
 
-Trust roots: `Qes::Validator` staví OpenSSL store z předaných trust roots **a z intermediate certifikátů
-z CMS** (SPEC § 7.5), takže v seznamu stačí root; leaf se ověřuje řetězem (self-signed certifikát
-projde jen když je sám sobě rootem — a pak `422 not_trusted`, SPEC § 5.2).
+`QES_ENABLED` je **feature gate forku**, ne jen vypínač podpisu: s `false` se nespustí žádný náš kód,
+který mění chování DocuSealu (nález #10):
+
+- QES endpointy vrací `404 {"error":"disabled"}` — `/qes/sessions/*`, `/s/:slug/qes_sessions`,
+  `/api/qes/*`, `/qes/sign`, `/qes/app`, `.well-known/assetlinks.json`,
+  `.well-known/apple-app-site-association`, `/qes-test/root.crl`
+  i `templates/:id/qes_verification`. Podepsat obřad tedy nejde spustit ani dokončit.
+- Nespouští se QES validace šablony (`qes_signing_order`), vynucení `submitters_order: preserved`,
+  přepis `required` u QES polí z API, zámek řádku při submit a `ExpireSessionsJob`.
+- Použije se upstream generátor PDF. **Důsledek: regenerované PDF u už dokončeného QES podpisu
+  ztratí QES revizi.** Uložený `final_document` v QES session zůstává, ale `submission.documents`
+  se přepne na nepodepsané PDF. Vypínej QES až po dokončení otevřených oběhů a neotvírej jím
+  podepsané dokumenty znovu (regenerace).
+- Změna se čte při každém volání (`Qes::Config` nemá memoizaci), takže `fly secrets set QES_ENABLED=false`
+  (restart machine, ne redeploy image) stačí a platí pro všechny nové requesty.
+- Vypnutý QES nerevaliduje existující šablony: QES šablonu jde s vypnutým QES upravit i od-QESovat,
+  ale po opětovném zapnutí se validace vztáhne i na ni.
+
+Trust roots: `Qes::Validator` staví OpenSSL store z předaných trust anchorů **a z intermediate
+certifikátů z CMS** (SPEC § 7.5). Anchory jsou **vydávající CA** (service digital identity z TSL),
+ne rooty: root jako anchor by důvěřoval celému podstromu, tj. i CA, které v TSL nejsou nebo z něj byly
+staženy. Store proto nastavuje `X509_V_FLAG_PARTIAL_CHAIN`, aby řetěz skončil na vydávající CA, i když
+není self-signed. Self-signed cert je anchor jen tehdy, když ho do seznamu dáte explicitně (testovací root
+na stagingu); self-signed cert podepisujícího projde jen když je sám sobě anchorem, a pak `422 not_trusted`
+(SPEC § 5.2).
 
 `QES_TRUST_ROOTS` je **signing** trust store: které certy smí podepsat v tomto DocuSealu.
 Výchozí je PostSignum (`config/qes/postsignum.pem`: Root QCA 4 + Qualified CA 4/5 + Root QCA ECC R1
-+ Qualified ECC R1 CA1/CA3).
++ Qualified ECC R1 CA1/CA3). Rooty tu zůstávají i jako zdroj issuer certů pro CRL (`Qes::Ltv.issuer_for`).
 
-`QES_VERIFICATION_TRUST_ROOTS` je **verification** trust store: české kvalifikované CA pro ověření
-cizích PDF (`config/qes/czech.pem`: PostSignum, I.CA, eIdentity, NCA, KB). Ověření tak nevnucuje
-všechny české QTSP jako podepisující autority.
+`QES_VERIFICATION_TRUST_ROOTS` je **verification** trust store: vydávající CA českých kvalifikovaných
+certifikátů pro ověření cizích PDF (`config/qes/czech.pem`: PostSignum, I.CA, eIdentity, NCA, KB).
+Ověření tak nevnucuje všechny české QTSP jako podepisující autority a nedůvěřuje podstromům rootů.
 
 ### Český verification bundle (`config/qes/czech.pem`)
 
-Stav 2026-10-28, 29 certů:
+Stav 2026-10-29, 15 certů — jen **vydávající CA** (trust anchory), žádný root:
 
-- **PostSignum** (6): Root QCA 4, Qualified CA 4/5, Root QCA ECC R1, Qualified ECC R1 CA1/CA3.
-- **I.CA** (11): Root CA/RSA, Root CA/ECC 12/2016, Root CA/RSA a ECC 05/2022,
-  Root CA/RSA v2 10/2026, QCA1/RSA v2 10/2026, EU Qualified CA2/RSA a ECC 06/2022,
-  Qualified 2 CA/ECC 06/2019, Qualified 2 CA/RSA 02/2016, Qualified CA/RSA 07/2015.
-- **eIdentity** (4): ACAeID3 Root, ACAeID3.1/3.2/3.3 Issuing.
-- **NCA** (6): Root CA/RSA a ECC 10/2023, SubCA1/2 RSA a ECC.
-- **Komerční banka** (2): KB Root 3 CA, Komerční banka Qualified CA/RSA.
+- **PostSignum** (4): Qualified CA 4/5, Qualified ECC R1 CA1/CA3.
+- **I.CA** (5): EU Qualified CA2/RSA a ECC 06/2022, Qualified 2 CA/RSA 02/2016,
+  Qualified 2 CA/ECC 06/2019, Qualified CA/RSA 07/2015 (expirovaná).
+- **eIdentity** (3): ACAeID3.1 (expirovaná), ACAeID3.2 a 3.3 Issuing.
+- **NCA** (2): SubCA1/RSA a ECC 10/2023.
+- **Komerční banka** (1): Komerční banka Qualified CA/RSA.
+
+Zdroj a pravidlo výběru: TSL ČR (`tsl.gov.cz/publ/TSL_CZ.xtsl`), služby typu CA/QC se statusem
+`granted`; anchor je jejich service digital identity (certifikát vydávající CA). Rooty, TLS/TSA CA a CA
+mimo TSL se do bundlu nedávají — bundle proto **není** totéž co celý TSL a při změně TSL se porovnává ručně.
 
 Expired intermediates (I.CA 2015/2016, eIdentity 3.1) jsou v bundle záměrně: podpis
 s časovým razítkem se validuje k času razítka, ne k aktuálnímu datu. Signing trust store
 `config/qes/postsignum.pem` zůstává bez nich.
 
+Známé mezery (vědomé, ne bug): starší PostSignum Qualified CA 1/2/3 a self-signed I.CA qualified rooty
+jsou v TSL `granted`, ale v bundlu nejsou — podpis certem z nich vyjde `valid_untrusted`. Nová I.CA
+hierarchie (`I.CA QCA1/RSA v2 10/2026`) v TSL ze 2026-09-14 ještě není; přidá se přes
+`QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/czech.pem,/cesta/qca1.pem`, až bude v TSL.
+
 Regenerace: stáhnout PEM z webů CA (I.CA `ica.cz/en/root-certificates`, eIdentity
 `eidentity.cz/certifikaty-certifikacnich-autorit`, NCA `narodni-ca.gov.cz/Dokumenty.aspx`,
-KB `kb.cz/cs/certifikacni-sluzby-kb/kvalifikovane-certifikaty`), sloučit s `postsignum.pem`
-a ověřit počet:
+KB `kb.cz/cs/certifikacni-sluzby-kb/kvalifikovane-certifikaty`), ponechat jen vydávající CA
+z TSL a ověřit počet:
 
 ```bash
 openssl crl2pkcs7 -nocrl -certfile config/qes/czech.pem \
-  | openssl pkcs7 -print_certs -noout | grep -c '^subject'   # 29
+  | openssl pkcs7 -print_certs -noout | grep -c '^subject'   # 15
 make qes-test-qes
 ```
 
@@ -239,7 +269,7 @@ v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL Post
 QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem
 #   root.crt = testovací root (testovací APK); postsignum.pem = reálné PostSignum certy pro podpis;
-#   czech.pem = české kvalifikované CA pro ověření (PostSignum, I.CA, eIdentity, NCA, KB)
+#   czech.pem = vydávající CA pro ověření (anchory; PostSignum, I.CA, eIdentity, NCA, KB), ne rooty
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
 QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; lokální bleeding-edge build
 QES_REQUIRE_LTV=false
@@ -261,7 +291,7 @@ QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48
 (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
 (`deployment-01M61RKSP8C594JRPAEKTR3VZT`), obě z forku `cfd36b2c`. Signing
 `QES_TRUST_ROOTS` zůstává PostSignum (prod 6; staging test root + 6 PostSignum = 7),
-verification `QES_VERIFICATION_TRUST_ROOTS` je `czech.pem` (prod 29; staging test root + 29 = 30).
+verification `QES_VERIFICATION_TRUST_ROOTS` je `czech.pem` (prod 15; staging test root + 15 = 16).
 `/up` 200, `POST /api/qes/verify` a `/api/qes/documents` → 401, `/qes-test/root.crl` → 404;
 `make qes-staging-e2e` (6 signatur) a `qes-staging-e2e-pdf` (3 signatury) zelené.
 
