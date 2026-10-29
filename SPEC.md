@@ -829,7 +829,10 @@ a session označit `failed` (nikdy nezkracovat podpis).
 
 `Qes::Validator.call(signed_pdf_bytes, trust_roots:, at:)` — `trust_roots` je **verification**
 trust store (`QES_VERIFICATION_TRUST_ROOTS`, výchozí `config/qes/czech.pem`); signing acceptance
-používá samostatný `QES_TRUST_ROOTS` (výchozí `config/qes/postsignum.pem`, § 5.2):
+používá samostatný `QES_TRUST_ROOTS` (výchozí `config/qes/postsignum.pem`, § 5.2). Trust anchory
+v `trust_roots` **MUSÍ** být vydávající CA (TSL service digital identity), ne rooty; store nastavuje
+`X509_V_FLAG_PARTIAL_CHAIN`, takže řetěz končí na vydávající CA. Root jako anchor by důvěřoval celému
+podstromu, tj. i CA, které v TSL nejsou (nález #9). Postup:
 1. **Pdfium** (`VerifyPdfSignature.call`) — interní validace jako u DocuSealu; výsledek se ukládá do `validation_report`.
 2. **Všechny signatury**: `signature_dicts` vrací všechny signatury v aktuální revizi; `intact` = kryptografická
    platnost všech (NOVERIFY — kontroluje se jen signatura, ne řetěz), `trusted` = jen QES signatury

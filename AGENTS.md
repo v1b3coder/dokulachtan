@@ -118,7 +118,7 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 - **Testovací APK** na `dokulachtan-download.fly.dev` = Gradle `release` varianta **s debug Android podpisem** (standalone JS bundle, `arm64-v8a`, testovací dokumentový cert + stub čtečky). Není to produkční APK.
 - **Produkční APK** = `assembleRelease` s `ANDROID_KEYSTORE_PATH` + `deploy/android-release/release.properties`, podepsaný release keystorem; jen CI/distribuce, nikdy testovací APK.
 - **Gradle `release` varianta ≠ produkční podpis.** Rozhoduje `ANDROID_KEYSTORE_PATH`, ne název varianty.
-- **PostSignum certy** s Android podpisem APK nesouvisí: signing `QES_TRUST_ROOTS` má jen PostSignum, verification `QES_VERIFICATION_TRUST_ROOTS` české CA (`czech.pem`), staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
+- **PostSignum certy** s Android podpisem APK nesouvisí: signing `QES_TRUST_ROOTS` má jen PostSignum, verification `QES_VERIFICATION_TRUST_ROOTS` vydávající CA (`czech.pem`, anchory — ne rooty), staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
 - `QES_ANDROID_CERT_SHA256` na Fly = fingerprint **Android podpisu testovacího APK** (nyní debug `FA:C6:…:9C`), ne cert dokumentu. Při nasazení produkčního APK z CI se přepne na `80:DC:…:E0`.
 - Testovací telefon s debug-signed APK **nejde** aktualizovat produkčním APK přes `adb install -r` (jiný podpis); vyžaduje uninstall a nový import `.p12`.
 
@@ -137,8 +137,8 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty) → `/data/docuseal`;
   starý volume `dokulachtan_data` byl smazán 2026-10-18.
 - Release **v52** (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), fork `cfd36b2c`.
-- `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 29 českých CA
-  (`config/qes/czech.pem`), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
+- `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 15 vydávajících CA
+  (`config/qes/czech.pem`, anchory — žádné rooty), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
   TSA roots 1, `tsa_required=true`; CRL fetch z produkční instance OK.
 - V secrets jen `QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256` a SMTP; ostatní defaulty
   jsou ve forku (`QES_ENABLED=true`, PostSignum CRL hosty a trust roots, DigiCert TSA).
@@ -306,7 +306,7 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   „Direct signing“), sdílení PDF do appky, stažení/uložení/sdílení finálního PDF.
 - Ověření PDF: `POST /api/qes/verify`, `POST /api/qes/verified_documents`, appka S14/S15,
   webový panel na template show, externí ověření přes EU DSS jen v appce.
-- Trust stores: signing PostSignum, verification české CA (`config/qes/czech.pem`), TSA DigiCert;
+- Trust stores: signing PostSignum, verification vydávající CA (`config/qes/czech.pem`, anchory, ne rooty), TSA DigiCert;
   defaulty pro český deployment jsou v `Qes::Config::DEFAULTS`.
 - Appka: Expo SDK 58, vault s AES-256-GCM a biometrií, import PKCS#12, přímý podpis
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.

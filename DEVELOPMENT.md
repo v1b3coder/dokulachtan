@@ -109,7 +109,7 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 |---|---|---|
 | `QES_ENABLED` | `true` | zapne QES vrstvu (`false` pro upstream/ne-QES) |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat (čárkou oddělené cesty) |
-| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF |
+| `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: vydávající CA pro ověření cizích PDF (anchory, ne rooty) |
 | `QES_REQUIRE_LTV` | `true` | vyžaduje LTV data pro certy bez CRL DP |
 | `QES_LTV_ALLOWED_HOSTS` | PostSignum a I.CA hosty | allowlist hostů pro CRL (SSRF ochrana); prázdná hodnota = jen https a veřejná adresa |
 | `QES_TSA_URL`, `QES_TSA_TRUST_ROOTS`, `QES_TSA_REQUIRED` | DigiCert / `config/qes/digicert-tsa.pem` / `true` | časové razítko (RFC 3161) |
@@ -118,8 +118,8 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID` | App Links pro konkrétní build |
 
 Výchozí signing trust store je PostSignum (`config/qes/postsignum.pem`), verification trust store je
-český bundle (`config/qes/czech.pem`). Staging přidává testovací root do obou přes `QES_TRUST_ROOTS` a
-`QES_VERIFICATION_TRUST_ROOTS`. Pro iSignum/I.CA přidej její root do `QES_VERIFICATION_TRUST_ROOTS`
+český bundle (`config/qes/czech.pem`) s jen vydávajícími CA (žádné rooty). Staging přidává testovací root do obou přes `QES_TRUST_ROOTS` a
+`QES_VERIFICATION_TRUST_ROOTS`. Pro iSignum/I.CA přidej její vydávající CA do `QES_VERIFICATION_TRUST_ROOTS`
 (signing trust store měň jen když má daná CA podepisovat).
 Defaulty jsou pro český deployment; ENV je override (`QES_REQUIRE_LTV=false` na stagingu/testech).
 

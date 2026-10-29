@@ -66,8 +66,8 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty)
   → `/data/docuseal`; starý volume `dokulachtan_data` byl smazán 2026-10-18.
 - signing `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA),
-  verification `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (PostSignum, I.CA,
-  eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=true`, `QES_ENABLED=true`.
+  verification `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (vydávající CA, ne rooty:
+  PostSignum, I.CA, eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=true`, `QES_ENABLED=true`.
 - `QES_ANDROID_CERT_SHA256` = fingerprint **Android podpisu testovacího APK** (debug
   `FA:C6:…:9C`); při nasazení produkčního APK z CI se přepne na release `80:DC:…:E0`.
 - healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet); migrace automaticky při startu;
