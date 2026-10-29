@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 18 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 17 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -11,7 +11,6 @@ jsou označené jako mimo rozsah.
 
 | # | Titulek (zkráceně) | Verdikt | Priorita |
 |---|---|---|---|
-| 3 | Generátor PDF podle šablony, ne podle podpisu | potvrzeno | **P0** |
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
 | 6 | Submenu úrovně podpisu se nevykreslí | potvrzeno | P1 |
@@ -42,25 +41,6 @@ Ověřeno lokálně: build-tools **35/36** tisknou `Signer #1 certificate SHA-25
 `find … | sort -V | tail -1` na runneru dnes vybere 36 → release cesta je rozbitá (selhává bezpečně, ale nefunguje).
 
 Oprava: `grep -oE '[0-9a-fA-F]{64}' | head -1` místo `awk`, plus test formátu v CI (obě varianty výstupu).
-
-### #3 Generátor výsledného PDF se vybírá podle šablony
-
-`generate_result_attachments.rb:8` a `generate_combined_attachment.rb:8` se rozhodují přes `Qes.active_for?`
-(šablona má QES pole), ne přes dokončenou session. `signing_values.rb:51` gatuje zachování podepsaných hodnot stejně.
-
-Dopady (oba potvrzené čtením kódu):
-1. Volitelné `qes` pole, které podepisující nepodepsal → `Qes::ResultAttachments.call` vrátí `[]`, upstream generátor
-   se nezavolá a **výsledný dokument nevznikne**.
-2. Dokončený QES podpis a později `QES_ENABLED=false` (nebo úprava polí šablony) → `active_for?` je false,
-   upstream generátor přestaví stránky a **kvalifikovaný podpis se ztratí** (a auditní stránka QES se nepřidá).
-
-Oprava: rozhodovat podle `submitter.qes_sessions.completed.exists?` na všech třech místech
-(`generate_result_attachments.rb:8`, `generate_combined_attachment.rb:8`, `signing_values.rb:51`).
-`Qes::Hooks.result_attachments` / `combined_attachment` (`hooks.rb:9-19`) nemají volajícího — smazat.
-
-Testy: (a) volitelné `qes` pole nepodepsané → upstream generátor proběhne a `documents` existuje;
-(b) dokončená session + `QES_ENABLED=false` → `ResultAttachments` se použije, podpis zůstane INTACT;
-(c) totéž pro `combined_document` a `finalize!`.
 
 ### #14 Dokončení přes token relace nehlídá stav submissionu
 
@@ -266,7 +246,6 @@ při vydání produkčního APK). Žádná změna kódu.
 
 | Blok | Issues | Proč první |
 |---|---|---|
-| F1 | #3 | ztráta kvalifikovaného podpisu při `QES_ENABLED=false`; nejdřív testy, pak jednořádková změna gate |
 | F3 | #14, #15 | stav submissionu a souběh revizí; potřebuje migraci (částečný index) |
 | F4 | #16, #4 | snapshot polí a `required`; jeden hook, dva testy |
 | F5 | #18.2 | CI `awk` — extrakce otisku z `apksigner` (workflow, ne kód forku) |
@@ -276,7 +255,7 @@ při vydání produkčního APK). Žádná změna kódu.
 | F9 | #5, #6, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
-před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #3, #14, #16.
+před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #14, #16.
 
 ## 8. Poznámky
 

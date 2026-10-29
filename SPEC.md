@@ -885,7 +885,9 @@ Přesný seznam **21 doteků** upstreamu, jejich změny a počty řádků je v �
 
 Generátory rozhodují podle **dokončené QES session** (`submitter.qes_sessions.completed.exists?`),
 ne podle šablony: volitelné `qes` pole bez podpisu musí dostat upstream PDF a finální PDF
-session se použije i po vypnutí QES nebo změně polí šablony (nález #3).
+session se použije i po změně polí šablony (nález #3). `QES_ENABLED=false` zůstává **feature
+gate** — s vypnutým QES se QES kód nespouští a starší podepsaný dokument projde
+ne-QES cestou (očekávané chování).
 - `app/views/submissions/_value.html.erb`, `show.html.erb` — přehled podpisu,
 - `app/views/templates/show.html.erb`, `edit.html.erb`, `templates_preview/show.html.erb` — panel a chyby,
 - `app/javascript/submission_form/form.vue`, `area.vue` — krok a oblast formuláře,
@@ -1569,7 +1571,7 @@ Oba dokumenty teď musí být v souladu; případný další rozpor je chyba, kt
 | 21 | Vlastní tabulka `qes_pdf_sessions` a vlastní pipeline pro přímý podpis | **Zamítnuto 2026-10-18** (rozhodnutí uživatele: minimum vlastního kódu) — přímý podpis jede standardním DocuSeal tokem: šablona s polem `qes`, submission, běžný obřad; fork přidává jen nahrání PDF a API token pro spuštění obřadu | docs/15, SPEC § 4.8 a § 5.8 |
 | 22 | TBS PDF a `document_digest` v `GET /qes/sessions/:token` | **Opraveno 2026-10-22**: pevná rezerva 20 000 B nestačila na reálný CMS — CRL PostSignum Qualified CA 4 má 812 863 B a do CMS jde 2× (ETSI + Adobe), tj. ~1,63 MB; reálný certifikát končil `signature_size_exceeded` | TBS se staví až po přijetí certifikátu, rezerva = `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN`; `document_digest` se počítá tamtéž (§ 7.1, § 11). **Od 2026-10-27** nahrazeno pevnou rezervou `QES_SIGNATURE_RESERVE` a TBS se staví **před** certifikátem (§ 5.1a); `estimate_size`/`SIGNATURE_SIZE_MARGIN` odstraněny. |
 | 23 | LTV v CMS (ETSI `RevocationValues` + Adobe `RevocationInfoArchival`) | **Změněno 2026-10-22**: pyHanko unsigned atributy nečte (čte DSS a signed Adobe revinfo); CRL v CMS byl 2× ~813 kB a zvětšoval PDF; Adobe LTV používá DSS VRI | Revokační data jen v DSS s VRI, krytá DocTS (§ 7.4, § 7.6) |
-| 24 | Generátor výsledného PDF se vybírá podle šablony (`Qes.active_for?`) | **Opraveno 2026-10-29 (nález #3)**: rozhoduje dokončená QES session, ne pole v šabloně — volitelné `qes` pole bez podpisu vracelo prázdné `documents` | § 7.7 |
+| 24 | Generátor výsledného PDF se vybírá podle šablony (`Qes.active_for?`) | **Opraveno 2026-10-29 (nález #3)**: rozhoduje dokončená QES session, ne pole v šabloně — volitelné `qes` pole bez podpisu vracelo prázdné `documents`; `QES_ENABLED` zůstává feature gate | § 7.7 |
 
 Kde je co v DESIGN.md opravené (řetěz DESIGN → SPEC):
 - § 3.1 — `preferences.level` (per-field), vícenásobní signeři a řetězení revizí,
