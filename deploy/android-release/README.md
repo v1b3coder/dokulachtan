@@ -65,11 +65,9 @@ stejnými názvy.
 
 ## Nasazení a migrace
 
-- Obě privátní instance na Fly (staging i produkce) mají `QES_ANDROID_CERT_SHA256` nastavený na **debug** fingerprint
-  `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`,
-  protože prostředí používají lokální bleeding-edge debug build.
-- Pokud na Fly nasadíš release APK z CI, přepni `QES_ANDROID_CERT_SHA256` na release fingerprint
-  `80:DC:...:E0`; jinak App Links nebudou fungovat.
+- Android App Links (`assetlinks.json`) **zrušeny** (#18.1): odkaz jde přes custom scheme
+  `dokulachtan://sign` a systémový chooser, takže na Fly už není co nastavovat.
+- iOS Universal Links (`apple-app-site-association`) zůstávají; `QES_IOS_TEAM_ID` se nastavuje v DocuSealu.
 - Stávající instalace s debug podpisem **nepůjde aktualizovat** release APK.
   Je potřeba odinstalovat, nainstalovat novou verzi a znovu importovat `.p12`
   (klíč se v telefonu neuchovává mimo aplikaci).

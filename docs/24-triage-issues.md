@@ -22,13 +22,13 @@ jsou označené jako mimo rozsah.
 | 15 | Dvě připravené revize nad jedním PDF | opraveno (aktivní revize pod zámkem + unikátní index) | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | opraveno (snapshot při vzniku, `level` ze submissionu) | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
-| 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 mimo rozsah (config), 18.2 potvrzeno | P1 |
+| 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 potvrzeno (latentní) | P2 |
 | 19 | LTV bez revokace mezilehlé CA | potvrzeno | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
 | 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
 
-**Wontfix v kódu:** #18.1 (konfigurace distributora appky), #23.1, #23.2.
+**Wontfix v kódu:** #23.1, #23.2.
 
 ## 2. P0 — bezpečnost a ztráta dat
 
@@ -37,7 +37,9 @@ jsou označené jako mimo rozsah.
 `.github/workflows/android-release.yml:111` parsuje `apksigner verify --print-certs` jako `awk -F': ' '{print $3}'`.
 Ověřeno lokálně: build-tools **35/36** tisknou `Signer #1 certificate SHA-256 digest: <hex>` → `$3` je prázdné
 → správně podepsaný APK je odmítnut. Build-tools **37** tiskne `V2 Signer: certificate SHA-256 digest: <hex>` → `$3` funguje.
-`find … | sort -V | tail -1` na runneru dnes vybere 36 → release cesta je rozbitá (selhává bezpečně, ale nefunguje).
+**Korekce triage (2026-10-29):** run `40491396716` (v1.3.9, 2026-10-27) prošel s `APK SHA-256: 80dc86ef…c3e0`
+a publikovaný APK je podepsaný release klíčem — runner tedy vybírá build-tools 37+, ne 36. Nález je
+**latentní** (parser je špatný pro ≤36, ale dnes release neblokuje), ne „dnes rozbitý“.
 
 Oprava: `grep -oE '[0-9a-fA-F]{64}' | head -1` místo `awk`, plus test formátu v CI (obě varianty výstupu).
 
@@ -248,37 +250,33 @@ udělat jako chybu, ne jako průchod.
 
 ## 5. Mimo rozsah (wontfix)
 
-Sem patří i **#18.1** — první verze triage ho měla jako P0, což bylo špatně (viz níže).
+Sem patří i **#18.1** — první verze triage ho měla jako P0, druhá jako wontfix; rozhodnutí 2026-10-29 je **zrušit App Links** (viz níže).
 
-### #18.1 Ladicí otisk v produkčních App Links — **mimo rozsah (wontfix v kódu)**
+### #18.1 Ladicí otisk v App Links — **vyřešeno zrušením App Links** (rozhodnutí 2026-10-29)
 
 První verze tohoto triage to měla jako P0 a navrhovala denylist debug otisku v `well_known_controller`.
-To bylo špatně a zde je oprava:
+Druhá verze to označila za wontfix s argumentem, že jde o konfiguraci distributora appky.
+**Výsledek:** `assetlinks.json` je z forku **úplně odstraněn** — Android jde přes custom scheme
+`dokulachtan://sign` a systémový chooser; ve které aplikaci se signing flow otevře, rozhoduje uživatel.
 
-`QES_ANDROID_CERT_SHA256` se v celém kódu používá **na jednom místě** — `qes/well_known_controller.rb:27`,
-kde se jen vypíše do `assetlinks.json`. Nikde se podle něj nic neautentizuje ani nevaliduje;
-`app_metadata` z appky se jen uloží (`qes_session.rb:60`), nikdy se neporovnává. Servery tedy otisk
-nijak nechrání — je to **veřejné tvrzení pro Android**, ne bezpečnostní kontrola na straně DocuSealu.
+Proč to není jen konfigurace:
 
-Co to reálně znamená: kdokoli umí postavit APK s `package_name=cz.dokulachtan.signer` podepsané veřejným
-debug klíčem a Android ho bude považovat za ověřeného zpracovatele odkazů. Aby ale cizí appka dostala token,
-musí být **nainstalovaná na zařízení oběti** — to už je kompromitace zařízení, ne serveru. Server nemá jak
-poznat, kdo odkaz otevřel, a token je jediná autorizace.
+1. **Self-hosted produkt nemá centrální server.** `assetlinks.json` váže odkaz na podpis konkrétního APK
+   **a na host zapečený v buildu** (`app.json`). Pro instanci na `example.com` by si operátor musel postavit
+   vlastní APK — mechanismus je per-instance, ne per-produkt.
+2. **Debug otisk je veřejný klíč.** `mobile/app/android/app/debug.keystore` (z React Native šablony) má
+   soukromý klíč veřejně na GitHubu. Cizí APK se stejným `package_name` a tímto podpisem Android považuje
+   za ověřeného zpracovatele odkazů a **nainstaluje se jako update** (stejný podpis → stejné UID, data i Keystore).
+3. **Denylist v kódu by nic neřešila** — pořád by zbývala konfigurace per instance a údržba cizí konstanty.
 
-Proč to neděláme v DocuSealu: rozhodnutí „která appka se smí distribuovat" patří distributorovi appky
-(uživateli), ne DocuSealu. Hardcodovaná denylist cizích otisků ve forku je scope creep, který se musí udržovat
-a který nic neřeší — když je otisk špatný, je špatná konfigurace, ne kód.
+Co to znamená pro bezpečnost: token v odkazu je jediná autorizace a server cert podepisujícího předem nezná
+(ověří jen úroveň a trust), takže kdo token dostane, může session dokončit **svým** certem. Bez App Links
+token dostane ta aplikace, kterou uživatel v chooseru vybere — to je vědomé rozhodnutí (SPEC § 6.6).
 
-Co zůstává (config a docs, ne kód):
-1. `deploy/android-release/README.md:69-77` už správně říká, že debug otisk je dočasný a že se „starý debug podpis
-   už nikdy nesmí použít pro distribuci". `docs/09` a `docs/10-qes.md` uvádějí debug otisk
-   jako **dočasný** stav s poznámkou, že release APK z CI vyžaduje `80:DC:…:E0`. Dokumentace je tedy v pořádku.
-2. Až se z CI nasadí produkční APK, přepnout `QES_ANDROID_CERT_SHA256` na `80:DC:…:E0` (`fly secrets set`).
-   Do té doby App Links na produkční instanci fungují jen pro debug-signed testovací APK — to je vědomá daň za to,
-   že je testovací APK veřejně ke stažení. Odkaz jde vždy i přes custom scheme, takže podepsat se dá i bez App Links.
+Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser pro custom scheme není.
 
-**Návrh:** zavřít #18.1 jako mimo rozsah, nechat jen jako položku v deployment checklistu (přepnutí secrets
-při vydání produkčního APK). Žádná změna kódu.
+**Návrh:** hotovo — `assetlinks.json` odstraněn z forku (#18.1), včetně routy, controlleru,
+`QES_ANDROID_CERT_SHA256`, `intentFilters` v `app.json` a testů; E2E ověřuje 404.
 
 - **#23.1 Lexikální detekce šifrovaného PDF v appce** (`preparedDocument.ts:49-65`) — jen UX, server kontroluje parserem
   (`pdf_source.rb`). Nebudeme parsovat xref v JS.

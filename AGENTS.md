@@ -70,7 +70,7 @@ na server. Výsledkem je upravený DocuSeal (fork) + mobilní appka.
 16. **Defaulty pro český deployment jsou ve forku** (rozhodnutí uživatele 2026-10-28): `QES_ENABLED=true`,
     PostSignum CRL hosty, PostSignum trust roots, DigiCert TSA a `QES_REQUIRE_LTV=true` jsou
     výchozí v `Qes::Config::DEFAULTS`; ENV je jen override. Produkční instance tak v secrets drží jen
-    `QES_PUBLIC_BASE_URL` a `QES_ANDROID_CERT_SHA256`; staging přepisuje trust roots,
+    `QES_PUBLIC_BASE_URL`; staging přepisuje trust roots,
     `QES_REQUIRE_LTV=false`, test CRL a allowlist. Detail: SPEC § 7.4 a § 11, `docs/10-qes.md`.
 
 ## Deployment
@@ -112,15 +112,18 @@ V projektu jsou **dvě nezávislé věci**; v textech se nesmí plést:
 
 | Co | K čemu | Debug/test build | Produkce |
 |---|---|---|---|
-| **Android signing key** (podpis APK) | integrita APK, App Links, aktualizace | `debug.keystore`, fingerprint `FA:C6:17:45:…:3B:9C` | release keystore `deploy/android-release/dokulachtan-release.jks`, fingerprint `80:DC:86:EF:…:C3:E0`; jen CI/distribuce |
+| **Android signing key** (podpis APK) | integrita APK, aktualizace | `debug.keystore`, fingerprint `FA:C6:17:45:…:3B:9C` | release keystore `deploy/android-release/dokulachtan-release.jks`, fingerprint `80:DC:86:EF:…:C3:E0`; jen CI/distribuce |
 | **Certifikát pro podpis dokumentů** (AdES/QES) | podpis PDF, trust roots na serveru | testovací cert v APK pro E2E; uživatel jinak importuje vlastní `.p12` | uživatel importuje **PostSignum** `.p12` nebo použije čtečku; signing trust store má jen PostSignum, verification trust store české CA |
 
 - **Testovací APK** na `dokulachtan-download.fly.dev` = Gradle `release` varianta **s debug Android podpisem** (standalone JS bundle, `arm64-v8a`, testovací dokumentový cert + stub čtečky). Není to produkční APK.
 - **Produkční APK** = `assembleRelease` s `ANDROID_KEYSTORE_PATH` + `deploy/android-release/release.properties`, podepsaný release keystorem; jen CI/distribuce, nikdy testovací APK.
 - **Gradle `release` varianta ≠ produkční podpis.** Rozhoduje `ANDROID_KEYSTORE_PATH`, ne název varianty.
 - **PostSignum certy** s Android podpisem APK nesouvisí: signing `QES_TRUST_ROOTS` má jen PostSignum, verification `QES_VERIFICATION_TRUST_ROOTS` vydávající CA (`czech.pem`, anchory — ne rooty), staging navíc test root; appka používá cert, který uživatel importuje (`.p12`), případně čtečku. Testovací cert v APK je jen pro E2E, ne pro produkční podpis dokumentů.
-- `QES_ANDROID_CERT_SHA256` na Fly = fingerprint **Android podpisu testovacího APK** (nyní debug `FA:C6:…:9C`), ne cert dokumentu. Při nasazení produkčního APK z CI se přepne na `80:DC:…:E0`.
 - Testovací telefon s debug-signed APK **nejde** aktualizovat produkčním APK přes `adb install -r` (jiný podpis); vyžaduje uninstall a nový import `.p12`.
+- **App Links (assetlinks.json) zrušeny** (rozhodnutí uživatele 2026-10-29, #18.1): Android odkazy jdou přes
+  custom scheme `dokulachtan://sign` a systémový chooser; aplikaci vybírá uživatel. Důvod: `assetlinks.json`
+  váže odkaz na podpis konkrétního APK a host zapečený v buildu, což u self-hosted instance nemá smysl.
+  iOS Universal Links (AASA) zůstávají.
 
 **Pravidlo pro texty:** vždy piš „Android podpis APK“ nebo „certifikát pro podpis dokumentů“; samotné „certifikát“ nebo „produkční certifikát“ je zakázané, protože oba významy se pletou.
 
@@ -140,7 +143,7 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 - `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 15 vydávajících CA
   (`config/qes/czech.pem`, anchory — žádné rooty), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
   TSA roots 1, `tsa_required=true`; CRL fetch z produkční instance OK.
-- V secrets jen `QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256` a SMTP; ostatní defaulty
+- V secrets jen `QES_PUBLIC_BASE_URL` a SMTP; ostatní defaulty
   jsou ve forku (`QES_ENABLED=true`, PostSignum CRL hosty a trust roots, DigiCert TSA).
 - healthcheck `/up` 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
   `SECRET_KEY_BASE` + `docuseal.env` + SQLite na volume.
@@ -148,9 +151,6 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
   `/qes/sessions/unknown/document` → 404; `/qes-test/root.crl` → 404.
 - První účet (setup) vytváří uživatel v prohlížeči; SMTP Brevo, `SMTP_FROM=<SMTP_FROM>`,
   `deploy/smtp.prod.env` (gitignored).
-- **Fly `QES_ANDROID_CERT_SHA256`** je fingerprint Android podpisu testovacího APK (nyní debug
-  `FA:C6:…:9C`), ne certifikátu dokumentu; při nasazení produkčního APK z CI se přepne na
-  `80:DC:…:E0`.
 
 **Staging — instance `dokulachtan-staging`**:
 
@@ -163,8 +163,7 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
   `QES_REQUIRE_LTV=false`,
   `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev`,
   `QES_TEST_CRL_PATH=/app/config/qes/test-root.crl`,
-  `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`,
-  `QES_ANDROID_CERT_SHA256=FA:C6:…:9C`.
+  `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`.
 - Ověřeno: `make qes-staging-e2e` 2 signeři → 6 signatur INTACT (report
   `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury,
   podpis appky INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
@@ -177,9 +176,8 @@ s **testovacím certifikátem pro podpis dokumentů** (E2E) a stub čtečky; **p
 cert se do APK nepeče** — uživatel ho importuje jako `.p12`, nebo použije čtečku.
 Verze v repu **1.3.9** (versionCode 10309; na Fly **1.3.8**). Výchozí server URL v buildu
 je adresa **produkční instance uživatele** (ne centrální server); na staging se přepíná v appce *Nastavení → Server URL* a odkaz se otevírá
-custom scheme `dokulachtan://sign?token=…` (funguje vždy). App Links (HTTPS) jsou vázané na host
-zapečený v buildu (`dokulachtan.fly.dev`), proto by staging vyžadoval rebuild APK s hostem
-`dokulachtan-staging.fly.dev`. APK se nasazuje `cd deploy/apk && fly deploy -a dokulachtan-download`
+custom scheme `dokulachtan://sign?token=…` (funguje vždy a na libovolném hostu). App Links (HTTPS)
+byly zrušeny (#18.1), takže staging nevyžaduje rebuild APK kvůli hostu. APK se nasazuje `cd deploy/apk && fly deploy -a dokulachtan-download`
 (soubor `deploy/apk/*.apk` je gitignored).
 - Konfigurace: `deploy/docuseal/fly.toml` a `fly.staging.toml` v parent repu (`make deploy-prod` /
   `make deploy-staging`; Dockerfile upstream, port 3000, healthcheck `/up`, volume na
@@ -319,9 +317,8 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 
 - Reálná čtečka eObčanky (P5 je stub/fake card; MOI SDK) — jinak je tok A hotový.
 - Kvalifikované časové razítko (nyní DigiCert free, non-qualified).
-- Produkční APK podepsaný release keystorem a přepnutí `QES_ANDROID_CERT_SHA256`
-  na release fingerprint; testovací APK je debug-signed. Do té doby App Links na produkční instanci
-  používají debug fingerprint (triage #18.1).
+- Produkční APK podepsaný release keystorem; testovací APK je debug-signed. App Links jsou zrušeny
+  (#18.1), takže debug podpis už App Links neovlivňuje.
 - První reálný podpis na produkční instanci s PostSignum certem.
 - TOFU ve forku `f1c28c2b` (origin serveru v podpisovém odkazu) — na produkčních instancích
   zatím není nasazený; před použitím TOFU odkazu nasadit.

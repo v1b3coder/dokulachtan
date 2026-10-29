@@ -7,7 +7,7 @@ function server(path: string): string | null {
 }
 
 describe('redirectSystemPath', () => {
-  it('přepíše App Link /qes/sign na routu /sign a předá server z odkazu', () => {
+  it('přepíše iOS Universal Link /qes/sign na routu /sign a předá server z odkazu', () => {
     const path = redirectSystemPath({
       path: 'https://dokulachtan.fly.dev/qes/sign?token=abc', initial: true,
     });
@@ -17,7 +17,7 @@ describe('redirectSystemPath', () => {
     expect(server(path)).toBe('https://dokulachtan.fly.dev');
   });
 
-  it('přepíše App Link /qes/app na routu /', () => {
+  it('přepíše iOS Universal Link /qes/app na routu /', () => {
     expect(
       redirectSystemPath({ path: 'https://dokulachtan.fly.dev/qes/app?token=abc', initial: false }),
     ).toBe('/?token=abc');
@@ -35,7 +35,7 @@ describe('redirectSystemPath', () => {
     );
   });
 
-  it('nepřijme server z parametru, použije ověřený host App Linku', () => {
+  it('nepřijme server z parametru, použije ověřený host Universal Linku', () => {
     const path = redirectSystemPath({
       path: 'https://dokulachtan.fly.dev/qes/sign?token=abc&server=https://evil.test',
       initial: true,

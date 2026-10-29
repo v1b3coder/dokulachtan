@@ -115,7 +115,7 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | `QES_TSA_URL`, `QES_TSA_TRUST_ROOTS`, `QES_TSA_REQUIRED` | DigiCert / `config/qes/digicert-tsa.pem` / `true` | časové razítko (RFC 3161) |
 | `QES_PUBLIC_BASE_URL`, `QES_DEEP_LINK_BASE` | veřejná URL a deep link pro appku |
 | `QES_PDF_MAX_BYTES`, `QES_SESSION_TTL` | limity uploadu a session |
-| `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID` | App Links pro konkrétní build |
+| `QES_IOS_TEAM_ID` | iOS Universal Links (AASA) pro konkrétní build |
 
 Výchozí signing trust store je PostSignum (`config/qes/postsignum.pem`), verification trust store je
 český bundle (`config/qes/czech.pem`) s jen vydávajícími CA (žádné rooty). Staging přidává testovací root do obou přes `QES_TRUST_ROOTS` a
@@ -168,7 +168,7 @@ zůstává v gitu.
 - **LTV v testovacím prostředí** — CRL Distribution Point testovacích certů je `127.0.0.1:8765`,
   takže testovací prostředí hlásí `UNTRUSTED` (stejně jako dřív); staging to řeší test CRL na
   staging hostu.
-- **APK z Releases** neotevře App Links, dokud v DocuSealu nenastavíš `QES_ANDROID_CERT_SHA256`
-  na jeho podpisový cert; podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
+- **APK z Releases** otevírá signing flow přes custom scheme `dokulachtan://` (systémový chooser);
+  Android App Links byly zrušeny (#18.1). Podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
 - **iOS build** čeká na Apple Developer účet; appka je cross-platform připravená.
 - **Otevřené nálezy** ze třetí a čtvrté kontroly: [docs/24-triage-issues.md](docs/24-triage-issues.md).

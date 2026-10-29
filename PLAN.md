@@ -199,11 +199,10 @@ Cíl: browser ↔ server ↔ appka přes HTTP; finální PDF v DocuSealu.
 - [ ] 3.11 Typ pole `qes` v builderu (`field_type.vue` ř. 142 `fieldIcons` + `fieldNames` + `skipTypes`, i18n;
       `builder.vue` ř. 1176 je jen definice propu — no-op)
       → verify: v builderu lze přidat `qes` pole, uloží se do `fields`
-- [ ] 3.12 `public/.well-known/assetlinks.json` (statika) + `Qes::WellKnownController` pro AASA
-      s `Content-Type: application/json` (SPEC § 6.6, 7.7)
-      → verify: `curl -i https://<instance>/.well-known/assetlinks.json` → 200 JSON
-      (instance `dokulachtan`; adresa se v každém nasazení mění);
-      `curl -i .../apple-app-site-association` → `Content-Type: application/json`
+- [x] 3.12 `Qes::WellKnownController` pro AASA s `Content-Type: application/json` (SPEC § 6.6, 7.7);
+      Android `assetlinks.json` **zrušeny** (#18.1, rozhodnutí 2026-10-29)
+      → verify: `curl -i .../apple-app-site-association` → `Content-Type: application/json`;
+      `curl -i .../.well-known/assetlinks.json` → 404
 - [ ] 3.13 `Qes::ValueValidator` + hook v `lib/submitters/submit_values.rb` `validate_values!` (SPEC § 4.4)
       — hodnota `qes` pole smí být jen `"qes:<id>"` s `completed` session téhož submittera
       → verify: `spec/lib/qes/value_validator_spec.rb` — podvržená hodnota → `ValidationError`
@@ -222,8 +221,8 @@ platný podpis a pečeť, audit má QES stránku. Toto je **hlavní důkaz řet�
 
 Cíl: reálná appka podepíše dokument klíčem z PKCS#12 v telefonu.
 
-- [ ] 4.1 Založit `mobile/app` (Expo, TypeScript, `expo-router`) + `app.json` s `scheme: dokulachtan`,
-      `android.intentFilters` (App Links) a `EXPO_PUBLIC_API_URL`
+- [x] 4.1 Založit `mobile/app` (Expo, TypeScript, `expo-router`) + `app.json` s `scheme: dokulachtan`
+      a `EXPO_PUBLIC_API_URL`
       → verify: `npx expo start` + `npx expo run:android` na emulátoru
 - [ ] 4.2 S1 Home + S7 Nastavení + `api.ts` (QES klient: `getSession`, `postCertificate`, `postComplete`)
       → verify: Jest unit `api.ts` (chyby 404/410/422/429), obrazovky v emulátoru
@@ -242,8 +241,8 @@ Cíl: reálná appka podepíše dokument klíčem z PKCS#12 v telefonu.
       → verify: Jest `signer.test.ts` (fixture PKCS#12 → signatura ověřitelná `cryptography`)
 - [ ] 4.8 `POST /complete` + S6 Výsledek + mazání klíče z paměti
       → verify: server vrátí `state: completed`; klíč v paměti je `null`
-- [ ] 4.9 Universal links: `assetlinks.json` (Android) + ověření otevření appky z HTTPS odkazu
-      → verify: `adb shell am start -a android.intent.action.VIEW -d "https://<host>/qes/sign?token=…"` otevře appku
+- [x] 4.9 Deep link: custom scheme `dokulachtan://sign` + systémový chooser (#18.1; App Links zrušeny)
+      → verify: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=…"` otevře appku
 - [ ] 4.10 Chybové stavy appky (SPEC § 9.6) + retry/backoff + expirace
       → verify: manuálně: vypnutá síť, expirovaný token, chybný cert
 - [ ] 4.11 `signer.ts` + S10 wizard (SPEC § 9.8): **automatická** volba podepisujícího (pro QES čtečka,

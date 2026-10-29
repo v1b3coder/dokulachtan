@@ -68,8 +68,6 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
 - signing `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA),
   verification `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (vydávající CA, ne rooty:
   PostSignum, I.CA, eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=true`, `QES_ENABLED=true`.
-- `QES_ANDROID_CERT_SHA256` = fingerprint **Android podpisu testovacího APK** (debug
-  `FA:C6:…:9C`); při nasazení produkčního APK z CI se přepne na release `80:DC:…:E0`.
 - healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet); migrace automaticky při startu;
   `SECRET_KEY_BASE` a `docuseal.env` na volume.
 - SMTP Brevo nastaveno (`deploy/smtp.prod.env`, gitignored); první účet vytváří uživatel
@@ -85,8 +83,7 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
   (testovací i reálné české CA pro ověření).
 - `QES_REQUIRE_LTV=false`; testovací CRL je dostupné na
   `https://dokulachtan-staging.fly.dev/qes-test/root.crl` (`QES_TEST_CRL_PATH`).
-- `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`;
-  `QES_ANDROID_CERT_SHA256=FA:C6:…:9C` (debug fingerprint testovacího APK).
+- `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`.
 - SMTP Brevo (stejné creds jako produkční instance, `deploy/smtp.env`).
 
 ## Konkrétní kroky (až se bude nasazovat)
@@ -214,8 +211,7 @@ fronta ve *Real time → Usage and plan → Email queue*.
 - Build: EAS (cloud) nebo lokálně `npx expo run:android` (SDK + Gradle jsou k dispozici).
 - Staging: APK s `EXPO_PUBLIC_API_URL` na staging URL; distribuce interně (přímý APK / Firebase
   App Distribution; TestFlight později). Testovací APK z `deploy/apk/` má výchozí adresu produkční instance
-uživatele a na staging se přepíná v appce *Nastavení → Server URL*; pro App Links na staging je potřeba rebuild APK s hostem
-  `dokulachtan-staging.fly.dev`.
-- Deep link: custom scheme `dokulachtan://` funguje vždy; App Links (https) servíruje
-  `Qes::WellKnownController` (`assetlinks.json` a `apple-app-site-association`) a jsou vázané na host
-  zapečený v APK.
+uživatele a na staging se přepíná v appce *Nastavení → Server URL*.
+- Deep link: custom scheme `dokulachtan://` funguje vždy a na libovolném hostu (systémový chooser);
+  Android App Links (`assetlinks.json`) **zrušeny** (#18.1). iOS Universal Links (`apple-app-site-association`)
+  zůstávají a jsou vázané na host zapečený v APK.

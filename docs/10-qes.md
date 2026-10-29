@@ -36,7 +36,6 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené). I.CA hosty jsou tu proto, že její CRL DP jsou jen **http** (https na `qcrldp1.ica.cz` neodpovídá), takže prázdná hodnota („bez allowlistu" = jen https a veřejná adresa) pro I.CA nestačí. Explicitní ENV default **plně nahradí** — kdo podepisuje certem mimo PostSignum/I.CA, musí svoje hosty vypsat taky. Podpis certem I.CA navíc potřebuje její roots v `QES_TRUST_ROOTS` (výchozí `postsignum.pem` I.CA nezná). |
 | `QES_TEST_CRL_PATH` | — | cesta k testovacímu CRL, které fork vystaví na `/qes-test/root.crl` (jen staging) |
-| `QES_ANDROID_CERT_SHA256` | — | fingerprint pro `assetlinks.json` |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
 | `QES_SEAL_PKCS_PATH` + `QES_SEAL_PKCS_PASSWORD` | — | jen pro testy (PKCS#12 pečeti); jinak `Accounts.load_signing_pkcs` |
@@ -50,8 +49,8 @@ na upstream/ne-QES instanci.
 který mění chování DocuSealu (nález #10):
 
 - QES endpointy vrací `404 {"error":"disabled"}` — `/qes/sessions/*`, `/s/:slug/qes_sessions`,
-  `/api/qes/*`, `/qes/sign`, `/qes/app`, `.well-known/assetlinks.json`,
-  `.well-known/apple-app-site-association`, `/qes-test/root.crl`
+  `/api/qes/*`, `/qes/sign`, `/qes/app`, `.well-known/apple-app-site-association`,
+  `/qes-test/root.crl`
   i `templates/:id/qes_verification`. Podepsat obřad tedy nejde spustit ani dokončit.
 - Nespouští se QES validace šablony (`qes_signing_order`), vynucení `submitters_order: preserved`,
   přepis `required` u QES polí z API, zámek řádku při submit a `ExpireSessionsJob`.
@@ -271,7 +270,6 @@ QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem
 #   root.crt = testovací root (testovací APK); postsignum.pem = reálné PostSignum certy pro podpis;
 #   czech.pem = vydávající CA pro ověření (anchory; PostSignum, I.CA, eIdentity, NCA, KB), ne rooty
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
-QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; lokální bleeding-edge build
 QES_REQUIRE_LTV=false
 QES_TEST_CRL_PATH=/app/config/qes/test-root.crl
 QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev
@@ -282,9 +280,8 @@ QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dok
 # produkce = privátní instance uživatele (deploy/docuseal/fly.toml, APP=dokulachtan)
 # Defaulty pokrývají QES_ENABLED, signing trust roots (PostSignum),
 # verification trust roots (české CA), LTV hosty, TSA i require_ltv.
-# Explicitně zůstává jen veřejná URL a fingerprint Android podpisu APK.
+# Explicitně zůstává jen veřejná URL.
 QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
-QES_ANDROID_CERT_SHA256=FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C  # debug keystore; při produkčním APK 80:DC:...:E0
 ```
 
 **Český verification trust store (2026-10-28):** produkční instance **v52**
@@ -316,9 +313,9 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release
   s přiloženým APK (verze z tagu se zapíše do `app.json`); podpis ověří proti
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
-- `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **debug** podpisu (lokální bleeding-edge build);
-  release APK z CI by vyžadoval release fingerprint (`deploy/android-release/`).
-  Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkční instanci teď sedí.
+- Android App Links (assetlinks.json) **zrušeny** (#18.1): odkaz jde přes custom scheme a systémový
+  chooser, takže `QES_ANDROID_CERT_SHA256` už není potřeba a `/qes/sign` v prohlížeči funguje
+  jako web fallback s QR a tlačítkem. Testovací APK na `dokulachtan-download.fly.dev` je debug.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan-staging.fly.dev"`
   → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
 - **TOFU (trust on first use):** podpisový odkaz nese origin serveru (HTTPS host nebo `server`

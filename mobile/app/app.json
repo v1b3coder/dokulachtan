@@ -13,23 +13,6 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "intentFilters": [
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "dokulachtan.fly.dev",
-              "pathPrefix": "/qes"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        }
-      ],
       "versionCode": 10309,
       "permissions": [
         "android.permission.USE_BIOMETRIC",

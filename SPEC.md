@@ -728,12 +728,15 @@ Pravidla:
 
 ### 6.6 Universal links
 
-- Android: `https://<host>/qes/sign?token=…` (App Links) + `/.well-known/assetlinks.json`.
+- Android: **custom scheme** `dokulachtan://sign?token=…&server=<origin>`; aplikaci vybírá systémový
+  chooser. Android App Links (`assetlinks.json`) **nejsou** — vážou odkaz na podpis konkrétního APK
+  a host zapečený v buildu, což u self-hosted instance nemá smysl (#18.1, `docs/24`).
 - iOS: `https://<host>/qes/sign?token=…` (Universal Links) + `/.well-known/apple-app-site-association`.
-- Custom scheme `dokulachtan://sign?token=…&server=<origin>` zůstává jako fallback (starší buildy, neověřené domény).
-- `assetlinks.json` i AASA **MUSÍ** servírovat `Qes::WellKnownController` s `Content-Type: application/json`
-  a bez přesměrování (statický soubor v `public/.well-known/` neexistuje); **MUSÍ** obsahovat SHA-256
-  fingerprint podpisového certifikátu appky (`QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID`).
+- Web fallback `https://<host>/qes/sign?token=…` (resp. `/qes/app`) funguje vždy: zobrazí QR
+  s custom scheme a tlačítko „Otevřít v aplikaci“.
+- AASA **MUSÍ** servírovat `Qes::WellKnownController` s `Content-Type: application/json`
+  a bez přesměrování (statický soubor v `public/.well-known/` neexistuje); **MUSÍ** obsahovat
+  `QES_IOS_TEAM_ID`.
 - AASA nemá příponu, takže statika (`ActionDispatch::Static` + `Rack::Mime`) by ho poslala jako
   `application/octet-stream`; proto ho **MUSÍ** servírovat route/controller s explicitním
   `Content-Type: application/json` (`Qes::WellKnownController#apple_app_site_association`, § 7.7).
@@ -1221,27 +1224,15 @@ Pravidla:
 
 | Formát | Použití |
 |---|---|
-| `https://<host>/qes/sign?token=…` | primární (universal link, Android + iOS) |
-| `dokulachtan://sign?token=…&server=<origin>` | fallback (starší buildy, neověřená doména); server se bere z parametru a při prvním použití ho uživatel potvrdí (TOFU) |
+| `https://<host>/qes/sign?token=…` | web fallback (vždy); na iOS zároveň Universal Link |
+| `dokulachtan://sign?token=…&server=<origin>` | primární na Androidu (systémový chooser); server se bere z parametru a při prvním použití ho uživatel potvrdí (TOFU) |
 | `https://<host>/qes/app?token=…` | web fallback stránka s QR |
 
-Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vracet `universal_link`
-(`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign?token=…&server=<origin>`) v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
+Appka **MUSÍ** podporovat custom scheme; na iOS navíc universal link. Server **MUSÍ** vracet
+`universal_link` (`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign?token=…&server=<origin>`)
+v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 
 ### 10.2 Soubory pro ověření
-
-`/.well-known/assetlinks.json` (Android App Links; servíruje `Qes::WellKnownController`, statický soubor neexistuje):
-
-```json
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "cz.dokulachtan.signer",
-    "sha256_cert_fingerprints": ["<QES_ANDROID_CERT_SHA256>"]
-  }
-}]
-```
 
 `/.well-known/apple-app-site-association` (iOS Universal Links; servíruje `Qes::WellKnownController`):
 
@@ -1283,7 +1274,6 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
 | `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené); prázdná hodnota = jen https a veřejná adresa (pro I.CA s http CRL DP nestačí); explicitní ENV default plně nahradí |
-| `QES_ANDROID_CERT_SHA256` | — | fingerprint pro assetlinks.json |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
 | `QES_COMPLETED_SESSION_TTL` | `86400` | platnost dokončeného tokenu [s] (24 h) |
@@ -1432,7 +1422,7 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 | Dotek JS | `spec/javascript/qes_step_logic.test.mjs` | `ERROR_KEYS`, polling/backoff, terminální stavy kroku |
 | Řetězení | `spec/lib/qes/chain_spec.rb` | 2 signeři: TBS 2 nad `final_document` signera 1; oba podpisy INTACT; poslední pokrývá celý soubor; varianta se 2 přílohami (`page_offsets`); **stejný submitter 2× se stejným certifikátem** → TBS 2 nad jeho `final_document`, 6 signatur INTACT, `documents` = poslední revize |
 | Pořadí | `spec/models/submission_spec.rb` | `submitters_order: random` u QES šablony → vynuceno `preserved` |
-| Well-known | `spec/requests/qes_well_known_spec.rb` | AASA `Content-Type: application/json`, `assetlinks.json` platný JSON |
+| Well-known | `spec/requests/qes_well_known_spec.rb` | AASA `Content-Type: application/json`; `assetlinks.json` → 404 (App Links zrušeny) |
 
 ### 15.2 E2E — `make qes-e2e` (nahradil `scripts/e2e_api.py`)
 
@@ -1524,7 +1514,7 @@ jsou dostupná; pečeť DocuSealu zůstává `UNTRUSTED` (test trust list neobsa
 4. Negativní scénáře N1–N17 mají očekávané výsledky.
 5. Appka (B): import PKCS#12, biometrie, podpis → validace na serveru (e2e na emulátoru s test certem).
 6. Appka (A): fake card mód testuje celý tok; manuální test s reálnou čtečkou a eObčankou zdokumentován.
-7. Universal links ověřené na Androidu (assetlinks.json) i iOS (AASA) — minimálně Android v1.
+7. iOS Universal Links (AASA) ověřené; Android jde přes custom scheme + systémový chooser.
 8. AdES **NIKDY** není zapsán jako QES (test N5/N6 + kontrola auditu).
 9. Staging `https://dokulachtan-staging.fly.dev/` běží s `QES_ENABLED=true` a healthcheckem;
    `make qes-staging-e2e` se dvěma signery projde (6 signatur INTACT, test cert
@@ -1773,7 +1763,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 
 **`spec/requests/well_known_spec.rb`**
 1. AASA → 200, `Content-Type: application/json`, platný JSON.
-2. `assetlinks.json` → 200, platný JSON s `QES_ANDROID_CERT_SHA256`.
+2. `/.well-known/assetlinks.json` → 404 (App Links zrušeny, #18.1).
 
 **`spec/lib/submissions/generate_result_attachments_spec.rb`**
 1. QES submission → `documents` = podepsané PDF (ne generované).

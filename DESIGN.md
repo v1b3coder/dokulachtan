@@ -365,7 +365,7 @@ app/models/qes_session.rb
 app/controllers/qes/sessions_controller.rb       # app-facing (token)
 app/controllers/qes/form_sessions_controller.rb # browser-facing
 app/controllers/qes/app_controller.rb           # web fallback
-app/controllers/qes/well_known_controller.rb    # AASA a assetlinks s Content-Type: application/json
+app/controllers/qes/well_known_controller.rb    # AASA s Content-Type: application/json
 app/controllers/qes/test_crl_controller.rb      # test CRL jen při QES_TEST_CRL_PATH
 app/controllers/api/qes_documents_controller.rb # upload PDF (přímý podpis)
 app/controllers/api/qes_verifications_controller.rb # ověření PDF
@@ -432,13 +432,12 @@ spec/system/signing_form_spec.rb                        # 2FA flake (test-only)
 | POST | `/qes/sessions/:token/complete` | appka (token) | raw signatura → vložení |
 | POST | `/qes/sessions/:token/complete_submission` | appka (token) | dokončení submittera přes session token |
 | POST | `/qes/sessions/:token/abort` | appka (token) | chyba/odmítnutí v appce |
-| GET | `/qes/sign`, `/qes/app?token=…` | prohlížeč | App Link / web fallback s QR |
+| GET | `/qes/sign`, `/qes/app?token=…` | prohlížeč | web fallback s QR a tlačítkem na custom scheme |
 | POST | `/api/qes/documents` | appka (API token) | upload PDF → šablona „Direct signing“ |
 | POST | `/api/qes/verify` | appka (API token) | ověření PDF (stateless) |
 | POST | `/api/qes/verified_documents` | appka (API token) | uložení do „Verified documents“ |
 | GET | `/templates/:template_id/qes_verification` | prohlížeč | panel ověření PDF v šabloně |
 | GET | `/.well-known/apple-app-site-association` | systém | AASA |
-| GET | `/.well-known/assetlinks.json` | systém | App Links |
 | GET | `/qes-test/root.crl` | test | test CRL, jen když je `QES_TEST_CRL_PATH` |
 
 Token: jednorázový, vázaný na session + hash, TTL 5–10 min, pouze HTTPS; v DB jen `sha256`.
@@ -496,8 +495,8 @@ Detail: [SPEC.md](SPEC.md) § 7.4, § 7.6 a § 16.
 ### 8.1 Deep link
 
 ```
-dokulachtan://sign?token=<jednorazovy>&server=<origin>
-https://<host>/qes/sign?token=<jednorazovy>   (universal link, primární)
+dokulachtan://sign?token=<jednorazovy>&server=<origin>   (Android, systémový chooser)
+https://<host>/qes/sign?token=<jednorazovy>   (web fallback; na iOS universal link)
 ```
 Fallback (web): `https://<host>/qes/app?token=…` → stránka s tlačítkem „Otevřít appku“ + QR + odkazy
 na stažení. Server URL se bere z odkazu: u HTTPS z hostu, u custom scheme z parametru `server`.
@@ -553,7 +552,7 @@ odpovídá očekávanému subjektu (volitelně), session neexpirovaná.
 
 Úroveň podpisu je **per-field** (`field.preferences.level` = `ades` / `qes`), ne globální přepínač.
 Přesný seznam ENV (včetně `QES_ENABLED`, `QES_SIGNATURE_SIZE`, `QES_TSA_REQUIRED`,
-`QES_REQUIRE_LTV`, `QES_PUBLIC_BASE_URL`, `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID`):
+`QES_REQUIRE_LTV`, `QES_PUBLIC_BASE_URL`, `QES_IOS_TEAM_ID`):
 [SPEC.md](SPEC.md) § 11.
 
 | Klíč | Význam |
@@ -617,7 +616,7 @@ Všechny níže uvedené body jsou rozhodnuté ve SPEC.md (potvrzeno 2026-10-15)
 | # | Otázka | Rozhodnutí | Kde |
 |---|---|---|---|
 | 1 | Zobrazení dokumentu v appce | appka zobrazí název, podepisujícího a cert; **nepodepsaný TBS** (`GET /document`) otevře ke kontrole **před** odemčením klíče | SPEC § 5.1a, § 9.1 |
-| 2 | Universal links vs custom scheme | **universal links** (`/qes/sign`) + custom scheme jako fallback | SPEC § 6.6, § 10 |
+| 2 | Universal links vs custom scheme | **custom scheme** + systémový chooser na Androidu; universal links jen iOS | SPEC § 6.6, § 10 |
 | 3 | Více certifikátů v appce | v1: import PKCS#12 **nahrazuje**; u A povinný výběr kontejneru na kartě | SPEC § 1.2, § 9.4 |
 | 4 | Obnova certifikátu | v1: upozornění na expiraci + ruční re-import; staré podpisy zůstávají | SPEC § 9.1 (S3) |
 | 5 | Varianta A: čtečka + PIN/QPIN | **MOI Podpisové SDK**; čtečky ACR 3901 U-S1, bR301 BLE (černá), CT 1100, AirID 2 (+ USB OTG); PIN/QPIN zadává dialog SDK | SPEC § 9.4 |

@@ -279,7 +279,6 @@ def main() -> int:
             log("\n## Prohlížeč: web fallback /qes/app + /.well-known")
             for path in (
                 f"/qes/app?token={token}",
-                "/.well-known/assetlinks.json",
                 "/.well-known/apple-app-site-association",
             ):
                 try:
@@ -289,6 +288,15 @@ def main() -> int:
                 except urllib.error.HTTPError as err:
                     log(f"- {path} -> HTTP {err.code}")
                     raise SystemExit(f"Fallback {path} selhal")
+
+            # Android App Links zrušeny (#18.1): assetlinks.json už nesmí existovat.
+            try:
+                urllib.request.urlopen(BASE + "/.well-known/assetlinks.json", timeout=30)
+                raise SystemExit("assetlinks.json stále existuje (App Links měly být zrušeny)")
+            except urllib.error.HTTPError as err:
+                if err.code != 404:
+                    raise SystemExit(f"assetlinks.json -> HTTP {err.code}, čekáno 404")
+                log("- /.well-known/assetlinks.json -> HTTP 404 (App Links zrušeny)")
 
         log(
             f"\n## Appka: podpis KÓDEM APPKY (signer {index}, "
