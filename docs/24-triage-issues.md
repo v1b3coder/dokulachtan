@@ -27,7 +27,7 @@ jsou označené jako mimo rozsah.
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | potvrzeno | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
-| 18 | Ladicí otisk v assetlinks + rozbité CI | potvrzeno | **P0** (1), P1 (2) |
+| 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 mimo rozsah (config), 18.2 potvrzeno | P1 |
 | 19 | LTV bez revokace mezilehlé CA | potvrzeno | P1 |
 | 20 | Zámek `ExpireSessionsJob` jen v paměti | částečně (testy žijí) | mimo rozsah |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
@@ -35,24 +35,9 @@ jsou označené jako mimo rozsah.
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
 
 **Uzavřeno:** #13 (opraveno), #20 (mimo rozsah — bez funkčního/bezpečnostního dopadu).
+**Wontfix v kódu:** #18.1 (konfigurace distributora appky), #23.1, #23.2.
 
 ## 2. P0 — bezpečnost a ztráta dat
-
-### #18.1 Ladicí Android podpis v produkčních App Links
-
-`config/qes` produkce má `QES_ANDROID_CERT_SHA256=FA:C6:…:9C` (veřejný Expo/RN debug klíč, heslo `android`)
-a `qes/well_known_controller.rb:27-35` ho bez kontroly vydá v `assetlinks.json`. Kdokoli s libovolným APK
-podepsaným tímto veřejným klíčem a `package_name=cz.dokulachtan.signer` získá App Links na `dokulachtan.fly.dev`
-a dostane podpisové odkazy s tokenem; přes `adb install -r` navíc přepíše debug-signed testovací APK.
-
-Oprava:
-1. `well_known_controller#assetlinks` odmítne známý debug otisk (konstanta `DEBUG_CERT_SHA256`, odpověď 404) —
-   i kdyby ho někdo do ENV omylem vrátil.
-2. Produkce přepne `QES_ANDROID_CERT_SHA256` na `80:DC:…:E0` (release keystore) až s nasazením produkčního APK z CI;
-   do té doby App Links na produkci nefungují a odkaz jde přes custom scheme (funguje vždy).
-3. `deploy/android-release/README.md` a `docs/09`/`docs/10` přestanou debug otisk doporučovat jako produkční.
-
-Test: `spec/requests/qes_well_known_spec.rb` — debug otisk v ENV → 404; release otisk → 200 s jedním záznamem.
 
 ### #18.2 CI extrahuje prázdný otisk
 
@@ -237,8 +222,6 @@ Oprava: buď ověřit, že finální PDF má přesně jednu revizi navíc a `/Co
 (bajty podpisu má), nebo funkci i UI přejmenovat na „kontrola shody s připraveným dokumentem" a chybějící kontroly
 udělat jako chybu, ne jako průchod.
 
-### #18.1 Ladicí otisk — viz P0 výše.
-
 ## 4. P2 — nízké, provozní a dokumentační
 
 - **#5** `template_errors.rb:11,16,19` — `rescue_from` chytá každou `RecordInvalid` a staví zprávu z `@template.errors`,
@@ -274,6 +257,38 @@ udělat jako chybu, ne jako průchod.
 
 ## 5. Mimo rozsah (wontfix)
 
+Sem patří i **#18.1** — první verze triage ho měla jako P0, což bylo špatně (viz níže).
+
+### #18.1 Ladicí otisk v produkčních App Links — **mimo rozsah (wontfix v kódu)**
+
+První verze tohoto triage to měla jako P0 a navrhovala denylist debug otisku v `well_known_controller`.
+To bylo špatně a zde je oprava:
+
+`QES_ANDROID_CERT_SHA256` se v celém kódu používá **na jednom místě** — `qes/well_known_controller.rb:27`,
+kde se jen vypíše do `assetlinks.json`. Nikde se podle něj nic neautentizuje ani nevaliduje;
+`app_metadata` z appky se jen uloží (`qes_session.rb:60`), nikdy se neporovnává. Servery tedy otisk
+nijak nechrání — je to **veřejné tvrzení pro Android**, ne bezpečnostní kontrola na straně DocuSealu.
+
+Co to reálně znamená: kdokoli umí postavit APK s `package_name=cz.dokulachtan.signer` podepsané veřejným
+debug klíčem a Android ho bude považovat za ověřeného zpracovatele odkazů. Aby ale cizí appka dostala token,
+musí být **nainstalovaná na zařízení oběti** — to už je kompromitace zařízení, ne serveru. Server nemá jak
+poznat, kdo odkaz otevřel, a token je jediná autorizace.
+
+Proč to neděláme v DocuSealu: rozhodnutí „která appka se smí distribuovat" patří distributorovi appky
+(uživateli), ne DocuSealu. Hardcodovaná denylist cizích otisků ve forku je scope creep, který se musí udržovat
+a který nic neřeší — když je otisk špatný, je špatná konfigurace, ne kód.
+
+Co zůstává (config a docs, ne kód):
+1. `deploy/android-release/README.md:69-77` už správně říká, že debug otisk je dočasný a že se „starý debug podpis
+   už nikdy nesmí použít pro distribuci". `docs/09:69-72` a `docs/10-qes.md:243,254` uvádějí debug otisk
+   jako **dočasný** stav s poznámkou, že release APK z CI vyžaduje `80:DC:…:E0`. Dokumentace je tedy v pořádku.
+2. Až se z CI nasadí produkční APK, přepnout `QES_ANDROID_CERT_SHA256` na `80:DC:…:E0` (`fly secrets set`).
+   Do té doby App Links na produkci fungují jen pro debug-signed testovací APK — to je vědomá daň za to,
+   že je testovací APK veřejně ke stažení. Odkaz jde vždy i přes custom scheme, takže podepsat se dá i bez App Links.
+
+**Návrh:** zavřít #18.1 jako mimo rozsah, nechat jen jako položku v deployment checklistu (přepnutí secrets
+při vydání produkčního APK). Žádná změna kódu.
+
 - **#20 Zámek `ExpireSessionsJob` jen v paměti.** Claim o `memory_store` (`production.rb:72`) je pravdivý,
   ale „smazané testy expirace" **není** — `spec/models/qes_session_spec.rb:90-125`, `spec/requests/qes_session_ttl_spec.rb:30`
   a `spec/jobs/qes/expire_sessions_job_spec.rb` existují. Dopad je jen zbytečná práce, ne přepis stavu (podmíněný update
@@ -299,7 +314,7 @@ udělat jako chybu, ne jako průchod.
 | F2 | #2 | povinná pole; sjednotit obě cesty, aby se neopakovalo |
 | F3 | #14, #15 | stav submissionu a souběh revizí; potřebuje migraci (částečný index) |
 | F4 | #16, #4 | snapshot polí a `required`; jeden hook, dva testy |
-| F5 | #18 | debug otisk z produkce + CI `awk`; konfigurace + workflow |
+| F5 | #18.2 | CI `awk` — extrakce otisku z `apksigner` (workflow, ne kód forku) |
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |
