@@ -609,7 +609,7 @@ QES přesně do této oblasti (`Qes::Stamp.draw`, § 7.1); appka clampuje klepnu
 
 #### 5.8.4 Spuštění obřadu (existující endpoint, § 6.6)
 
-`POST /s/:slug/qes_sessions` s `{ "field_uuid": "…" }` → `201` s `token` (a `universal_link`, QR).
+`POST /s/:slug/qes_sessions` s `{ "field_uuid": "…" }` → `201` s `token`, `universal_link` a `custom_scheme_link` (QR s custom scheme).
 Appka tento endpoint volá s **API tokenem** místo prohlížečové session; token je kapabilita (jako podpisový
 odkaz), CSRF kontrola se u něj přeskakuje. Dál je tok shodný s § 5.1–§ 5.4 (`GET /qes/sessions/:token`,
 `POST …/certificate`, `POST …/complete`).
@@ -695,7 +695,7 @@ Uživatel zruší obřad v prohlížeči → `cancelled`, token přestane platit
 ### 6.4 `GET /qes/app?token=…` — web fallback
 
 Veřejná HTML stránka (bez autorizace): zobrazí název dokumentu, jméno podepisujícího, platnost
-odkazu, tlačítko „Otevřít aplikaci" (custom scheme), QR kód (universal link), odkazy na stažení
+odkazu, tlačítko „Otevřít aplikaci" (custom scheme), QR kód (custom scheme), odkazy na stažení
 appky (APK / App Store). **NESMÍ** zobrazit `data_to_sign` ani jiné citlivé údaje.
 
 ### 6.5 `QesStep` — chování kroku v prohlížeči
@@ -708,7 +708,7 @@ Komponenta `app/javascript/submission_form/qes_step.vue` (registrovaná ve `form
 |---|---|---|
 | `idle` | název pole, vysvětlení („Podepíše se vaším certifikátem v aplikaci. Klíč zůstává ve vašem zařízení."), tlačítko **„Podepsat certifikátem“** | `POST /s/:slug/qes_sessions` |
 | `creating` | spinner, tlačítko zakázané | — |
-| `awaiting_app` | QR kód (universal link `/qes/sign`), tlačítko **„Otevřít aplikaci“** (custom scheme), odkaz na web fallback (`fallback_url`), odpočet do `expires_at`, tlačítko **„Zrušit“** | polling `GET /s/:slug/qes_sessions/:id` každých `poll_interval_ms` |
+| `awaiting_app` | QR kód (custom scheme `dokulachtan://sign`), tlačítko **„Otevřít aplikaci“** (custom scheme), odkaz na web fallback (`fallback_url`), odpočet do `expires_at`, tlačítko **„Zrušit“** | polling `GET /s/:slug/qes_sessions/:id` každých `poll_interval_ms` |
 | `completed` | „Podepsáno“ + úroveň (AdES/QES) + čas | nastaví `values[field.uuid] = value`, zavolá `submitStep()` (auto-submit) |
 | `failed` | chybová zpráva dle `error.code` (§ 5.6) | **„Zkusit znovu“** (nová session), **„Zrušit“** |
 | `expired` | „Platnost odkazu vypršela“ | **„Vyžádat nový odkaz“** (nová session) |
@@ -1643,7 +1643,7 @@ Nové soubory forku (vše v `app/lib/qes/` — Rails autoloaduje `app/**`):
 | `app/controllers/api/qes_verifications_controller.rb` | ověření PDF (docs/16) | `spec/requests/qes_verifications_spec.rb` |
 | `app/controllers/templates_qes_verifications_controller.rb` | panel ověření PDF | `spec/requests/qes_verifications_spec.rb` |
 | `app/jobs/qes/expire_sessions_job.rb` | expirace sessions | `spec/jobs/qes/expire_sessions_job_spec.rb` |
-| `app/views/qes/app/show.html.erb` | fallback HTML (QR, odkazy) | — |
+| `app/views/qes/app/show.html.erb` | fallback HTML (QR, tlačítko) | — |
 | `app/views/templates/_qes_verification.html.erb` | panel ověření PDF | `spec/requests/qes_verifications_spec.rb` |
 | `app/javascript/submission_form/qes_step.vue` | krok v prohlížeči (§ 6.5) | `spec/javascript/qes_step_logic.test.mjs` (logika) |
 | `app/javascript/submission_form/qes_step_logic.mjs` | čistá logika kroku (polling, chyby, cancel) | `spec/javascript/qes_step_logic.test.mjs` |
