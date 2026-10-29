@@ -13,7 +13,6 @@ jsou označené jako mimo rozsah.
 |---|---|---|---|
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
-| 6 | Submenu úrovně podpisu se nevykreslí | potvrzeno | P1 |
 | 8 | Prázdná ENV vypne default bez varování | potvrzeno | P2 |
 | 9 | Důvěra na úrovni kořene širší než TSL | potvrzeno (policy) | P2 |
 | 10 | `QES_ENABLED=false` není úplný vypínač | potvrzeno (úzké) | P2 |
@@ -107,15 +106,6 @@ end
 ```
 
 Test: šablona `required: false`, API `required: false` → `false`.
-
-### #6 Submenu úrovně podpisu se nevykreslí
-
-`qes_level_submenu.vue:5` používá `qesI18n.en.qes_level`, ale `qesI18n` je jen modulový import (`:15`);
-`data()` vrací jen `{ IconWritingSign }` (`:28`). Vue 3 Options API sáhne na `this.qesI18n` → `undefined`
-→ render skončí `Cannot read properties of undefined (reading 'en')`. Komponenta se mountuje, když
-`withQes && field.type === 'qes'` (`field_context_menu.vue:123`), takže volba AdES/QES v builderu nejde použít.
-
-Oprava: přidat `qesI18n` do `data()` (nebo `setup()`), plus mount test.
 
 ### #11 PdfiumTrust: při přijatém jen razítku se změny nekontrolují
 
@@ -252,7 +242,7 @@ při vydání produkčního APK). Žádná změna kódu.
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |
-| F9 | #5, #6, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
+| F9 | #5, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
 před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #14, #16.

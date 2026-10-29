@@ -121,6 +121,8 @@ Pole typu `qes` je v `template.fields` JSON objekt:
 
 Chování:
 - V **template builderu** se `qes` nabízí jako typ pole vedle `signature` (ikona `IconWritingSign`).
+- V **template builderu** je u pole `qes` volba úrovně (`preferences.level`); **QES je do nasazení reálné
+  čtečky viditelná, ale neaktivní**, takže z UI vznikají jen AdES pole (tok A/B, § 9.4).
 - V **podpisovém formuláři** se místo kreslení zobrazí krok `QesStep` (§ 9).
 - V **renderování výsledného PDF** se `qes` pole **nevykresluje** (žádný text ani obrázek);
   jeho hodnota je interní token.
