@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 19 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 18 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -11,7 +11,6 @@ jsou označené jako mimo rozsah.
 
 | # | Titulek (zkráceně) | Verdikt | Priorita |
 |---|---|---|---|
-| 2 | Povinná pole se u QES submissionu přeskočí | potvrzeno | **P0** |
 | 3 | Generátor PDF podle šablony, ne podle podpisu | potvrzeno | **P0** |
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
@@ -62,29 +61,6 @@ Oprava: rozhodovat podle `submitter.qes_sessions.completed.exists?` na všech t�
 Testy: (a) volitelné `qes` pole nepodepsané → upstream generátor proběhne a `documents` existuje;
 (b) dokončená session + `QES_ENABLED=false` → `ResultAttachments` se použije, podpis zůstane INTACT;
 (c) totéž pro `combined_document` a `finalize!`.
-
-### #2 Povinná pole se u QES submissionu přeskočí (regrese `d845ba42`)
-
-`lib/submitters/submit_values.rb:77` se vrací přes `Qes::Hooks.finalize_values(..., required_field_uuids_acc: Set.new)`
-ještě před smyčkou, která plní `required_field_uuids_acc` a hází `RequiredFieldError` (řádky 96–105).
-`SigningValues.finalize!` povinná pole nekontroluje (`prepare!` ano, ale jen na cestě před podpisem).
-
-Dopad: šablona s volitelným `qes` polem a chybějícím povinným textovým polem projde dokončením.
-
-Oprava: sjednotit obě cesty — extrahovat upstream kontrolu do privátní metody
-`check_required_values!(submitter, acc, validate_required)` a zavolat ji i ve QES větvi:
-
-```ruby
-if Qes.active_for?(submitter.submission)
-  required_field_uuids_acc = Set.new
-  Qes::Hooks.finalize_values(submitter, required_field_uuids_acc:)
-  check_required_values!(submitter, required_field_uuids_acc, validate_required)
-  return submitter
-end
-```
-
-Test: šablona s volitelným `qes` polem + povinným textem, `PUT /api/submitters/:id` s `completed: true`
-bez textu → `RequiredFieldError` (422), u QES i non-QES pole.
 
 ### #14 Dokončení přes token relace nehlídá stav submissionu
 
@@ -291,7 +267,6 @@ při vydání produkčního APK). Žádná změna kódu.
 | Blok | Issues | Proč první |
 |---|---|---|
 | F1 | #3 | ztráta kvalifikovaného podpisu při `QES_ENABLED=false`; nejdřív testy, pak jednořádková změna gate |
-| F2 | #2 | povinná pole; sjednotit obě cesty, aby se neopakovalo |
 | F3 | #14, #15 | stav submissionu a souběh revizí; potřebuje migraci (částečný index) |
 | F4 | #16, #4 | snapshot polí a `required`; jeden hook, dva testy |
 | F5 | #18.2 | CI `awk` — extrakce otisku z `apksigner` (workflow, ne kód forku) |
