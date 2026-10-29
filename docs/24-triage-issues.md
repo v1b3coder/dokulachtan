@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 20 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 19 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -16,7 +16,6 @@ jsou označené jako mimo rozsah.
 | 4 | API `required: false` se přepíše na `true` | potvrzeno | P1 |
 | 5 | `rescue_from RecordInvalid` chytá vše | potvrzeno (nízký dopad) | P2 |
 | 6 | Submenu úrovně podpisu se nevykreslí | potvrzeno | P1 |
-| 7 | Default `QES_LTV_ALLOWED_HOSTS` bez I.CA | potvrzeno (config) | P2 |
 | 8 | Prázdná ENV vypne default bez varování | potvrzeno | P2 |
 | 9 | Důvěra na úrovni kořene širší než TSL | potvrzeno (policy) | P2 |
 | 10 | `QES_ENABLED=false` není úplný vypínač | potvrzeno (úzké) | P2 |
@@ -225,10 +224,6 @@ udělat jako chybu, ne jako průchod.
   ne z `error.record.errors`. V praxi dnes `RecordInvalid` v těchto controllerech hází jen `@template.save!`,
   takže dopad je malý; oprava je ale levná: `raise error unless error.record.is_a?(Template) && error.record.errors.attribute_names.include?(:fields)`
   a stavět z `error.record.errors`. Test: RecordInvalid z jiného záznamu → upstream chování.
-- **#7** `qes.rb:60` — default `ltv_allowed_hosts` bez I.CA hostů, ale README/docs/10 nabízejí iSignum (I.CA).
-  Cert s CDP na I.CA selže `ltv_unavailable` i při `QES_REQUIRE_LTV=false`; z chyby není poznat, že chybí allowlist.
-  Oprava: doplnit CRL hosty I.CA (ověřit z aktuálních certů), v README říct, že prázdná hodnota = bez allowlistu,
-  a do hlášky `ltv_unavailable` doplnit odmítnutý host.
 - **#8** `qes.rb:87-98` — `cast` vrací `raw.presence`, takže `QES_TRUST_ROOTS=` dá `nil` (prázdný signing store)
   a `QES_EXPIRY_JOB_INTERVAL=` dá `0` (expirace se nikdy nespustí). `load_roots` (`:133-142`) neexistující soubor tiše přeskočí.
   Oprava: `from_env` vrací default, když je `ENV[env_name].blank?`, kromě `ltv_allowed_hosts` (prázdná = vypnuto);
@@ -303,7 +298,7 @@ při vydání produkčního APK). Žádná změna kódu.
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |
-| F9 | #5, #6, #7, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
+| F9 | #5, #6, #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
 před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #3, #14, #16.

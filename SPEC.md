@@ -1256,7 +1256,7 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA; povinné když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
 | `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
-| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené) |
+| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené); prázdná hodnota = jen https a veřejná adresa (pro I.CA s http CRL DP nestačí); explicitní ENV default plně nahradí |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro assetlinks.json |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |

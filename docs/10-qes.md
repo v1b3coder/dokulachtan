@@ -34,7 +34,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
 | `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
-| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené) |
+| `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené). I.CA hosty jsou tu proto, že její CRL DP jsou jen **http** (https na `qcrldp1.ica.cz` neodpovídá), takže prázdná hodnota („bez allowlistu" = jen https a veřejná adresa) pro I.CA nestačí. Explicitní ENV default **plně nahradí** — kdo podepisuje certem mimo PostSignum/I.CA, musí svoje hosty vypsat taky. Podpis certem I.CA navíc potřebuje její roots v `QES_TRUST_ROOTS` (výchozí `postsignum.pem` I.CA nezná). |
 | `QES_TEST_CRL_PATH` | — | cesta k testovacímu CRL, které fork vystaví na `/qes-test/root.crl` (jen staging) |
 | `QES_ANDROID_CERT_SHA256` | — | fingerprint pro `assetlinks.json` |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
@@ -163,7 +163,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `422 qes_required_qscd` | pole `preferences.level=qes`, cert bez `QcSSCD` | cert z čipu, nebo pole přepněte na `ades` |
 | `422 level_mismatch` | `QcSSCD` cert poslaný jako `phone_keystore` | telefon není QSCD; použijte čtečku |
 | `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví před certifikátem, SPEC § 5.1a) |
-| `ltv_unavailable` | cert má CRL DP a CRL nelze stáhnout (chybí allowlist / egress / DNS) | přidejte hosty do `QES_LTV_ALLOWED_HOSTS` a ověřte egress; `QES_REQUIRE_LTV=false` u certu s CRL DP nepomůže |
+| `ltv_unavailable` | cert má CRL DP a CRL nelze stáhnout (chybí allowlist / egress / DNS) | přidejte hosty do `QES_LTV_ALLOWED_HOSTS` (I.CA: `qcrldp1.ica.cz`, `qcrldp2.ica.cz`, `crldp1.ica.cz`, `crldp2.ica.cz`) a ověřte egress; hláška nově obsahuje odmítnutý host; `QES_REQUIRE_LTV=false` u certu s CRL DP nepomůže |
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
 | `pyhanko` → `UNTRUSTED` | chybí root v signing/verification trust store (podle toho, co se ověřuje), nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
 | `pyhanko` → `EXTENDED_WITH_FORM_FILLING` | po podpisu appky přibyla pečeť | očekávané; podpis appky zůstává INTACT |
@@ -220,9 +220,11 @@ který DSS kryje; offline `pyhanko ades_lta_validation` s `allow_fetching=False`
 Na stagingu mají test certy CRL DP i na staging hostu (`QES_TEST_CRL_PATH`) a `QES_REQUIRE_LTV=false`,
 takže CRL je dostupné; `127.0.0.1:8765` se ignoruje. Reálné PostSignum certy CRL dostanou (jejich CRL DP jsou veřejné
 a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkci jsou CRL hosty PostSignum (`crl.postsignum.cz`,
-`crl2.postsignum.cz`, `crl.postsignum.eu`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
+`crl2.postsignum.cz`, `crl.postsignum.eu`) i I.CA (`qcrldp1.ica.cz`, `qcrldp2.ica.cz`, `crldp1.ica.cz`,
+`crldp2.ica.cz`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
 bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` by skončil na
-`ltv_unavailable` (ověřeno na produkci 2026-10-18). Reálný CRL PostSignum Qualified CA 4 má
+`ltv_unavailable` (ověřeno na produkci 2026-10-18). Podpis certem I.CA navíc potřebuje její roots
+v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL PostSignum Qualified CA 4 má
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
 `QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
 
@@ -242,6 +244,8 @@ QES_REQUIRE_LTV=false
 QES_TEST_CRL_PATH=/app/config/qes/test-root.crl
 QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev
 #   test cert má CRL DP na staging host → staging CRL je dostupné; 127.0.0.1 se ignoruje
+#   explicitní hodnota nahrazuje default → kdo na stagingu podepisuje certem I.CA,
+#   musí sem doplnit i její hosty (qcrldp1/qcrldp2/crldp1/crldp2.ica.cz)
 
 # produkce (deploy/docuseal/fly.toml, APP=dokulachtan)
 # Defaulty pokrývají QES_ENABLED, signing trust roots (PostSignum),

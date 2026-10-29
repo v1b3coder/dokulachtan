@@ -62,7 +62,7 @@ const ERROR_TEXT: Record<string, string> = {
   no_qualified_certificate: 'Na čipu není kvalifikovaný certifikát.',
   level_mismatch: 'Vybraný certifikát neodpovídá typu podpisu.',
   not_qualified: 'Certifikát není kvalifikovaný.',
-  not_trusted: 'Certifikát není důvěryhodný. Použijte certifikát od důvěryhodné CA (I.CA/PostSignum).',
+  not_trusted: 'Certifikát není pro tento server důvěryhodný. Obraťte se na správce.',
   revoked: 'Certifikát byl revokován.',
   unsupported_certificate: 'Certifikát nepodporuje podepisování.',
   unsupported_key: 'Nepodporovaný typ nebo velikost klíče.',
@@ -70,7 +70,7 @@ const ERROR_TEXT: Record<string, string> = {
   signature_invalid: 'Podpis se nepodařilo ověřit. Zkuste to znovu.',
   signature_size_exceeded: 'Podpis se nevešel do připraveného místa. Zkuste to znovu.',
   tsa_unavailable: 'Časové razítko není dostupné. Zkuste to znovu.',
-  ltv_unavailable: 'Nepodařilo se ověřit revokaci certifikátu. Zkuste to znovu.',
+  ltv_unavailable: 'Revokační data certifikátu nejsou dostupná. Obraťte se na správce.',
   validation_failed: 'Podpis se nepodařilo ověřit. Zkuste to znovu.',
   incomplete_coverage: 'Podpis nepokrývá celý dokument. Zkuste to znovu.',
   seal_failed: 'Pečeť dokumentu se nepodařilo vytvořit. Zkuste to znovu.',
@@ -184,7 +184,7 @@ export default function SignScreen() {
     || error === 'expired_token' || error === 'unknown_token'
     || error === 'missing_server' || error === 'failed' || error === 'cancelled'
     || error === 'values_changed' || error === 'document_set_changed'
-    || error === 'signing_context_mismatch';
+    || error === 'signing_context_mismatch' || error === 'ltv_unavailable';
   const pending = error === 'server_pending';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 

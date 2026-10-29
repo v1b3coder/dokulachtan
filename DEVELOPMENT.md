@@ -110,7 +110,7 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat (čárkou oddělené cesty) |
 | `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF |
 | `QES_REQUIRE_LTV` | `true` | vyžaduje LTV data pro certy bez CRL DP |
-| `QES_LTV_ALLOWED_HOSTS` | PostSignum hosty | allowlist hostů pro CRL (SSRF ochrana) |
+| `QES_LTV_ALLOWED_HOSTS` | PostSignum a I.CA hosty | allowlist hostů pro CRL (SSRF ochrana); prázdná hodnota = jen https a veřejná adresa |
 | `QES_TSA_URL`, `QES_TSA_TRUST_ROOTS`, `QES_TSA_REQUIRED` | DigiCert / `config/qes/digicert-tsa.pem` / `true` | časové razítko (RFC 3161) |
 | `QES_PUBLIC_BASE_URL`, `QES_DEEP_LINK_BASE` | veřejná URL a deep link pro appku |
 | `QES_PDF_MAX_BYTES`, `QES_SESSION_TTL` | limity uploadu a session |
