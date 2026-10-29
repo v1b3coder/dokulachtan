@@ -834,8 +834,11 @@ a session označit `failed` (nikdy nezkracovat podpis).
 - `Qes::Ltv.check_revoked!` při přijetí certifikátu **MUSÍ** ověřit, že certifikát není v CRL uvedený jako
   revokovaný; pokud je, session **MUSÍ** selhat s `422 revoked` (SPEC § 15.2 N4).
 - Pokud cert má `CRLDistributionPoints` a CRL nelze získat (allowlist, egress, DNS), session **MUSÍ**
-  selhat s `failure_code = "ltv_unavailable"`; `QES_REQUIRE_LTV` řídí jen certy **bez** CRL DP
-  (`true` = fail, `false` = podpis bez LTV s varováním v auditu).
+  selhat s `failure_code = "ltv_unavailable"`. Při `QES_REQUIRE_LTV=true` se CRL vyžaduje pro **každý
+  ne-kořenový cert** ověřeného řetězu, i bez CRL DP (`false` = cert bez CRL DP se přeskočí a podpis
+  vznikne bez LTV s varováním v auditu).
+- Do DSS **MUSÍ** jít certy ověřeného řetězu (`Qes::Validator.verify_chain!`), ne jen certy od klienta:
+  mezilehlý cert, který server zná jen z trust bundlu, musí být v PDF pro offline validaci.
 - **Poznámka:** HexaPDF 1.7 LTV neumí (viz § 16), proto je LTV implementováno vlastními moduly
   `Qes::Ltv` (CRL pro DSS) a `Qes::Dss` (DSS slovník); CMS LTV se nepoužívá (viz § 7.4 výše).
 
@@ -1272,7 +1275,7 @@ v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepíše |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA; povinné když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
-| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro certy bez CRL DP; staging/testy `false` |
+| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro každý ne-kořenový cert řetězu (cert bez CRL DP = fail); staging/testy `false` |
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené); prázdná hodnota = jen https a veřejná adresa (pro I.CA s http CRL DP nestačí); explicitní ENV default plně nahradí |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
@@ -1726,6 +1729,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 2. CRL nedostupné + `QES_REQUIRE_LTV=true` → `ltv_unavailable`.
 3. `crl_urls` vrací všechny URL z certifikátu (ne jen první).
 4. offline `pyhanko validate` (bez `--fetch`) → `trusted=True`.
+5. ne-kořenový cert bez CRL DP + `QES_REQUIRE_LTV=true` → `ltv_unavailable`; s `false` se přeskočí.
 
 **`spec/lib/qes/seal_spec.rb`**
 1. po `apply` má PDF o jednu signaturu víc; předchozí zůstávají `INTACT`.

@@ -23,7 +23,7 @@ jsou označené jako mimo rozsah.
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | opraveno (snapshot při vzniku, `level` ze submissionu) | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 potvrzeno (latentní) | P2 |
-| 19 | LTV bez revokace mezilehlé CA | potvrzeno | P1 |
+| 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
 | 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
@@ -173,15 +173,20 @@ ne podpisový tok (`Qes::Validator` ověřuje řetěz), ne appka (S14/S15 čte `
 (`Qes::Verifier#messages` bere jen pečetě). Útočník potřebuje privátní klíč k certu v účtu; bez něj podpis nezkreslí.
 `adbe.pkcs7.detached` (pečeť) zůstává na upstream sémantice — klíč pečeti je na serveru.
 
-### #19 Přísné LTV projde bez revokace mezilehlé CA; DSS z certů od klienta
+### #19 Přísné LTV projde bez revokace mezilehlé CA; DSS z certů od klienta — **opraveno**
 
 `ltv.rb:48-62` (`check_revoked!`): `matching.empty?` hází `No matching CRL` jen když cert má CDP
 (`crl_distribution_point?`, `:331`). Mezilehlý cert bez CDP projde. `collect_crls` (`:78-98`) iteruje `[certificate, *chain]`,
 tedy řetěz od klienta, ne ověřený `context.chain`. DSS (`mobile_app.rb:230-233`) dostává `certificate_chain_der`
 (`:348`) — mezilehlý cert, který server zná jen z trust bundlu, se do PDF nevloží.
 
-Oprava: při `require_ltv` vyžadovat CRL/OCSP pro každý ne-kořenový cert ověřeného řetězce a do DSS vkládat tento řetězec.
-Test: mezilehlý cert bez CDP + `require_ltv` → `ltv_unavailable`; DSS obsahuje všechny certy řetězce.
+Oprava (fork `4fd9390a`): `Qes::Ltv.check_revoked!`/`collect_crls` při `require_ltv` odmítnou i cert
+bez CRL DP (`ltv_unavailable`); s `require_ltv=false` zůstává přeskočení. `Qes::Providers::MobileApp#ltv_values`
+vrací certy ověřeného řetězu a DSS je bere odtud. `Qes::Validator.verify_chain!` vrací ověřený řetěz;
+controller ho použije pro fetch CRL i `data_to_sign`, takže revokace, CMS i DSS jdou z ověřeného řetězu
+už při přijetí certu.
+Test: `ltv_spec.rb` (mezilehlý cert bez CDP + `require_ltv` → `ltv_unavailable`),
+`chain_revocation_spec.rb` (DSS certy z ověřeného řetězu), `qes_sessions_spec.rb` (controller uloží ověřený řetěz).
 
 ### #17 Podepisující nemusí dokument vidět; PDF se může otevřít v Dokulachtanu
 
