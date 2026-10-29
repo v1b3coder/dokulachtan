@@ -25,10 +25,10 @@ jsou označené jako mimo rozsah.
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 opraveno | P2 |
 | 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
-| 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
+| 22 | URL finálního PDF se neověřuje | neplatí (stahování jen v přímém podpisu) | — |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
 
-**Wontfix v kódu:** #23.1, #23.2.
+**Wontfix v kódu:** #22, #23.1, #23.2.
 
 ## 2. P0 — bezpečnost a ztráta dat
 
@@ -245,10 +245,6 @@ udělat jako chybu, ne jako průchod.
   `final_document` zůstává). Testy: `template_spec`, `submission_spec`, `expire_sessions_job_spec`,
   `qes_disabled_spec` (4×), `qes_template_errors_spec`; bez guardů 8/8 červených, s guardy T0 447/1
   (1 flaky `qes_session_documents_spec` na hranici sekundy v `expires_at`).
-- **#22** `pdfShare.ts:106` — `downloadPdf` předá URL z API rovnou `File.downloadFileAsync` bez kontroly schématu/origin.
-  Dopad nízký (přesměrování podepsanou URL jinému hostu nepředá), ale chybí vazba na server z Nastavení.
-  Oprava: před stažením ověřit `https` a host proti serveru z Nastavení (nebo nakonfigurovanému úložišti),
-  chybu hlásit jako `foreign_server`.
 - **#23.3** `ceremony.ts:115` — `unlockCertificate` před `POST certificate`; podpis až po validaci, takže dopad je jen
   zbytečně dlouhá doba s odemčeným klíčem. Oprava: veřejný cert a řetěz číst bez odemčení, klíč odemknout až před podpisem.
 - **#23.4** `sessions_controller.rb:47,69,89` — každý `GET document` / `POST certificate` posune `expires_at` bez stropu;
@@ -258,7 +254,7 @@ udělat jako chybu, ne jako průchod.
 
 ## 5. Mimo rozsah (wontfix)
 
-Sem patří i **#18.1** — první verze triage ho měla jako P0, druhá jako wontfix; rozhodnutí 2026-10-29 je **zrušit App Links** (viz níže).
+Sem patří **#22** (neplatí, viz níže) a **#18.1** — první verze triage ho měla jako P0, druhá jako wontfix; rozhodnutí 2026-10-29 je **zrušit App Links** (viz níže).
 
 ### #18.1 Ladicí otisk v App Links — **vyřešeno zrušením App Links** (rozhodnutí 2026-10-29)
 
@@ -291,6 +287,26 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 - **#23.2 Paralelní spouštěč testů** (`scripts/qes-test-parallel.sh:125,167`, `scripts/qes_test_groups.py:85`) —
   vývojový nástroj, ne produkt. Opraveno samostatně, až bude potřeba.
 
+### #22 URL finálního PDF se neověřuje — **neplatí** (rozhodnutí 2026-10-29)
+
+`pdfShare.ts:106` (`downloadPdf`) opravdu předá URL z těla odpovědi rovnou `File.downloadFileAsync` bez kontroly
+schématu a originu a `documentUrl` (`pdfApi.ts:295-307`) ji nevaliduje. Nález ale popisuje scénář, který v kódu není:
+
+1. **Stahování je jen v přímém podpisu PDF.** Tlačítka „Stáhnout“/„Sdílet“ se renderují pod `isPdfFlow`
+   (`sign.tsx:689`) a `pdfApi()` dnes navíc hází `invalid_server`, když `!isPdfFlow` (`sign.tsx:194`); `downloadPdf`
+   i `documentUrl` mají jediné volání (`sign.tsx:480-482`). Ve signing workflow appka po podpisu jen napíše
+   „Dokument byl podepsán. Můžete se vrátit do prohlížeče.“ — nic nestahuje.
+2. **Vazba na server z Nastavení existuje.** `pdfApi()` volá `resolveSigningOrigin` (`signingOrigin.ts:52-60`);
+   když se origin odkazu liší od Nastavení, padá `foreign_server` ještě před requestem.
+3. **Kontrola URL by nepřidala bezpečnost, jen konfigurační závislost.** V přímém podpisu je server z Nastavení ten
+   server, kterému uživatel nahrál PDF a který vyrobil finální PDF (pečeť + DocTS); podvržené PDF může vrátit
+   z vlastního originu stejně snadno. Zavázání na `APP_URL` by naopak rozbilo nasazení, kde se host liší
+   (custom doména, CDN, `HOST` v multitenant režimu) — u self-hosted software reálný scénář.
+
+Co zůstává platné: kdyby někdy přibylo stahování finálního PDF ve workflow flow, URL se musí vázat na **origin
+session** (server z odkazu), ne na Nastavení — pravidlo do `docs/17`/SPEC, ne kód dnes. Integritu finálního PDF
+řeší #21, podmínku důvěry v orchestraci #17.
+
 ## 7. Návrh pořadí oprav
 
 | Blok | Issues | Proč první |
@@ -300,7 +316,7 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 | F5 | #18.2 | hotovo: `scripts/apk_fingerprint.sh` + test v CI |
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
-| F8 | #17, #21, #22 | appka: review, ověření finálního PDF, URL; E2E na emulátoru |
+| F8 | #17, #21 | appka: review, ověření finálního PDF; E2E na emulátoru |
 | F9 | #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
