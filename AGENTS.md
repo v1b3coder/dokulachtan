@@ -139,7 +139,7 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty) → `/data/docuseal`;
   starý volume `dokulachtan_data` byl smazán 2026-10-18.
-- Release **v52** (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), fork `cfd36b2c`.
+- Release **v55** (`deployment-01M650QAXQV2X3ZNV0F33DW4QB`), fork `1694f6e4`.
 - `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 15 vydávajících CA
   (`config/qes/czech.pem`, anchory — žádné rooty), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
   TSA roots 1, `tsa_required=true`; CRL fetch z produkční instance OK.
@@ -148,7 +148,8 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 - healthcheck `/up` 200, `/` → `/setup` (čeká na první účet); migrace automaticky,
   `SECRET_KEY_BASE` + `docuseal.env` + SQLite na volume.
 - `/api/qes/verify`, `/api/qes/documents` i `/api/tools/verify` → 401;
-  `/qes/sessions/unknown/document` → 404; `/qes-test/root.crl` → 404.
+  `/qes/sessions/unknown/document` → 404; `/qes-test/root.crl` → 404;
+  `/.well-known/assetlinks.json` → 404 (App Links zrušeny), `/.well-known/apple-app-site-association` → 200 JSON.
 - První účet (setup) vytváří uživatel v prohlížeči; SMTP Brevo, `SMTP_FROM=<SMTP_FROM>`,
   `deploy/smtp.prod.env` (gitignored).
 
@@ -157,7 +158,7 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`;
   obnovený ze snapshotu starého staging volume, má účet `<SMTP_FROM>` a šablonu
   „QES E2E (staging)“.
-- Release **v25** (`deployment-01M61RKSP8C594JRPAEKTR3VZT`), fork `cfd36b2c`.
+- Release **v28** (`deployment-01M650K1FWD2H6SK54HBXQ9GV7`), fork `1694f6e4`.
 - Override: `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`,
   `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`,
   `QES_REQUIRE_LTV=false`,
@@ -308,10 +309,10 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   defaulty pro český deployment jsou v `Qes::Config::DEFAULTS`.
 - Appka: Expo SDK 58, vault s AES-256-GCM a biometrií, import PKCS#12, přímý podpis
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.
-- Testy: tiery T0–T3 a paralelní runner; QES 459/0, appka 224/0, JS 37/0,
+- Testy: tiery T0–T3 a paralelní runner; QES 469/0, appka 225/0, JS 37/0,
   T2 659/0 a T3 660/0 (2026-10-29).
-- Nasazeno: produkční instance **v52** (`dokulachtan`, fork `cfd36b2c`), staging **v25**
-  (`dokulachtan-staging`, fork `cfd36b2c`); `/up` 200 na obou.
+- Nasazeno: produkční instance **v55** (`dokulachtan`, fork `1694f6e4`), staging **v28**
+  (`dokulachtan-staging`, fork `1694f6e4`); `/up` 200 na obou.
 
 **Zbývá**
 
@@ -320,8 +321,6 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 - Produkční APK podepsaný release keystorem; testovací APK je debug-signed. App Links jsou zrušeny
   (#18.1), takže debug podpis už App Links neovlivňuje.
 - První reálný podpis na produkční instanci s PostSignum certem.
-- TOFU ve forku `f1c28c2b` (origin serveru v podpisovém odkazu) — na produkčních instancích
-  zatím není nasazený; před použitím TOFU odkazu nasadit.
 - Otevřené nálezy z triage: [docs/24-triage-issues.md](docs/24-triage-issues.md).
 
 ## Pravidla modifikací forku

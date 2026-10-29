@@ -327,8 +327,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   podpisové odkazy ho nepoužívají. Server shodný s Nastavením je pro podpisové odkazy
   důvěryhodný bez TOFU (v seznamu je označený „Server z Nastavení“). Odkaz bez serveru skončí `missing_server` (žádný tichý
   fallback do Nastavení); `server_url` z payloadu musí odpovídat originu odkazu, jinak appka
-  vrátí `foreign_server`. Serverová část TOFU je ve forku `f1c28c2b`; na produkčních instancích
-  (v52/v25, fork `cfd36b2c`) zatím není nasazená — před použitím TOFU odkazu nasadit.
+  vrátí `foreign_server`. Serverová část TOFU je ve forku `f1c28c2b` a od release **v55**/**v28**
+  (fork `1694f6e4`) je nasazená na obou instancích.
 
 ### iOS build a instalace na iPhone
 
