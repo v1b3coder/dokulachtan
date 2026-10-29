@@ -19,7 +19,7 @@ jsou označené jako mimo rozsah.
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | opraveno (hranice i pro DocTS) | P2 |
 | 12 | Account fallback důvěřuje klíči, ne certu | opraveno (přesná shoda certu) | P2 |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | opraveno (guard v `create`, `complete`, `complete_submission`) | P0 |
-| 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
+| 15 | Dvě připravené revize nad jedním PDF | opraveno (aktivní revize pod zámkem + unikátní index) | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | opraveno (snapshot při vzniku, `level` ze submissionu) | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 mimo rozsah (config), 18.2 potvrzeno | P1 |
@@ -77,6 +77,15 @@ Navíc `QesSession.active` (`qes_session.rb:68`) nezahrnuje `expires_at > now` �
 blokuje `create` odpovědí `409 signature_in_progress`, dokud ji nezavře job. Brát jen `expires_at > now`.
 
 Test: dvě session vytvořené paralelně → druhá dostane `conflict`; prošlá session neblokuje novou.
+
+**Opraveno (2026-10-29, fork `3268334b`):** `form_sessions#create` kontroluje aktivní session celé submission
+pod zámkem (jiné pole v `awaiting_signature` → 409, ne nová revize), prošlou session pod zámkem ukončí
+(`QesSession.live` ji vylučuje z předkontroly) a `RecordNotUnique` z indexu překládá na stejný 409.
+`MobileApp#complete!` porovnává `qes_base_digest` i nil, takže první revize selže, když mezitím dokončila jiná.
+Migrace `20261029000001` přidává částečný unikátní index na `qes_sessions (submission_id)` pro aktivní stavy
+a před ním uklidí existující duplicity (ponechá nejnovější). Testy: `spec/lib/qes/session_concurrency_spec.rb`
+(souběh před zámkem, prošlá session, první revize), `spec/models/qes_session_spec.rb` (index) a
+`spec/requests/qes_form_sessions_spec.rb` (`show` pro expired i failed). Ověřeno T0 469/0, T1 577/0, T2 712/0, T3 716/0.
 
 ## 3. P1 — reálné, opravit v dalším bloku
 
