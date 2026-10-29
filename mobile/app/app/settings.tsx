@@ -52,6 +52,16 @@ export default function SettingsScreen() {
   }, []);
 
   const dirty = !loaded || loaded.serverUrl !== serverUrl || loaded.apiToken !== apiToken;
+  const configuredOrigin = (() => {
+    if (!loaded?.serverUrl) return null;
+
+    try {
+      return signingOrigin(loaded.serverUrl);
+    } catch {
+      return null;
+    }
+  })();
+  const otherTrustedServers = trustedServers.filter((server) => server.origin !== configuredOrigin);
 
   async function saveApi() {
     setSaveError(null);
@@ -133,9 +143,17 @@ export default function SettingsScreen() {
       <Text style={styles.muted}>
         Servery, kterým jste při prvním odkazu povolili podepisování. Token z odkazu se posílá jen jim.
       </Text>
-      {trustedServers.length === 0 ? (
+      {configuredOrigin ? (
+        <View style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.origin}>{configuredOrigin}</Text>
+            <Text style={styles.muted}>Server z Nastavení – vždy důvěryhodný pro podpisové odkazy</Text>
+          </View>
+        </View>
+      ) : null}
+      {otherTrustedServers.length === 0 && !configuredOrigin ? (
         <Text style={styles.muted}>Zatím žádný. Server se přidá při prvním podpisu z odkazu.</Text>
-      ) : trustedServers.map((server) => (
+      ) : otherTrustedServers.map((server) => (
         <View key={server.origin} style={styles.row}>
           <View style={styles.rowText}>
             <Text style={styles.origin}>{server.origin}</Text>

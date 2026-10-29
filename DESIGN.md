@@ -465,7 +465,8 @@ https://<host>/qes/sign?token=<jednorazovy>   (universal link, primární)
 Fallback (web): `https://<host>/qes/app?token=…` → stránka s tlačítkem „Otevřít appku“ + QR + odkazy
 na stažení. Server URL se bere z odkazu: u HTTPS z hostu, u custom scheme z parametru `server`.
 Nastavení se používá jen pro přímý podpis PDF a ověření PDF. Při prvním odkazu z neznámého
-serveru appka zobrazí potvrzení (TOFU), origin uloží a v Nastavení ho lze odvolat. Odkaz
+serveru appka zobrazí potvrzení (TOFU), origin uloží a v Nastavení ho lze odvolat. Server
+shodný s Nastavením (přímý podpis PDF) je důvěryhodný bez TOFU. Odkaz
 bez serveru skončí `missing_server`; `server_url` z payloadu musí odpovídat originu odkazu,
 jinak `foreign_server`.
 

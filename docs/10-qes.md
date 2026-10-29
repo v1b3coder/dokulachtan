@@ -308,7 +308,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   z něj jdou bez potvrzení. V *Nastavení → Důvěryhodné servery pro podpisové odkazy* je seznam
   s tlačítkem „Odvolat“; odvolání znamená, že se příští odkaz z toho serveru znovu potvrdí.
   *Nastavení → Server URL + API token* se používá **jen** pro přímý podpis PDF a ověření PDF;
-  podpisové odkazy ho nepoužívají. Odkaz bez serveru skončí `missing_server` (žádný tichý
+  podpisové odkazy ho nepoužívají. Server shodný s Nastavením je pro podpisové odkazy
+  důvěryhodný bez TOFU (v seznamu je označený „Server z Nastavení“). Odkaz bez serveru skončí `missing_server` (žádný tichý
   fallback do Nastavení); `server_url` z payloadu musí odpovídat originu odkazu, jinak appka
   vrátí `foreign_server`.
 

@@ -1224,7 +1224,7 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | Appka není nainstalovaná | prohlížeč zůstane na `/qes/app`, zobrazí QR + odkazy na stažení |
 | Universal link neověřený (dev build, fly.dev) | fallback na custom scheme odkaz |
 | Appka otevřená bez tokenu | S1 s chybou „Neplatný odkaz" |
-| Deep link z jiného serveru | origin z odkazu je autoritativní pro danou session; pokud není v seznamu důvěryhodných, appka vyžádá potvrzení (TOFU); odkaz bez serveru skončí `missing_server`; `server_url` z payloadu musí odpovídat originu odkazu, jinak `foreign_server` |
+| Deep link z jiného serveru | origin z odkazu je autoritativní pro danou session; server shodný s Nastavením (přímý podpis PDF) je důvěryhodný bez TOFU; jinak pokud není v seznamu důvěryhodných, appka vyžádá potvrzení (TOFU); odkaz bez serveru skončí `missing_server`; `server_url` z payloadu musí odpovídat originu odkazu, jinak `foreign_server` |
 | Token expiroval | S6 s „Vyžádejte nový odkaz"; prohlížeč nabídne „Zkusit znovu" (nová session) |
 
 ---

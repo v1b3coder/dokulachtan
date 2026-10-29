@@ -133,7 +133,8 @@ o aplikaci → „Smazat certifikát a klíč“ (obrys).
    nic nezmění; „Uloženo“ se resetuje při první editaci). Používá se jen pro přímý podpis PDF
    a ověření PDF, ne pro podpisové odkazy.
 2. **Důvěryhodné servery pro podpisové odkazy** — seznam originů s datem důvěry a „Odvolat“;
-   server se přidá při prvním podpisu z odkazu (TOFU).
+   server se přidá při prvním podpisu z odkazu (TOFU). Server z Nastavení je v seznamu
+   jako vždy důvěryhodný, bez „Odvolat“.
 3. **Podepisování** — řádek „Certifikát“ (subject + úroveň) → S3; řádek „Čtečka“ (Android) → S8.
    Sem se přesouvá párování čtečky z Home.
 4. **O aplikaci** — verze + attribution MOI SDK (beze změny).

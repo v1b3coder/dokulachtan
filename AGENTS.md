@@ -675,7 +675,8 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       nese origin serveru (HTTPS host, custom scheme `server`) a appka ho při prvním
       použití potvrdí (TOFU). Důvěryhodné servery jsou v `dataStorage`
       (`cz.dokulachtan.signer.trusted_servers`) a v *Nastavení → Důvěryhodné servery
-      pro podpisové odkazy* je lze odvolat. `server_url` z payloadu musí odpovídat
+      pro podpisové odkazy* je lze odvolat. Server shodný s Nastavením je důvěryhodný
+      implicitně (bez TOFU). `server_url` z payloadu musí odpovídat
       originu odkazu, jinak `foreign_server`; odkazy bez serveru skončí
       `missing_server` (žádný tichý fallback do Nastavení). Ověřeno: `make qes-test-qes` 422/0,
       `make qes-js-test` 33/0, `make qes-app-test` 223/0, `make qes-app-typecheck`.

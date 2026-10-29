@@ -80,6 +80,15 @@ it('uses the link origin and reports trust for workflows', async () => {
     .resolves.toEqual({ origin: 'https://link.test', trusted: true });
 });
 
+it('trusts the server configured in Settings without a TOFU record', async () => {
+  const storage = memoryStorage({
+    [PDF_API_SETTINGS_KEY]: JSON.stringify({ serverUrl: 'https://settings.test', apiToken: '' }),
+  });
+
+  await expect(resolveWorkflowOrigin(storage, 'https://SETTINGS.test:443/'))
+    .resolves.toEqual({ origin: 'https://settings.test', trusted: true });
+});
+
 it('rejects a link without a server instead of using Settings', async () => {
   const storage = memoryStorage({
     [PDF_API_SETTINGS_KEY]: JSON.stringify({ serverUrl: 'https://settings.test', apiToken: '' }),

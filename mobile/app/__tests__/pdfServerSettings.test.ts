@@ -6,6 +6,7 @@ import { TRUSTED_SERVERS_KEY } from '../src/lib/trustedServers';
 import SignPdfScreen from '../app/sign-pdf';
 import VerifyPdfScreen from '../app/verify-pdf';
 import SettingsScreen from '../app/settings';
+import { TextButton } from '../src/ui/buttons';
 
 const { create, act } = require('react-test-renderer');
 jest.mock('expo-router', () => ({
@@ -106,7 +107,7 @@ describe('Settings save', () => {
 
   it('lists trusted signing-link servers and revokes their trust', async () => {
     storage.getItem.mockImplementation(async (key: string) => key === TRUSTED_SERVERS_KEY
-      ? JSON.stringify([{ origin: 'https://company.test', approvedAt: '2026-10-01T00:00:00Z' }])
+      ? JSON.stringify([{ origin: 'https://other.test', approvedAt: '2026-10-01T00:00:00Z' }])
       : JSON.stringify({ serverUrl: 'https://company.test', apiToken: 'test-token' }));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
       buttons?.find((button) => button.style === 'destructive')?.onPress?.();
@@ -114,10 +115,15 @@ describe('Settings save', () => {
     let screen: ReturnType<typeof create>;
     await act(async () => { screen = create(React.createElement(SettingsScreen)); });
     expect(JSON.stringify(screen.toJSON())).toContain('https://company.test');
+    expect(JSON.stringify(screen.toJSON())).toContain('Server z Nastavení – vždy důvěryhodný pro podpisové odkazy');
+    expect(JSON.stringify(screen.toJSON())).toContain('https://other.test');
+    const revoke = screen.root.findAllByType(TextButton)
+      .filter((button: { props: { title?: string } }) => button.props.title === 'Odvolat');
+    expect(revoke).toHaveLength(1);
 
-    await act(async () => { await screen.root.findByProps({ title: 'Odvolat' }).props.onPress(); });
+    await act(async () => { await revoke[0].props.onPress(); });
     expect(alert).toHaveBeenCalledWith('Odvolat důvěru?',
-      'Server https://company.test už nebude automaticky přijat pro podpisové odkazy.',
+      'Server https://other.test už nebude automaticky přijat pro podpisové odkazy.',
       expect.any(Array));
     expect(storage.setItem).toHaveBeenCalledWith(TRUSTED_SERVERS_KEY, '[]');
     expect(JSON.stringify(screen.toJSON())).not.toContain('Důvěra od');

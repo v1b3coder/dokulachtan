@@ -1,7 +1,7 @@
 // Důvěryhodné servery pro podpisové odkazy (TOFU): při prvním odkazu
 // uživatel potvrdí origin a appka si ho zapamatuje. Není to tajemství,
 // proto dataStorage (soubor), ne SecureStore s biometrií.
-import type { PdfApiStorage } from './pdfApi';
+import { loadPdfApiSettings, type PdfApiStorage } from './pdfApi';
 import { signingOrigin, SigningOriginError } from './signingOrigin';
 
 export const TRUSTED_SERVERS_KEY = 'cz.dokulachtan.signer.trusted_servers';
@@ -108,8 +108,22 @@ export async function resolveWorkflowOrigin(
   const origin = signingOrigin(linkServer);
   const servers = await loadTrustedServers(storage);
 
-  return {
-    origin,
-    trusted: servers.some((server) => server.origin === origin),
-  };
+  if (servers.some((server) => server.origin === origin)) {
+    return { origin, trusted: true };
+  }
+
+  // Server z Nastavení je uživatelův vlastní; nechceme po něm TOFU potvrzení.
+  const settings = await loadPdfApiSettings(storage);
+
+  if (settings?.serverUrl) {
+    try {
+      if (signingOrigin(settings.serverUrl) === origin) {
+        return { origin, trusted: true };
+      }
+    } catch {
+      // Neplatné Nastavení nemá trust ovlivnit; rozhodne se podle seznamu.
+    }
+  }
+
+  return { origin, trusted: false };
 }
