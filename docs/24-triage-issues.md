@@ -17,7 +17,7 @@ jsou označené jako mimo rozsah.
 | 9 | Důvěra na úrovni kořene širší než TSL | opraveno (anchory = vydávající CA) | P2 |
 | 10 | `QES_ENABLED=false` není úplný vypínač | opraveno (feature gate ve všech hoocích) | P2 |
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | opraveno (hranice i pro DocTS) | P2 |
-| 12 | Account fallback důvěřuje klíči, ne certu | potvrzeno | P1 |
+| 12 | Account fallback důvěřuje klíči, ne certu | opraveno (přesná shoda certu) | P2 |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | potvrzeno | **P0** |
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | potvrzeno | P1 |
@@ -138,8 +138,16 @@ jen `public_key.to_der` s certy účtu. R2 tím rozšířil důvěru i na CAdES 
 Držitel klíče k CA nebo `keyEncipherment` certu v účtu si vystaví nový list se stejným klíčem, `signing_leaf?` projde
 a podpis je „důvěryhodný" — obchází validaci řetězce.
 
-Oprava: v account fallbacku pro CAdES porovnávat celý cert (`to_der`), ne klíč; nebo fallback omezit na certy,
-které samy mají `signing_leaf?` (což je dnes jen částečné). Test: nový list se stejným klíčem jako CA cert v účtu → `trusted: false`.
+**Opraveno (2026-10-29, fork `31897fc5`):** `Qes::PdfiumTrust#account_leaf?` pro CAdES vyžaduje
+přesnou shodu `cert.to_der == signer.to_der` s certem účtu a dál drží `signing_leaf?` (K1);
+`lib/verify_pdf_signature.rb` zůstává beze změny. Test: `spec/lib/qes/verify_parity_spec.rb`
+(nový list se stejným klíčem jako cert účtu → `trusted: false`; přesný cert zůstává `trusted: true`),
+helper `QesHelpers#reissued_leaf`. Ověřeno: cílené lib specy 83/0, T0 460/0 (SQLite).
+
+**Závažnost snížena na P2:** zasažena je jen webová/API verifikace PDF (`/verify`, `/api/tools/verify`),
+ne podpisový tok (`Qes::Validator` ověřuje řetěz), ne appka (S14/S15 čte `Qes::Validator`) a ne uložený report
+(`Qes::Verifier#messages` bere jen pečetě). Útočník potřebuje privátní klíč k certu v účtu; bez něj podpis nezkreslí.
+`adbe.pkcs7.detached` (pečeť) zůstává na upstream sémantice — klíč pečeti je na serveru.
 
 ### #19 Přísné LTV projde bez revokace mezilehlé CA; DSS z certů od klienta
 
