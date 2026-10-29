@@ -20,7 +20,7 @@ jsou označené jako mimo rozsah.
 | 12 | Account fallback důvěřuje klíči, ne certu | opraveno (přesná shoda certu) | P2 |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | opraveno (guard v `create`, `complete`, `complete_submission`) | P0 |
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
-| 16 | Úroveň QES pole jde snížit; chybí snapshot | potvrzeno | P1 |
+| 16 | Úroveň QES pole jde snížit; chybí snapshot | opraveno (snapshot při vzniku, `level` ze submissionu) | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 mimo rozsah (config), 18.2 potvrzeno | P1 |
 | 19 | LTV bez revokace mezilehlé CA | potvrzeno | P1 |
@@ -87,11 +87,19 @@ může přepsat `preferences.level` z `qes` na `ades`; dokončení pak kontroluj
 Navíc `template_fields` se naplní jen při `completed` nebo při přepisu polí (`:110`), takže bez přepisu se pozdější
 úprava šablony propíše do požadavků existující submission.
 
-Oprava: v `Qes::Extensions::Lib::CreateFromSubmitters#assign_field_attrs` u `qes` polí vždy vrátit
-`preferences['level']` a `required` ze šablony (ignorovat `attrs`), a `submission.template_fields` naplnit vždy
-(`submission.template_fields ||= submission.template.fields.deep_dup`).
+**Opraveno (2026-10-30, fork `25d82cad`):** `level` i `required` se čtou ze snapshotu submissionu, ne ze šablony.
+`Qes::Extensions::Models::Submission#maybe_preserve_qes_order` naplní `template_fields` při vzniku QES submissionu
+(`template_fields ||= template.fields.deep_dup`), takže `Qes.template_fields` už nesahá na živou šablonu;
+`Qes::Extensions::Lib::CreateFromSubmitters#assign_field_attrs` u QES pole ignoruje `preferences.level`
+i `required` z API a vrátí hodnotu ze snapshotu (vytvoření i update). Backfill `FreezeQesFieldRequirements`
+zmrazí starší submissions bez snapshotu (jinak by se do nich úprava šablony pořád propisovala).
 
-Test: šablona `qes` + API `preferences: {level: 'ades'}` → session zůstane `qes`; template_fields je vyplněné.
+Důsledek: API nemůže změnit úroveň podpisu rozběhnuté submission ani při vytvoření, ani při update;
+úprava šablony se do ní nepropíše. Vytvoření s `level: ades` u `qes` šablony skončí `qes`.
+
+Testy: `spec/requests/qes_requirements_spec.rb` (4 nové — změna levelu u rozběhnuté submission včetně
+dokončení s AdES session, snapshot při vytvoření, `level` z API při vytvoření, změna šablony po vytvoření).
+Ovřeno T0 469/0 (SQLite); bez opravy 3 ze 4 testů červené.
 
 ### #4 API `required: false` u QES pole se přepíše na `true` (regrese `d845ba42`)
 
