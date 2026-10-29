@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Paralelní běh RSpec sady forku (docs/21-audit-testu.md § 8, fáze 3).
+# Paralelní běh RSpec sady forku (paralelní runner).
 #
 #   ./scripts/qes-test-parallel.sh [-g qes|fast|full] [-n 4] [--dry-run] [-- rspec argy…]
 #   ./scripts/qes-test-parallel.sh --write-timings
@@ -7,10 +7,10 @@
 # Každý worker je vlastní kontejner s vlastní SQLite DB a vlastním SCHEMA dumpem,
 # takže se mezi workery nic nesdílí. `QesHelpers.with_crl_server` binduje
 # 127.0.0.1:8765 a Capybara svůj Puma port, ale každý kontejner má vlastní
-# network namespace → nekolidují (ověřeno, docs/21 § 7.1).
+# network namespace → nekolidují (ověřeno).
 #
 # Bez `parallel_tests` gemu: ten by přidal řádek do Gemfile/Gemfile.lock, což je
-# dotek upstreamu (docs/08, docs/18). Dělení souborů dělá
+# dotek upstreamu (docs/08). Dělení souborů dělá
 # `scripts/qes_test_groups.py` podle naměřených časů z `test/qes/timings.txt`.
 #
 # Skupiny:
