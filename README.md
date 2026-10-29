@@ -118,7 +118,7 @@ Odkaz posílá upravený DocuSeal; v šabloně musí být pole „Podpis certifi
 - **Hotové:** podpis certifikátem v DocuSealu (AdES), Android appka, přímý podpis PDF,
   ověření PDF, vícenásobné podpisy, v praxi se používá.
 - **Zbývá:** QES s čipem eObčanky (reálná čtečka) a kvalifikované časové razítko.
-- Detail a historie: [AGENTS.md](AGENTS.md#stav).
+- Detail a stav: [AGENTS.md](AGENTS.md#stav).
 
 ## Pro vývojáře
 
