@@ -26,7 +26,7 @@ import {
   type SavedPdf,
 } from '../src/lib/pdfShare';
 import { documentDigest } from '../src/lib/preparedDocument';
-import { platformVaultDeps } from '../src/lib/platform';
+import { appVersion, platformVaultDeps } from '../src/lib/platform';
 import type { QesSessionPayload, QesValidationReport } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
@@ -436,6 +436,7 @@ export default function SignScreen() {
           vault: platformVaultDeps(),
           reviewedDocument: reviewPdf,
           reviewedDigest: reviewDigest ?? undefined,
+          appVersion: appVersion(),
         },
         session?.level_required ?? 'ades',
       );

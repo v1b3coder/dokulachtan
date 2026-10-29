@@ -14,6 +14,7 @@ jest.mock('../src/lib/platform', () => ({
   platformVaultDeps: () => ({
     storage: { getItem: jest.fn().mockResolvedValue(null), setItem: jest.fn(), deleteItem: jest.fn() },
   }),
+  appVersion: () => '1.3.9',
 }));
 jest.mock('../src/lib/crypto/vault', () => ({ certificateSummary: async () => null }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));

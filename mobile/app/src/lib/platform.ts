@@ -1,6 +1,7 @@
 // Napojení appky na reálné Expo moduly (SecureStore, LocalAuthentication,
 // expo-crypto, expo-file-system). Testy a e2e harness používají paměťové
 // implementace.
+import Constants from 'expo-constants';
 import * as Crypto from 'expo-crypto';
 import { File, Paths } from 'expo-file-system';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -24,6 +25,12 @@ function dataFile(key: string): File {
 // SecureStore nepovoluje (klíč musí být jen [\w.-]+).
 function storageKey(key: string, options?: VaultStorageOptions): string {
   return options?.requireAuthentication ? `auth_${key}` : key;
+}
+
+// Reálná verze appky z `app.json` (ne z buildu, který ji nezná). Server ji
+// ukládá do auditní stránky jako self-reported údaj.
+export function appVersion(): string | undefined {
+  return Constants.expoConfig?.version ?? undefined;
 }
 
 export function platformVaultDeps(): VaultDeps {

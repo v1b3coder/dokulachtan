@@ -11,7 +11,10 @@ jest.mock('expo-router', () => ({
   useFocusEffect: () => {},
   router: { replace: jest.fn(), back: jest.fn(), canGoBack: () => false },
 }));
-jest.mock('../src/lib/platform', () => ({ platformVaultDeps: () => ({ storage: {} }) }));
+jest.mock('../src/lib/platform', () => ({
+  platformVaultDeps: () => ({ storage: {} }),
+  appVersion: () => '1.3.9',
+}));
 jest.mock('../src/lib/pdfShare', () => ({
   ...jest.requireActual('../src/lib/pdfShare'),
   sharePdf: jest.fn(),

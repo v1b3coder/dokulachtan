@@ -32,6 +32,8 @@ export interface CeremonyDeps {
   reviewedDigest?: string;
   cardSigner?: CardSigner;
   configuration?: SignerConfiguration;
+  // Reálná verze appky z `app.json` (`expo-constants`); e2e harness ji neposílá.
+  appVersion?: string;
   app?: QesAppMetadata;
 }
 
@@ -77,11 +79,11 @@ export async function runSigningCeremony(
     throw new CeremonyError(selection.reason ?? 'no_signer');
   }
 
+  // Server ukládá jen platformu a reálnou verzi (SPEC § 5.4); čtečku už nese
+  // `key_location` a id containeru je lokální záležitost zařízení.
   const app: QesAppMetadata = deps.app ?? {
     platform: Platform.OS === 'ios' ? 'ios' : 'android',
-    version: '1.0.0',
-    reader: null,
-    container_ref: null,
+    ...(deps.appVersion ? { version: deps.appVersion } : {}),
   };
 
   if (selection.kind === 'card') {
@@ -91,7 +93,6 @@ export async function runSigningCeremony(
 
     try {
       const card = await cardSigner.getCertificate('');
-      const containers = await cardSigner.listContainers();
       const chain = card.chainPems.map((pem) => toBase64(pemCertificateToDer(pem)));
       const identity = certificateIdentityFromPem(card.certificatePem);
 
@@ -99,11 +100,10 @@ export async function runSigningCeremony(
         throw new CeremonyError(required === 'qes' ? 'qes_required_qscd' : 'level_mismatch');
       }
 
-      return await completeWithCertificate(deps, card.certificatePem, chain, {
-        ...app,
-        reader: 'moi-sdk',
-        container_ref: containers[0]?.id ?? null,
-      }, session.hash_algorithm, identity, (dataToSign) => cardSigner.signData('', dataToSign));
+      return await completeWithCertificate(
+        deps, card.certificatePem, chain, 'card', app, session.hash_algorithm, identity,
+        (dataToSign) => cardSigner.signData('', dataToSign),
+      );
     } catch (error) {
       if (error instanceof CardSignerError) throw new CeremonyError(error.code);
       throw error;
@@ -129,7 +129,7 @@ export async function runSigningCeremony(
     keySize: material.info.keySize,
   };
 
-  return completeWithCertificate(deps, material.certificatePem, chain, app, session.hash_algorithm, identity, (dataToSign) =>
+  return completeWithCertificate(deps, material.certificatePem, chain, 'phone_keystore', app, session.hash_algorithm, identity, (dataToSign) =>
     Promise.resolve(signSignedAttrs(material.privateKeyPem, dataToSign, session.hash_algorithm as HashAlgorithm)),
   );
 }
@@ -138,6 +138,7 @@ async function completeWithCertificate(
   deps: CeremonyDeps,
   certificatePem: string,
   chain: string[],
+  keyLocation: 'card' | 'phone_keystore',
   app: QesAppMetadata,
   hashAlgorithm: string,
   identity: CertificateIdentity,
@@ -147,7 +148,7 @@ async function completeWithCertificate(
   const prepared = await deps.api.postCertificate({
     certificate: toBase64(certificateDer),
     chain,
-    key_location: app.reader ? 'card' : 'phone_keystore',
+    key_location: keyLocation,
     app,
   });
 
@@ -174,7 +175,7 @@ async function completeWithCertificate(
   return {
     completed,
     level: completed.level,
-    keyLocation: app.reader ? 'card' : 'phone_keystore',
+    keyLocation,
     biometricPrompts: 1,
     documentDigest: verified.digest,
   };

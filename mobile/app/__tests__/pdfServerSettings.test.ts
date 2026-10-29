@@ -14,7 +14,7 @@ jest.mock('expo-router', () => ({
   useFocusEffect: () => {}, useRouter: () => ({ push: jest.fn() }),
   router: { push: jest.fn(), replace: jest.fn(), setParams: jest.fn() },
 }));
-jest.mock('../src/lib/platform', () => ({ platformVaultDeps: jest.fn() }));
+jest.mock('../src/lib/platform', () => ({ platformVaultDeps: jest.fn(), appVersion: () => '1.3.9' }));
 jest.mock('../src/lib/crypto/vault', () => ({ certificateSummary: async () => null }));
 jest.mock('../src/lib/testCertificate', () => ({ importTestCertificate: jest.fn() }));
 

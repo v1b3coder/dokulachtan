@@ -77,9 +77,8 @@ export type KeyLocation = 'phone_keystore' | 'card';
 
 export interface QesAppMetadata {
   platform: string;
-  version: string;
-  reader?: string | null;
-  container_ref?: string | null;
+  // Reálná verze appky z `app.json`; v e2e harnessu chybí a klíč se neposílá.
+  version?: string;
 }
 
 export interface QesCertificateRequest {

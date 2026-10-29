@@ -147,3 +147,23 @@ it('recovers a lost completion response with no second signature or unlock', asy
   expect(api.postCertificate).toHaveBeenCalledTimes(1);
   expect(api.postComplete).toHaveBeenCalledTimes(1);
 });
+
+it('reports the real application version and platform without reader details', async () => {
+  const { deps, api } = setup();
+  deps.appVersion = '1.3.9';
+  await runSigningCeremony(deps, 'ades');
+
+  const body = api.postCertificate.mock.calls[0][0];
+  expect(body.key_location).toBe('phone_keystore');
+  expect(body.app).toEqual({ platform: expect.any(String), version: '1.3.9' });
+  expect(body.app).not.toHaveProperty('reader');
+  expect(body.app).not.toHaveProperty('container_ref');
+});
+
+it('omits the version when the build cannot read it', async () => {
+  const { deps, api } = setup();
+  await runSigningCeremony(deps, 'ades');
+
+  const body = api.postCertificate.mock.calls[0][0];
+  expect(body.app).toEqual({ platform: expect.any(String) });
+});
