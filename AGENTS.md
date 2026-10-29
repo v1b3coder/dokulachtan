@@ -267,8 +267,9 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 
 **Hotovo**
 
-- P0–P8: QES vrstva (model, stavový automat, token), kryptografie (TBS → CMS → embed →
-  LTV/DSS → DocTS → validace → pečeť), API pro appku i prohlížeč, hooky do DocuSealu.
+- P0–P8 hotové kromě reálné čtečky (P5 je stub + fake card): QES vrstva (model, stavový
+  automat, token), kryptografie (TBS → CMS → embed → LTV/DSS → DocTS → validace → pečeť),
+  API pro appku i prohlížeč, hooky do DocuSealu.
 - Vícenásobné podpisy: každý signer má vlastní pole `qes` a session, podpisy se řetězí
   inkrementálně; finální PDF má N podpisů appky + N pečetí + N DocTS.
 - Přímý podpis PDF nativním tokem DocuSealu (`POST /api/qes/documents`, šablona ve složce
