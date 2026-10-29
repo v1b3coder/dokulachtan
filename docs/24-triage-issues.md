@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 20 otevřených issues z 22 (plus #24, nález z triage samého) z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 20 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -31,9 +31,7 @@ jsou označené jako mimo rozsah.
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
 | 22 | URL finálního PDF se neověřuje | potvrzeno (nízký) | P2 |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
-| 24 | `app_metadata`: vymyšlená verze a mrtvá data | **už opraveno** | — |
 
-**Už opraveno:** #13 (odkaz nese server), #20 (mimo rozsah), #24 (`app_metadata` jen platforma a verze).
 **Wontfix v kódu:** #18.1 (konfigurace distributora appky), #23.1, #23.2.
 
 ## 2. P0 — bezpečnost a ztráta dat
