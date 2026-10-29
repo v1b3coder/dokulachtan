@@ -129,13 +129,16 @@ o aplikaci → „Smazat certifikát a klíč“ (obrys).
 
 **Nově, sekce:**
 
-1. **Server** — URL, API token, **primární** „Uložit“ (vypnuté, dokud se nic nezmění; „Uloženo“
-   se resetuje při první editaci).
-2. **Podepisování** — řádek „Certifikát“ (subject + úroveň) → S3; řádek „Čtečka“ (Android) → S8.
+1. **Přímý podpis a ověření PDF** — URL, API token, **primární** „Uložit“ (vypnuté, dokud se
+   nic nezmění; „Uloženo“ se resetuje při první editaci). Používá se jen pro přímý podpis PDF
+   a ověření PDF, ne pro podpisové odkazy.
+2. **Důvěryhodné servery pro podpisové odkazy** — seznam originů s datem důvěry a „Odvolat“;
+   server se přidá při prvním podpisu z odkazu (TOFU).
+3. **Podepisování** — řádek „Certifikát“ (subject + úroveň) → S3; řádek „Čtečka“ (Android) → S8.
    Sem se přesouvá párování čtečky z Home.
-3. **O aplikaci** — verze + attribution MOI SDK (beze změny).
-4. **Pokročilé (testování)** — tlumené vysvětlení + **terciární** „Importovat testovací certifikát“.
-5. Mazání certifikátu zde **není** — jediné místo je S3 (rozhodnutí D3).
+4. **O aplikaci** — verze + attribution MOI SDK (beze změny).
+5. **Pokročilé (testování)** — tlumené vysvětlení + **terciární** „Importovat testovací certifikát“.
+6. Mazání certifikátu zde **není** — jediné místo je S3 (rozhodnutí D3).
 
 ### S10 Setup (wizard)
 

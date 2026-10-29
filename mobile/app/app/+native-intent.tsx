@@ -1,8 +1,8 @@
 // Přepis příchozích odkazů (SPEC § 10.1): App Link / Universal Link míří na
 // webovou stránku `/qes/sign` (resp. `/qes/app`), ale routy appky jsou `/sign`
-// (resp. `/`). Custom scheme `dokulachtan://sign?token=…` odpovídá routě přímo,
-// takže se beze změny vrací.
-const APP_LINK = /^(?:https?:\/\/[^/?#]+)?\/qes(\/[^?#]*)?(\?[^#]*)?$/;
+// (resp. `/`). Z HTTPS odkazu předáme i origin serveru; custom scheme
+// `dokulachtan://sign?token=…&server=…` odpovídá routě přímo a server už nese.
+const APP_LINK = /^(https?:\/\/[^/?#]+)?\/qes(\/[^?#]*)?(?:\?([^#]*))?$/;
 
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
   const match = path.match(APP_LINK);
@@ -11,7 +11,16 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     return path;
   }
 
-  const route = match[1] === undefined || match[1] === '/app' ? '/' : match[1];
+  const route = match[2] === undefined || match[2] === '/app' ? '/' : match[2];
+  const params = new URLSearchParams(match[3] ?? '');
 
-  return `${route}${match[2] ?? ''}`;
+  // Host u HTTPS App Linku ověřil OS (assetlinks/AASA). Appka ho použije jen
+  // pro podpisový odkaz, nikdy pro přímý podpis PDF (ten má Nastavení).
+  if (match[1] && route === '/sign') {
+    params.set('server', match[1]);
+  }
+
+  const query = params.toString();
+
+  return `${route}${query ? `?${query}` : ''}`;
 }

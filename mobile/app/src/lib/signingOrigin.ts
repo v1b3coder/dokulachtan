@@ -1,10 +1,12 @@
 import { loadPdfApiSettings, type PdfApiStorage } from './pdfApi';
 
-// Server used when Settings has none; a release build without EXPO_PUBLIC_API_URL falls back to production.
+// Server z Nastavení pro přímý podpis PDF a ověření PDF; release build bez
+// EXPO_PUBLIC_API_URL spadne na produkci. Workflow má server z odkazu
+// (trustedServers.ts), ten Nastavení nepoužívá.
 export const DEFAULT_SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'https://dokulachtan.fly.dev';
 
 export class SigningOriginError extends Error {
-  constructor(readonly code: 'foreign_server' | 'invalid_server') {
+  constructor(readonly code: 'foreign_server' | 'invalid_server' | 'missing_server') {
     super(code);
   }
 }

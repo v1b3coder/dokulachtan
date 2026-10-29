@@ -20,6 +20,10 @@ jest.mock('../src/lib/pdfShare', () => ({
 jest.mock('../src/lib/signingOrigin', () => ({
   ...jest.requireActual('../src/lib/signingOrigin'), resolveSigningOrigin: async () => 'https://server',
 }));
+jest.mock('../src/lib/trustedServers', () => ({
+  ...jest.requireActual('../src/lib/trustedServers'),
+  resolveWorkflowOrigin: async () => ({ origin: 'https://server', trusted: true }),
+}));
 jest.mock('../src/lib/ceremony', () => ({
   ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
 }));

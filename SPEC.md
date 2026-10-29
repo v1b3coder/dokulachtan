@@ -641,7 +641,7 @@ Request: `{ "field_uuid": "…", "provider": "mobile_app" }`
   "token": "<jednorázový token, jen v této odpovědi>",
   "universal_link": "https://dokulachtan.fly.dev/qes/sign?token=…",
   "fallback_url": "https://dokulachtan.fly.dev/qes/app?token=…",
-  "custom_scheme_link": "dokulachtan://sign?token=…",
+  "custom_scheme_link": "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan.fly.dev",
   "expires_at": "2026-10-15T10:30:00Z",
   "poll_interval_ms": 2000
 }
@@ -650,7 +650,7 @@ Request: `{ "field_uuid": "…", "provider": "mobile_app" }`
 Pravidla: existující aktivní session se zruší a založí nová; odpověď **NESMÍ** obsahovat token
 při žádném dalším volání (jen digest v DB); `field_uuid` **MUSÍ** patřit submitterovi a být typu `qes`.
 `universal_link` míří na `/qes/sign` (App Links / Universal Links, § 10.1), `fallback_url` na
-web fallback `/qes/app` (§ 6.4); `custom_scheme_link` je `dokulachtan://sign?token=…`.
+web fallback `/qes/app` (§ 6.4); `custom_scheme_link` je `dokulachtan://sign?token=…&server=<origin>`.
 
 ### 6.2 `GET /s/:submit_form_slug/qes_sessions/:id` — polling
 
@@ -711,7 +711,7 @@ Pravidla:
 
 - Android: `https://<host>/qes/sign?token=…` (App Links) + `/.well-known/assetlinks.json`.
 - iOS: `https://<host>/qes/sign?token=…` (Universal Links) + `/.well-known/apple-app-site-association`.
-- Custom scheme `dokulachtan://sign?token=…` zůstává jako fallback (starší buildy, neověřené domény).
+- Custom scheme `dokulachtan://sign?token=…&server=<origin>` zůstává jako fallback (starší buildy, neověřené domény).
 - `assetlinks.json` i AASA **MUSÍ** servírovat `Qes::WellKnownController` s `Content-Type: application/json`
   a bez přesměrování (statický soubor v `public/.well-known/` neexistuje); **MUSÍ** obsahovat SHA-256
   fingerprint podpisového certifikátu appky (`QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID`).
@@ -1011,7 +1011,7 @@ spolu s `key_location`, `reader` (u A) a verzí protokolu.
 | S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout“ + sekundární „Sdílet“ + terciární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neobsahuje reviewed TBS) |
 | S5 | **Biometrie** | systémová výzva (`expo-local-authentication`) před každým podpisem | zamítnuto → zpět na S4 |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba + „Zkusit znovu" / „Vyžádat nový odkaz" | — |
-| S7 | **Nastavení** | sekce Server (URL + API token + primární „Uložit“), Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A), Pokročilé (testovací certifikát); smazání dat je jen v S3 | — |
+| S7 | **Nastavení** | sekce Přímý podpis a ověření PDF (URL + API token jen pro přímý podpis PDF a ověření PDF + primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A), Pokročilé (testovací certifikát); smazání dat je jen v S3 | — |
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie, připojení | `reader_not_found`, `reader_disconnected` |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů (`getContainerList`), jen kvalifikované (`QcCompliance`), úroveň QES, PIN/QPIN výzva | `pin_blocked`, `applet_blocked`, `no_qualified_certificate` |
 | S10 | **Konfigurační wizard** (z S4, když není podepisující — § 9.8) | primární „Importovat klíč (PKCS#12)“ → S2, sekundární „Nastavit čtečku“ → S8, testovací certifikát až na konci; „Zpět“ | `import_failed`, `reader_not_found` |
@@ -1189,11 +1189,11 @@ Pravidla:
 | Formát | Použití |
 |---|---|
 | `https://<host>/qes/sign?token=…` | primární (universal link, Android + iOS) |
-| `dokulachtan://sign?token=…` | fallback (starší buildy, neověřená doména; `server_url` se bere z odpovědi API, § 16 #9) |
+| `dokulachtan://sign?token=…&server=<origin>` | fallback (starší buildy, neověřená doména); server se bere z parametru a při prvním použití ho uživatel potvrdí (TOFU) |
 | `https://<host>/qes/app?token=…` | web fallback stránka s QR |
 
 Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vracet `universal_link`
-(`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign`) v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
+(`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign?token=…&server=<origin>`) v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 
 ### 10.2 Soubory pro ověření
 
@@ -1224,7 +1224,7 @@ Appka **MUSÍ** podporovat universal link i custom scheme; server **MUSÍ** vrac
 | Appka není nainstalovaná | prohlížeč zůstane na `/qes/app`, zobrazí QR + odkazy na stažení |
 | Universal link neověřený (dev build, fly.dev) | fallback na custom scheme odkaz |
 | Appka otevřená bez tokenu | S1 s chybou „Neplatný odkaz" |
-| Deep link z jiného serveru | `server_url` z payloadu je autoritativní pro danou session; ruční hodnota v S7 je jen výchozí (když payload `server_url` chybí) |
+| Deep link z jiného serveru | origin z odkazu je autoritativní pro danou session; pokud není v seznamu důvěryhodných, appka vyžádá potvrzení (TOFU); odkaz bez serveru skončí `missing_server`; `server_url` z payloadu musí odpovídat originu odkazu, jinak `foreign_server` |
 | Token expiroval | S6 s „Vyžádejte nový odkaz"; prohlížeč nabídne „Zkusit znovu" (nová session) |
 
 ---
@@ -1533,7 +1533,7 @@ Oba dokumenty teď musí být v souladu; případný další rozpor je chyba, kt
 | 6 | Combined dokument se nestaví ze stránek | Platí; pro QES = kopie podepsaného PDF (+ pečeť) | § 7.7 |
 | 7 | `QES_LEVEL_CHECK` (globální ENV) | Úroveň je per-field (`preferences.level`) | AdES/QES se řídí polem, ne globálním ENV |
 | 8 | `qes` pole i ve vícesignatářské šabloně | **v1.5 podporuje** — řetězení PAdES revizí; všichni signeři mají `qes` pole a striktní pořadí | § 4.1, § 4.6, § 7.1 |
-| 9 | Deep link `dokulachtan://sign?token=…&s=<server_url_b64>` | Server URL se bere z odpovědi API (`server_url`), ne z parametru `s` | Jeden zdroj pravdy, kratší link, žádné parametry v URL |
+| 9 | Deep link `dokulachtan://sign?token=…&server=<origin>` | Server URL se bere z odkazu (HTTPS host, custom scheme `server`); Nastavení je jen pro přímý podpis PDF a ověření PDF | Jeden zdroj pravdy pro workflow, žádné použití Nastavení pro podpisové odkazy |
 | 10 | Stav `awaiting_signature` chyběl | Certifikát přichází až po otevření appky | DESIGN § 3.3 |
 | 11 | Heslo k PKCS#12 se použije i při podpisu | Při podpisu se zadává jen biometrie; heslo jen při importu (klíčový materiál se ihned přešifruje AES-256-GCM) | SPEC § 9.5 |
 | 12 | Appka neměla rozhodnutí, kterou cestou podepsat | Volba lokálně: klíč → čtečka → wizard (S10); server cert nezná | SPEC § 9.8 |

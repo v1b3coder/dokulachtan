@@ -2,12 +2,17 @@
 // čtečka), o aplikaci a testovací cesty až na konci. Mazání klíče patří do S3.
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
 
 import { certificateSummary } from '../src/lib/crypto/vault';
 import { loadPdfApiSettings, savePdfApiSettings } from '../src/lib/pdfApi';
 import { platformVaultDeps } from '../src/lib/platform';
 import { DEFAULT_SERVER_URL, signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
+import {
+  loadTrustedServers,
+  revokeTrustedServer,
+  type TrustedServer,
+} from '../src/lib/trustedServers';
 import { importTestCertificate } from '../src/lib/testCertificate';
 import { PrimaryButton, TextButton } from '../src/ui/buttons';
 
@@ -18,6 +23,8 @@ export default function SettingsScreen() {
   const [loaded, setLoaded] = useState<{ serverUrl: string; apiToken: string } | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
   const [testCert, setTestCert] = useState<string | null>(null);
+  const [trustedServers, setTrustedServers] = useState<TrustedServer[]>([]);
+  const [trustError, setTrustError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +44,12 @@ export default function SettingsScreen() {
       certificateSummary(platformVaultDeps()).then((summary) => setSubject(summary?.subject ?? null));
     }, []),
   );
+
+  useEffect(() => {
+    loadTrustedServers(platformVaultDeps().dataStorage)
+      .then(setTrustedServers)
+      .catch(() => setTrustedServers([]));
+  }, []);
 
   const dirty = !loaded || loaded.serverUrl !== serverUrl || loaded.apiToken !== apiToken;
 
@@ -65,15 +78,42 @@ export default function SettingsScreen() {
     }
   }
 
+  function revoke(server: TrustedServer) {
+    Alert.alert(
+      'Odvolat důvěru?',
+      `Server ${server.origin} už nebude automaticky přijat pro podpisové odkazy.`,
+      [
+        { text: 'Zrušit', style: 'cancel' },
+        {
+          text: 'Odvolat',
+          style: 'destructive',
+          onPress: async () => {
+            setTrustError(null);
+            try {
+              await revokeTrustedServer(platformVaultDeps().dataStorage, server.origin);
+              setTrustedServers((current) => current.filter((item) => item.origin !== server.origin));
+            } catch {
+              setTrustError('Důvěru se nepodařilo odvolat. Zkuste to znovu.');
+            }
+          },
+        },
+      ],
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Nastavení</Text>
 
-      <Text style={styles.section}>Server</Text>
-      <Text style={styles.label}>Server URL</Text>
+      <Text style={styles.section}>Přímý podpis a ověření PDF</Text>
+      <Text style={styles.muted}>
+        Server URL a API token se používají jen pro přímý podpis PDF a ověření PDF v appce.
+        Podpisové odkazy z DocuSealu používají server z odkazu.
+      </Text>
+      <Text style={styles.label}>Server URL (přímý podpis a ověření PDF)</Text>
       <TextInput style={styles.input} value={serverUrl} onChangeText={setServerUrl} autoCapitalize="none" />
 
-      <Text style={styles.label}>API token (podpis a ověření PDF)</Text>
+      <Text style={styles.label}>API token (přímý podpis a ověření PDF)</Text>
       <Text style={styles.muted}>
         Token z DocuSealu (Nastavení → API) pro nahrání a ověření PDF. Ukládá se do úložiště zařízení.
       </Text>
@@ -88,6 +128,25 @@ export default function SettingsScreen() {
       />
       <PrimaryButton title={dirty ? 'Uložit' : 'Uloženo'} onPress={saveApi} disabled={!dirty} />
       {saveError ? <Text style={styles.error} accessibilityRole="alert">{saveError}</Text> : null}
+
+      <Text style={styles.section}>Důvěryhodné servery pro podpisové odkazy</Text>
+      <Text style={styles.muted}>
+        Servery, kterým jste při prvním odkazu povolili podepisování. Token z odkazu se posílá jen jim.
+      </Text>
+      {trustedServers.length === 0 ? (
+        <Text style={styles.muted}>Zatím žádný. Server se přidá při prvním podpisu z odkazu.</Text>
+      ) : trustedServers.map((server) => (
+        <View key={server.origin} style={styles.row}>
+          <View style={styles.rowText}>
+            <Text style={styles.origin}>{server.origin}</Text>
+            <Text style={styles.muted}>
+              Důvěra od {new Date(server.approvedAt).toLocaleDateString('cs-CZ')}
+            </Text>
+          </View>
+          <TextButton title="Odvolat" onPress={() => revoke(server)} />
+        </View>
+      ))}
+      {trustError ? <Text style={styles.error} accessibilityRole="alert">{trustError}</Text> : null}
 
       <Text style={styles.section}>Podepisování</Text>
       <TouchableOpacity
@@ -154,5 +213,6 @@ const styles = StyleSheet.create({
   },
   rowText: { gap: 2 },
   rowLabel: { fontSize: 15, fontWeight: '600' },
+  origin: { fontFamily: 'monospace', fontSize: 13, color: '#111' },
   chevron: { fontSize: 20, color: '#6b7280' },
 });

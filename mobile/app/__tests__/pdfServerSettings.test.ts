@@ -1,7 +1,8 @@
 import React from 'react';
-import { TextInput } from 'react-native';
+import { Alert, TextInput } from 'react-native';
 import { platformVaultDeps } from '../src/lib/platform';
 import { PDF_API_SETTINGS_KEY } from '../src/lib/pdfApi';
+import { TRUSTED_SERVERS_KEY } from '../src/lib/trustedServers';
 import SignPdfScreen from '../app/sign-pdf';
 import VerifyPdfScreen from '../app/verify-pdf';
 import SettingsScreen from '../app/settings';
@@ -23,7 +24,7 @@ const invalidServers = [
 const storage = { getItem: jest.fn(), setItem: jest.fn(), deleteItem: jest.fn() };
 
 beforeEach(() => {
-  jest.mocked(platformVaultDeps).mockReturnValue({ storage } as unknown as ReturnType<typeof platformVaultDeps>);
+  jest.mocked(platformVaultDeps).mockReturnValue({ storage, dataStorage: storage } as unknown as ReturnType<typeof platformVaultDeps>);
   storage.setItem.mockResolvedValue(undefined);
   jest.spyOn(global, 'fetch').mockRejectedValue(new Error('unexpected request'));
 });
@@ -100,6 +101,26 @@ describe('Settings save', () => {
     expect(storage.setItem).toHaveBeenCalledWith(PDF_API_SETTINGS_KEY,
       JSON.stringify({ serverUrl: `http://${host}:3000`, apiToken: 'test-token' }));
     expect(screen.root.findByProps({ title: 'Uloženo' }).props.disabled).toBe(true);
+    await act(async () => screen.unmount());
+  });
+
+  it('lists trusted signing-link servers and revokes their trust', async () => {
+    storage.getItem.mockImplementation(async (key: string) => key === TRUSTED_SERVERS_KEY
+      ? JSON.stringify([{ origin: 'https://company.test', approvedAt: '2026-10-01T00:00:00Z' }])
+      : JSON.stringify({ serverUrl: 'https://company.test', apiToken: 'test-token' }));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+    });
+    let screen: ReturnType<typeof create>;
+    await act(async () => { screen = create(React.createElement(SettingsScreen)); });
+    expect(JSON.stringify(screen.toJSON())).toContain('https://company.test');
+
+    await act(async () => { await screen.root.findByProps({ title: 'Odvolat' }).props.onPress(); });
+    expect(alert).toHaveBeenCalledWith('Odvolat důvěru?',
+      'Server https://company.test už nebude automaticky přijat pro podpisové odkazy.',
+      expect.any(Array));
+    expect(storage.setItem).toHaveBeenCalledWith(TRUSTED_SERVERS_KEY, '[]');
+    expect(JSON.stringify(screen.toJSON())).not.toContain('Důvěra od');
     await act(async () => screen.unmount());
   });
 });

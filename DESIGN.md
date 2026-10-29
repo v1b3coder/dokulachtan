@@ -214,7 +214,7 @@ Sender        DocuSeal (fork)        Appka (Expo)         Signer
    - vrátí `{id, state, token, universal_link, fallback_url, custom_scheme_link, expires_at, poll_interval_ms}`;
      stránka zobrazí tlačítko + QR a čeká.
    (CMS s podepsanými atributy vzniká až po přijetí certifikátu — server cert podepisujícího předem nezná.)
-6. **Předání do appky.** Deep link `dokulachtan://sign?token=…` (na desktopu QR). Appka token
+6. **Předání do appky.** Deep link `dokulachtan://sign?token=…&server=<origin>` (na desktopu QR). Appka token
    vymění za payload: `GET /qes/sessions/:token` → `{document_name, signer_name, hash_algorithm,
    level_required, expires_at, server_url}`.
 7. **Potvrzení v appce.** Appka zobrazí: název dokumentu, kdo podepisuje, jaký certifikát se použije,
@@ -269,7 +269,7 @@ na stav, alternativy za oddělovačem, navigace a „Zrušit“ jako textové od
 | S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, úroveň, automaticky zvolený podepisující (§ 9.8 SPEC), „Podepsat“ |
 | S5 | **Biometrie** | systémová výzva (otisk/obličej) před každým podpisem |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba s možností zkusit znovu |
-| S7 | **Nastavení** | server URL + API token (primární „Uložit“), sekce Podepisování (certifikát → S3, čtečka → S8), diagnostika, o aplikaci (+ attribution MOI SDK), testovací certifikát jen v Pokročilém; smazání dat je jen v S3 |
+| S7 | **Nastavení** | server URL + API token jen pro přímý podpis PDF a ověření PDF (primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, sekce Podepisování (certifikát → S3, čtečka → S8), diagnostika, o aplikaci (+ attribution MOI SDK), testovací certifikát jen v Pokročilém; smazání dat je jen v S3 |
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů, jen kvalifikované, QPIN |
 | S10 | **Konfigurační wizard** | když není podepisující: primární import klíče (PKCS#12), sekundární nastavení čtečky, testovací certifikát až na konci, „Zpět“ |
@@ -279,7 +279,7 @@ na stav, alternativy za oddělovačem, navigace a „Zrušit“ jako textové od
 
 ### 5.2 Interakce a stavy
 
-- **Deep link**: `dokulachtan://sign?token=…`; appka při otevření načte payload (HTTPS).
+- **Deep link**: `dokulachtan://sign?token=…&server=<origin>`; appka při otevření načte payload (HTTPS).
 - **Token**: jednorázový; appka ho drží jen v paměti, neukládá.
 - **Biometrie**: vyžádána před každým podpisem; u klíče ji vynucuje SecureStore (`requireAuthentication`).
 - **Klíč**: při importu se PKCS#12 dešifruje heslem a klíčový materiál se **ihned přešifruje**
@@ -459,11 +459,15 @@ Detail: [SPEC.md](SPEC.md) § 7.4, § 7.6 a § 16.
 ### 8.1 Deep link
 
 ```
-dokulachtan://sign?token=<jednorazovy>
+dokulachtan://sign?token=<jednorazovy>&server=<origin>
 https://<host>/qes/sign?token=<jednorazovy>   (universal link, primární)
 ```
 Fallback (web): `https://<host>/qes/app?token=…` → stránka s tlačítkem „Otevřít appku“ + QR + odkazy
-na stažení. Server URL se bere z odpovědi API (`server_url`), ne z parametru v linku.
+na stažení. Server URL se bere z odkazu: u HTTPS z hostu, u custom scheme z parametru `server`.
+Nastavení se používá jen pro přímý podpis PDF a ověření PDF. Při prvním odkazu z neznámého
+serveru appka zobrazí potvrzení (TOFU), origin uloží a v Nastavení ho lze odvolat. Odkaz
+bez serveru skončí `missing_server`; `server_url` z payloadu musí odpovídat originu odkazu,
+jinak `foreign_server`.
 
 ### 8.2 Payload pro appku
 

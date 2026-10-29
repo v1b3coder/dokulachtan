@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { resolveSigningOrigin, SigningOriginError } from '../src/lib/signingOrigin';
+import { resolveSigningOrigin, signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
+import { resolveWorkflowOrigin, trustServer, type WorkflowOrigin } from '../src/lib/trustedServers';
 import { QesApi, QesApiError } from '../src/lib/api';
 import { runSigningCeremony, CeremonyError } from '../src/lib/ceremony';
 import { certificateSummary, VaultError, type StoredCertificateInfo } from '../src/lib/crypto/vault';
@@ -35,8 +36,9 @@ const ERROR_TEXT: Record<string, string> = {
   verification_failed: 'Stažené PDF neodpovídá podepsanému dokumentu. Nestahujte ho a kontaktujte podporu.',
   user_cancelled: 'Podpis byl zrušen.',
   pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
-  foreign_server: 'Odkaz patří jinému serveru než tomu v Nastavení. Podpis byl odmítnut.',
-  invalid_server: 'V Nastavení zadejte platnou HTTPS adresu serveru.',
+  foreign_server: 'Odkaz vede na jiný server, než se očekávalo. Podpis byl odmítnut.',
+  invalid_server: 'Odkaz obsahuje neplatnou adresu serveru.',
+  missing_server: 'Odkaz neobsahuje adresu serveru. Vyžádejte nový odkaz.',
   expired_token: 'Platnost odkazu vypršela. Vyžádejte nový.',
   used_token: 'Odkaz už byl použit nebo podpis zrušen. Vyžádejte nový.',
   unknown_token: 'Neplatný odkaz. Vyžádejte nový.',
@@ -158,6 +160,8 @@ export default function SignScreen() {
   const [reviewPdf, setReviewPdf] = useState<Uint8Array | null>(null);
   const [reviewDigest, setReviewDigest] = useState<string | null>(null);
   const [reviewOpened, setReviewOpened] = useState(false);
+  const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
+  const [trusting, setTrusting] = useState(false);
   const [loadingDocument, setLoadingDocument] = useState(false);
   const [openingPdf, setOpeningPdf] = useState(false);
   const signingLock = useRef(false);
@@ -178,26 +182,24 @@ export default function SignScreen() {
   const needsSetup = error ? needsSetupError(error) : false;
   const terminal = error === 'document_mismatch' || error === 'used_token'
     || error === 'expired_token' || error === 'unknown_token'
-    || error === 'failed' || error === 'cancelled'
+    || error === 'missing_server' || error === 'failed' || error === 'cancelled'
     || error === 'values_changed' || error === 'document_set_changed'
     || error === 'signing_context_mismatch';
   const pending = error === 'server_pending';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
-  // Klient pro stažení finálního PDF (docs/15 § 5).
+  // Klient pro stažení finálního PDF (docs/15 § 5) — jen přímý podpis PDF.
   const pdfApi = useCallback(async () => {
+    if (!isPdfFlow) throw new SigningOriginError('invalid_server');
+
     const settings = await loadPdfApiSettings(platformVaultDeps().storage);
 
     return new PdfApi(await resolveSigningOrigin(platformVaultDeps().storage, server), settings?.apiToken ?? '');
-  }, [server]);
+  }, [isPdfFlow, server]);
 
-  const qesApi = useCallback(async () => {
-    const origin = serverUrl ?? await resolveSigningOrigin(platformVaultDeps().storage, server);
+  const qesApi = useCallback((origin: string) => new QesApi(origin, token ?? ''), [token]);
 
-    return new QesApi(origin, token ?? '');
-  }, [serverUrl, server, token]);
-
-  const finishSubmission = useCallback(async (submitterId = session?.submitter_id) => {
+  const finishSubmission = useCallback(async (origin: string, submitterId = session?.submitter_id) => {
     if (submissionLock.current) return;
     if (!submitterId) {
       setSubmissionError('invalid_submission');
@@ -208,7 +210,7 @@ export default function SignScreen() {
     setSavingSubmission(true);
     setSubmissionError(null);
     try {
-      await (await qesApi()).completeSubmission();
+      await qesApi(origin).completeSubmission();
       if (currentGeneration === generation.current) setSubmissionCompleted(true);
     } catch (err) {
       if (currentGeneration === generation.current) {
@@ -225,6 +227,37 @@ export default function SignScreen() {
     finishSubmissionRef.current = finishSubmission;
   }, [finishSubmission]);
 
+  const loadSession = useCallback(async (origin: string) => {
+    const currentGeneration = generation.current;
+    const payload = await new QesApi(origin, token ?? '').getSession();
+
+    if (currentGeneration !== generation.current) return;
+
+    // Server v payloadu nesmí tvrdit jiný origin, než je ten z odkazu;
+    // jinak by důvěryhodný server mohl token přesměrovat jinam.
+    if (payload.server_url) {
+      if (signingOrigin(payload.server_url) !== origin) {
+        throw new SigningOriginError('foreign_server');
+      }
+    }
+
+    setServerUrl(origin);
+    setPendingOrigin(null);
+    setSession(payload);
+    if (payload.state === 'completed') {
+      setDone({
+        level: payload.level,
+        digest: payload.document_digest,
+        verified: null,
+        validation: payload.validation,
+        sealState: payload.seal_state,
+        docTimestampState: payload.doc_timestamp_state,
+        finalPdfSha256: payload.final_pdf_sha256,
+      });
+      if (isPdfFlow) void finishSubmissionRef.current(origin, payload.submitter_id);
+    }
+  }, [token, isPdfFlow]);
+
   useEffect(() => {
     if (!token) {
       setError('unknown_token');
@@ -232,43 +265,64 @@ export default function SignScreen() {
       return;
     }
 
-    let active = true;
+    const currentGeneration = generation.current;
     setDone(null);
     setSubmissionCompleted(false);
     setSubmissionError(null);
     setSession(null);
     setServerUrl(null);
+    setPendingOrigin(null);
+    setTrusting(false);
     setError(null);
     setReviewPdf(null);
     setReviewDigest(null);
     setReviewOpened(false);
 
-    resolveSigningOrigin(platformVaultDeps().storage, server)
-      .then(async (origin) => ({ origin, payload: await new QesApi(origin, token).getSession() }))
-      .then(({ origin, payload }) => {
-        if (!active) return;
-        setServerUrl(origin);
-        setSession(payload);
-        if (payload.state === 'completed') {
-          setDone({
-            level: payload.level,
-            digest: payload.document_digest,
-            verified: null,
-            validation: payload.validation,
-            sealState: payload.seal_state,
-            docTimestampState: payload.doc_timestamp_state,
-            finalPdfSha256: payload.final_pdf_sha256,
-          });
-          if (isPdfFlow) void finishSubmissionRef.current(payload.submitter_id);
+    (async () => {
+      try {
+        const resolved: WorkflowOrigin = isPdfFlow
+          ? { origin: await resolveSigningOrigin(platformVaultDeps().storage, server), trusted: true }
+          : await resolveWorkflowOrigin(platformVaultDeps().storage, server);
+
+        if (currentGeneration !== generation.current) return;
+
+        if (!resolved.trusted) {
+          setPendingOrigin(resolved.origin);
+
+          return;
         }
-      })
-      .catch((err) => {
-        if (!active) return;
+
+        await loadSession(resolved.origin);
+      } catch (err) {
+        if (currentGeneration !== generation.current) return;
         setError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
         setErrorDetail(err instanceof Error ? err.message : null);
-      });
-    return () => { active = false; };
-  }, [token, server, isPdfFlow]);
+      }
+    })();
+
+    return () => { generation.current += 1; };
+  }, [token, server, isPdfFlow, loadSession]);
+
+  const confirmTrust = useCallback(async () => {
+    if (!pendingOrigin || trusting) return;
+
+    const origin = pendingOrigin;
+    setTrusting(true);
+    setError(null);
+    setErrorDetail(null);
+
+    try {
+      await trustServer(platformVaultDeps().dataStorage, origin);
+      setPendingOrigin(null);
+      await loadSession(origin);
+    } catch (err) {
+      setPendingOrigin(null);
+      setError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
+      setErrorDetail(err instanceof Error ? err.message : null);
+    } finally {
+      setTrusting(false);
+    }
+  }, [pendingOrigin, trusting, loadSession]);
 
   // Certifikát zobrazíme už před odemčením klíče (info je v trezoru nešifrované).
   useEffect(() => {
@@ -328,7 +382,7 @@ export default function SignScreen() {
     setReviewOpened(false);
 
     try {
-      const pdf = await (await qesApi()).getDocument();
+      const pdf = await qesApi(serverUrl).getDocument();
       let digest: string;
 
       try {
@@ -356,7 +410,7 @@ export default function SignScreen() {
 
   const cancelReview = useCallback(async () => {
     if (token && serverUrl) {
-      await (await qesApi()).postAbort('user_cancelled').catch(() => {});
+      await qesApi(serverUrl).postAbort('user_cancelled').catch(() => {});
     }
     setReviewPdf(null);
     setReviewDigest(null);
@@ -378,7 +432,7 @@ export default function SignScreen() {
     try {
       const result = await runSigningCeremony(
         {
-          api: new QesApi(await resolveSigningOrigin(platformVaultDeps().storage, server), token),
+          api: qesApi(serverUrl),
           vault: platformVaultDeps(),
           reviewedDocument: reviewPdf,
           reviewedDigest: reviewDigest ?? undefined,
@@ -400,7 +454,7 @@ export default function SignScreen() {
       });
 
       // Přímý podpis: dokončit submission jen když server vrátil stejný digest.
-      if (isPdfFlow && verified) await finishSubmission();
+      if (isPdfFlow && verified) await finishSubmission(serverUrl);
     } catch (err) {
       if (err instanceof SigningOriginError || err instanceof CeremonyError || err instanceof VaultError || err instanceof QesApiError) {
         setError(err.code);
@@ -444,7 +498,7 @@ export default function SignScreen() {
     setErrorDetail(null);
 
     try {
-      const payload = await (await qesApi()).getSession();
+      const payload = await qesApi(serverUrl).getSession();
 
       if (payload.state === 'completed') {
         const verified = reviewDigest ? payload.document_digest === reviewDigest : null;
@@ -459,7 +513,7 @@ export default function SignScreen() {
           finalPdfSha256: payload.final_pdf_sha256,
         });
 
-        if (isPdfFlow && verified !== false) void finishSubmission(payload.submitter_id);
+        if (isPdfFlow && verified !== false) void finishSubmission(serverUrl, payload.submitter_id);
       } else {
         setError('server_pending');
       }
@@ -558,6 +612,25 @@ export default function SignScreen() {
     }
   }, [busy, finalPdf, failAction]);
 
+  if (pendingOrigin) {
+    return (
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={styles.title}>Neznámý server</Text>
+        <Text style={styles.muted}>Podpisový odkaz vede na server, který jste ještě nepoužili:</Text>
+        <Text style={styles.origin}>{pendingOrigin}</Text>
+        <Text style={styles.muted}>
+          Token z odkazu se odešle až po potvrzení. Podepíše se jen dokument, který si zobrazíte a potvrdíte.
+        </Text>
+        <PrimaryButton
+          title={trusting ? 'Ukládám…' : 'Důvěřovat a pokračovat'}
+          onPress={confirmTrust}
+          disabled={trusting}
+        />
+        <TextButton title="Zrušit" onPress={leaveSignScreen} />
+      </ScrollView>
+    );
+  }
+
   if (!session && !error) {
     return (
       <View style={styles.center}>
@@ -583,7 +656,7 @@ export default function SignScreen() {
           {done.verified !== false ? (
             <PrimaryButton
               title={savingSubmission ? 'Dokončuji uložení…' : 'Dokončit uložení'}
-              onPress={() => finishSubmission()}
+              onPress={() => { if (serverUrl) void finishSubmission(serverUrl); }}
               disabled={savingSubmission}
             />
           ) : null}
@@ -640,6 +713,8 @@ export default function SignScreen() {
         <>
           <Text style={styles.title}>{session.document_name ?? 'Dokument'}</Text>
           <Text style={styles.muted}>Podepisuje: {session.signer_name}</Text>
+          {serverUrl ? <Text style={styles.label}>Server: {serverUrl}</Text> : null}
+
           <Text style={styles.label}>Úroveň: {levelLabel(session.level_required ?? 'ades')}</Text>
           {certificate ? (
             <>
@@ -724,6 +799,7 @@ const styles = StyleSheet.create({
   muted: { fontSize: 14, color: '#6b7280' },
   label: { fontSize: 13, color: '#6b7280' },
   hash: { fontFamily: 'monospace', fontSize: 11, color: '#374151' },
+  origin: { fontFamily: 'monospace', fontSize: 14, color: '#111', paddingVertical: 4 },
   error: { color: '#991b1b', fontSize: 14 },
   detail: { color: '#b45309', fontSize: 12 },
 });

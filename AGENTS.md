@@ -670,6 +670,16 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       `/qes/sessions/unknown/document` 404, `/qes-test/root.crl` 404. Testy: T0 416/0, T1 523/0, T2 659/0.
       Staging v23 běží ze staršího forku s explicitními defaulty; při dalším deployi může zjednodušit stejně.
 
+- [x] **TOFU pro podpisové odkazy z více instancí (2026-10-29):** Nastavení drží jen
+      `Server URL` + API token pro **přímý podpis PDF a ověření PDF**; podpisový odkaz
+      nese origin serveru (HTTPS host, custom scheme `server`) a appka ho při prvním
+      použití potvrdí (TOFU). Důvěryhodné servery jsou v `dataStorage`
+      (`cz.dokulachtan.signer.trusted_servers`) a v *Nastavení → Důvěryhodné servery
+      pro podpisové odkazy* je lze odvolat. `server_url` z payloadu musí odpovídat
+      originu odkazu, jinak `foreign_server`; odkazy bez serveru skončí
+      `missing_server` (žádný tichý fallback do Nastavení). Ověřeno: `make qes-test-qes` 422/0,
+      `make qes-js-test` 33/0, `make qes-app-test` 223/0, `make qes-app-typecheck`.
+
 ## Pravidla modifikací forku
 
 - Refaktor 2026-10-28: 36 → **21** upstream souborů, 783 → **233** řádků, **0** opsaného upstream kódu; detail [docs/23-refaktor-touch-surface.md](docs/23-refaktor-touch-surface.md).

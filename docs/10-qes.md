@@ -300,8 +300,17 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
 - `QES_ANDROID_CERT_SHA256` na stagingu odpovídá **debug** podpisu (lokální bleeding-edge build);
   release APK z CI by vyžadoval release fingerprint (`deploy/android-release/`).
   Testovací APK na `dokulachtan-download.fly.dev` je debug, takže App Links na produkci teď sedí.
-- Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…"`
+- Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan-staging.fly.dev"`
   → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
+- **TOFU (trust on first use):** podpisový odkaz nese origin serveru (HTTPS host nebo `server`
+  u custom scheme). Při prvním odkazu z neznámého serveru appka token neodešle a zobrazí
+  „Neznámý server“ s originem; po potvrzení se origin uloží do `dataStorage` a další odkazy
+  z něj jdou bez potvrzení. V *Nastavení → Důvěryhodné servery pro podpisové odkazy* je seznam
+  s tlačítkem „Odvolat“; odvolání znamená, že se příští odkaz z toho serveru znovu potvrdí.
+  *Nastavení → Server URL + API token* se používá **jen** pro přímý podpis PDF a ověření PDF;
+  podpisové odkazy ho nepoužívají. Odkaz bez serveru skončí `missing_server` (žádný tichý
+  fallback do Nastavení); `server_url` z payloadu musí odpovídat originu odkazu, jinak appka
+  vrátí `foreign_server`.
 
 ### iOS build a instalace na iPhone
 
@@ -343,7 +352,7 @@ Na co nezapomenout:
 - `QES_IOS_TEAM_ID` na stagingu = Apple Team ID (jinak je v AASA placeholder `TEAMID`
   a Universal Links se neověří); zjistíš ho v Apple Developer portálu (Membership).
 - Universal Links vyžadují `ios.associatedDomains` v `app.json` + placený účet; custom scheme
-  `dokulachtan://sign?token=…` funguje vždy (i v ad hoc buildu).
+  `dokulachtan://sign?token=…&server=<origin>` funguje vždy (i v ad hoc buildu).
 - Varianta A (čtečka) na iOS nefunguje — MOI Podpisové SDK je Android AAR; odkaz „Připojit čtečku“
   se v appce na iOS nezobrazuje (varianta B je plně přenositelná).
 
