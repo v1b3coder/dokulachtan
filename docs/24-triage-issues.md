@@ -16,7 +16,7 @@ jsou označené jako mimo rozsah.
 | 8 | Prázdná ENV vypne default bez varování | rejected (jen tichý skip souboru; precedence zůstává) | P3 |
 | 9 | Důvěra na úrovni kořene širší než TSL | opraveno (anchory = vydávající CA) | P2 |
 | 10 | `QES_ENABLED=false` není úplný vypínač | opraveno (feature gate ve všech hoocích) | P2 |
-| 11 | PdfiumTrust: jen razítko → změny se nekontrolují | potvrzeno | P1 |
+| 11 | PdfiumTrust: jen razítko → změny se nekontrolují | opraveno (hranice i pro DocTS) | P2 |
 | 12 | Account fallback důvěřuje klíči, ne certu | potvrzeno | P1 |
 | 14 | Dokončení přes token nehlídá archivaci/expiraci | potvrzeno | **P0** |
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
@@ -114,8 +114,22 @@ Test: šablona `required: false`, API `required: false` → `false`.
 `boundary` obsahuje jen razítko → `last_signature` je `nil` → `modified` se nepočítá.
 Druhý případ: `trusted_ranges` neprázdné a žádný podpis přijatý → `boundary = []` → totéž.
 
-Oprava: když po odfiltrování razítek nic nezbude, počítat `modified` vůči poslednímu přijatému razítku,
-nebo vůči `verified`. Test: nedůvěryhodný podpis + důvěryhodné DocTS + přidaná revize → `modified: true`.
+**Opraveno (2026-10-29, fork `987707b9`):** po odfiltrování razítek se bere poslední přijatý
+záznam (`boundary.max_by`), jinak poslední ověřený podpis (`verified.max_by`, drží R1). Tím se `modified`
+počítá i pro PDF, kde je přijaté jen DocTS. Testy: `spec/lib/qes/verify_parity_spec.rb` (3 nové —
+nedůvěryhodný podpis + DocTS + revize, nedůvěryhodný podpis za DocTS, jen DocTS + revize; kontrola
+bez revize zůstává `modified: false`). Ověřeno T0 454/0 (SQLite).
+
+Druhá část nálezu přes `Qes::Validator` sestrojit nejde — `accepted?` přijme každý range, který je
+v `trusted_ranges`; dosažitelná je jen varianta `trusted_ranges = [range DocTS]`, což je první případ.
+Fallback `verified.max_by` pokrývá i doslovnou variantu.
+
+**Závažnost snížena na P2:** verdikt se v praxi nepřeklopí na `valid` (přidaný obsah po posledním
+podpisu udělá `coverage: partial` → `invalid`); dopad je (a) `modified: false` → appka ukáže „Podpis je
+neplatný“ místo „PDF bylo po podpisu změněno“, (b) `VerifiedDocuments.store!` a `canStore`
+(`intact && !modified`) uloží změněné PDF do „Verified documents“ (D14), (c) webové „Verify PDF“ nemá
+varování o změnách. Týká se PDF bez přijatého podpisu — cizí CA mimo `czech.pem`, testovací cert,
+pečeť z jiné instance; naše dokumenty s PostSignum/I.CA podpisem a pečetí vlastního účtu jsou přijaté.
 
 ### #12 Account fallback pro CAdES důvěřuje veřejnému klíči, ne certifikátu
 
