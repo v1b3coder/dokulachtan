@@ -18,7 +18,7 @@ jsou označené jako mimo rozsah.
 | 10 | `QES_ENABLED=false` není úplný vypínač | opraveno (feature gate ve všech hoocích) | P2 |
 | 11 | PdfiumTrust: jen razítko → změny se nekontrolují | opraveno (hranice i pro DocTS) | P2 |
 | 12 | Account fallback důvěřuje klíči, ne certu | opraveno (přesná shoda certu) | P2 |
-| 14 | Dokončení přes token nehlídá archivaci/expiraci | potvrzeno | **P0** |
+| 14 | Dokončení přes token nehlídá archivaci/expiraci | opraveno (guard v `create`, `complete`, `complete_submission`) | P0 |
 | 15 | Dvě připravené revize nad jedním PDF | potvrzeno | **P0** |
 | 16 | Úroveň QES pole jde snížit; chybí snapshot | potvrzeno | P1 |
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
@@ -41,19 +41,24 @@ Ověřeno lokálně: build-tools **35/36** tisknou `Signer #1 certificate SHA-25
 
 Oprava: `grep -oE '[0-9a-fA-F]{64}' | head -1` místo `awk`, plus test formátu v CI (obě varianty výstupu).
 
-### #14 Dokončení přes token relace nehlídá stav submissionu
+### #14 Dokončení přes token relace nehlídá stav submissionu — **opraveno**
 
-`qes/sessions_controller.rb:136-146` (`complete_submission`) volá `Submitters::SubmitValues.call` bez kontrol,
+`qes/sessions_controller.rb:136-146` (`complete_submission`) volal `Submitters::SubmitValues.call` bez kontrol,
 které má `submit_form_controller.rb:62-70`: `template.archived_at`, `submission.archived_at`, `submission.expired?`,
 `submitter.declined_at`. `SubmitValues` je nekontroluje. Token platí 24 h (`N7`).
-Stejná mezera v `form_sessions_controller.rb:24` — chybí `submission.expired?` a `template.archived_at`.
+Stejná mezera v `form_sessions_controller.rb:24` — chybělo `submission.expired?` a `template.archived_at`.
+Navíc `sessions#complete` vkládal podpis do PDF i po archivaci (mrtvá revize, kterou už nikdo nedokončí).
 
 Dopad: odesílatel smlouvu po podpisu zruší (archivuje / nechá vypršet), podepisující ji do 24 h z aplikace dokončí.
 
-Oprava: jedna sdílená metoda `Qes::SubmissionState.active!(submission)` (stejné podmínky jako upstream),
-volaná v `form_sessions#create` i `sessions#complete_submission`; chyba `gone`/`conflict` s QES kódem.
+Oprava: `Qes::ControllerConcern#inactive_submission?` (stejné podmínky jako upstream) +
+`reject_inactive_submission` (`410 form_not_active`), volané v `form_sessions#create` i v `sessions#complete`
+a `#complete_submission`. Guard v `complete` je před modifikací PDF, takže archivace během obřadu
+nevyrobí podepsanou revizi. Appka i prohlížeč mají `form_not_active` v `ERROR_TEXT`/`ERROR_KEYS`.
 
-Test: archivace submission po `complete` → `complete_submission` musí selhat; expired submission → `create` musí selhat.
+Test: `qes_session_completion_spec.rb` (archivace a expirace po `complete`), `qes_sessions_spec.rb`
+(archivovaná šablona, expirovaná submission, archivace během obřadu), `qes_step_logic.test.mjs`,
+`signScreen.test.ts` (bez retry tlačítka).
 
 ### #15 Dvě připravené revize nad jedním PDF
 

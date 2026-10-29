@@ -1,5 +1,5 @@
 import React from 'react';
-import { QesApi } from '../src/lib/api';
+import { QesApi, QesApiError } from '../src/lib/api';
 import { PdfApi } from '../src/lib/pdfApi';
 import { CeremonyError, runSigningCeremony } from '../src/lib/ceremony';
 import { downloadPdf, previewPdf, sharePdf } from '../src/lib/pdfShare';
@@ -84,6 +84,19 @@ it('offers saving retry after a signature and retries only submission completion
   expect(complete).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenLastCalledWith();
   expect(runSigningCeremony).toHaveBeenCalledTimes(1);
+  await act(async () => screen.unmount());
+});
+
+it('does not offer a completion retry when the submission is no longer active', async () => {
+  jest.spyOn(QesApi.prototype, 'completeSubmission')
+    .mockRejectedValue(new QesApiError(410, 'form_not_active'));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await signOnScreen(screen);
+
+  expect(JSON.stringify(screen.toJSON())).toContain('Dokument už není aktivní');
+  expect(screen.root.findAllByProps({ title: 'Dokončit uložení' })).toHaveLength(0);
+  expect(screen.root.findByProps({ title: 'Zavřít' })).toBeTruthy();
   await act(async () => screen.unmount());
 });
 

@@ -482,7 +482,8 @@ polluje `GET /qes/sessions/:token` (appka) resp. `GET /s/:slug/qes_sessions/:id`
 Appka **MUSÍ** pollovat max. 30 s, pak zobrazí „Dokončuji na serveru…" s tlačítkem „Zkontrolovat znovu"
 (session se dokončí i bez appky — výsledek je v DocuSealu).
 
-Chyby: `409 wrong_state`, `410 expired_token`, `422 signature_invalid`, `422 signature_size`.
+Chyby: `409 wrong_state`, `410 expired_token`, `422 signature_invalid`, `422 signature_size`,
+`410 form_not_active` (submission byla během obřadu archivována nebo vypršela; podpis se do PDF nevloží).
 
 ### 5.3.1 `POST /qes/sessions/:token/complete_submission` — dokončení submissionu
 
@@ -491,6 +492,13 @@ Po `completed` session appka **MUSÍ** dokončit submission přes tento endpoint
 na session token**; `submitter` z deep linku se ignoruje. Endpoint je idempotentní a vrací
 `{ "state": "completed", "submitter_id": 7, "completed": true }`.
 Dokončený token platí 24 h po `completed_at`, pak `410 expired_token` (§ 5.1).
+
+**Stav submissionu.** `complete`, `complete_submission` i `POST /s/:slug/qes_sessions` odmítnou
+submission, která je archivovaná (submission nebo šablona) nebo jejíž `expire_at` už prošel:
+`410 form_not_active`. Session token je kapabilita a nesmí přežít smrt dokumentu — jinak podepisující
+dokončí smlouvu, kterou odesílatel zrušil. Podmínky jsou stejné jako v upstream
+`SubmitFormController#update`. Guard v `complete` je před modifikací PDF, takže archivace během
+obřadu nevyrobí podepsanou revizi, kterou už nikdo nedokončí.
 
 ### 5.4 `POST /qes/sessions/:token/abort` — chyba na straně appky
 
@@ -525,6 +533,7 @@ App                                   Server
 | 410 | `expired_token` | TTL vypršel | totéž |
 | 410 | `used_token` | token už byl použit | „Podpis už byl dokončen" |
 | 410 | `expired_token` | dokončený token po 24 h | „Vyžádejte nový odkaz" |
+| 410 | `form_not_active` | submission archivována / vypršela | „Dokument už není aktivní, požádejte nový" |
 | 409 | `wrong_state` | operace neodpovídá stavu | znovu načíst payload |
 | 422 | `invalid_certificate` | cert nejde načíst / chybí klíč | „Zkontrolujte certifikát" |
 | 422 | `certificate_expired` | mimo platnost | „Certifikát vypršel" |

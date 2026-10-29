@@ -41,6 +41,7 @@ const ERROR_TEXT: Record<string, string> = {
   missing_server: 'Odkaz neobsahuje adresu serveru. Vyžádejte nový odkaz.',
   expired_token: 'Platnost odkazu vypršela. Vyžádejte nový.',
   used_token: 'Odkaz už byl použit nebo podpis zrušen. Vyžádejte nový.',
+  form_not_active: 'Dokument už není aktivní. Požádejte odesílatele o nový.',
   unknown_token: 'Neplatný odkaz. Vyžádejte nový.',
   network: 'Chyba připojení. Zkuste to znovu.',
   certificate_missing: 'Certifikát chybí nebo vypršel. Importujte nový.',
@@ -654,7 +655,7 @@ export default function SignScreen() {
               : 'Podpis se nebude opakovat. Dokončete uložení dokumentu do DocuSealu.'}
           </Text>
           {submissionError ? <Text style={styles.error}>{ERROR_TEXT[submissionError] ?? submissionError}</Text> : null}
-          {done.verified !== false ? (
+          {done.verified !== false && submissionError !== 'form_not_active' ? (
             <PrimaryButton
               title={savingSubmission ? 'Dokončuji uložení…' : 'Dokončit uložení'}
               onPress={() => { if (serverUrl) void finishSubmission(serverUrl); }}

@@ -266,15 +266,15 @@ Testy jsou rozdelené do **tierů** podle ceny a rizika; runbook a naměřené �
 
 | Tier | Cíl | Rozsah | Kdy | Naměřeno |
 |---|---|---|---|---|
-| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 422 ex, 43 s |
-| **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 422 ex, **25 s** |
+| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 459 ex, 42 s |
+| **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 459 ex, **25 s** |
 | **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 526 ex, 81 s |
 | **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 526 ex, 43 s |
 | **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 659 ex, 3 min 20 s |
 | **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 659 ex, **90 s** |
 | **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 660 ex, 3 min 37 s |
-| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` (jinak v T0) | 33 ex, 0,2 s |
-| — | `make qes-app-test` | Jest testy appky | po změně appky | 223 ex, 13 s |
+| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` (jinak v T0) | 37 ex, 0,2 s |
+| — | `make qes-app-test` | Jest testy appky | po změně appky | 224 ex, 9 s |
 | — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
 | — | `make qes-e2e` / `qes-e2e-two` / `qes-e2e-pdf` / `qes-verify-e2e` | E2E s reálným podpisem | před PR, když se mění signing flow | — |
 | — | `make qes-staging-e2e*` | E2E proti stagingu | po nasazení na staging | — |
@@ -310,8 +310,8 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   defaulty pro český deployment jsou v `Qes::Config::DEFAULTS`.
 - Appka: Expo SDK 58, vault s AES-256-GCM a biometrií, import PKCS#12, přímý podpis
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.
-- Testy: tiery T0–T3 a paralelní runner; QES 422/0, appka 223/0, JS 33/0,
-  T2 659/0 a T3 660/0 (2026-10-28).
+- Testy: tiery T0–T3 a paralelní runner; QES 459/0, appka 224/0, JS 37/0,
+  T2 659/0 a T3 660/0 (2026-10-29).
 - Nasazeno: produkční instance **v52** (`dokulachtan`, fork `cfd36b2c`), staging **v25**
   (`dokulachtan-staging`, fork `cfd36b2c`); `/up` 200 na obou.
 

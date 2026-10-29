@@ -58,6 +58,7 @@ const ERROR_TEXT: Record<string, string> = {
   source_mismatch: 'Server přijal jiný soubor, než jste vybrali. Zkuste to znovu.',
   already_completed: 'Dokument už je podepsaný. Otevřete ho v DocuSealu.',
   signature_in_progress: 'Podpis už probíhá v jiném okně. Dokončete ho, nebo zkuste znovu.',
+  form_not_active: 'Dokument už není aktivní. Požádejte odesílatele o nový.',
   pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
 };
 
