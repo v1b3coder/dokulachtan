@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
+    "android": "expo run:android --app-id cz.dokulachtan.signer.debug",
     "test": "jest",
     "e2e": "tsx --tsconfig scripts/tsconfig.e2e.json scripts/qes-app-e2e.ts",
     "typecheck": "tsc --noEmit",

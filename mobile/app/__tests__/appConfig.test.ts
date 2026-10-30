@@ -9,4 +9,8 @@ describe('app.json', () => {
     expect(Object.keys(config.expo.android)).not.toContain('intentFilters');
     expect(config.expo.scheme).toBe('dokulachtan');
   });
+
+  it('drží produkční applicationId (varianty řeší withReleaseSigning)', () => {
+    expect(config.expo.android.package).toBe('cz.dokulachtan.signer');
+  });
 });

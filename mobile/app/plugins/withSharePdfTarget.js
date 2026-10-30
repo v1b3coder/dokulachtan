@@ -4,12 +4,15 @@
 //    původního souboru, bez re-exportu z PDF editoru.
 // Aliasy míří na MainActivity, takže intent převezme expo-share-intent
 // (SEND) nebo vlastní OpenPdfModule (VIEW). Plugin je idempotentní.
-const { withAndroidManifest } = require('expo/config-plugins');
+//
+// Labely jsou string resources, aby je šel build type přepsat: produkce
+// „Podepsat PDF“ / „Ověřit PDF“, debug a testovací APK mají suffix.
+const { withAndroidManifest, withStringsXml, AndroidConfig } = require('expo/config-plugins');
 
 const SHARE_ALIAS = '.SharePdfAlias';
-const SHARE_LABEL = 'Podepsat PDF';
+const SHARE_LABEL = '@string/share_pdf_label';
 const OPEN_ALIAS = '.OpenPdfAlias';
-const OPEN_LABEL = 'Ověřit PDF';
+const OPEN_LABEL = '@string/open_pdf_label';
 
 function alias(name, label, action, mimeType) {
   return {
@@ -57,7 +60,20 @@ function addPdfAliases(androidManifest) {
   return androidManifest;
 }
 
+function addLabels(config) {
+  return withStringsXml(config, (config) => {
+    config.modResults = AndroidConfig.Strings.setStringItem([
+      { $: { name: 'share_pdf_label' }, _: 'Podepsat PDF' },
+      { $: { name: 'open_pdf_label' }, _: 'Ověřit PDF' },
+    ], config.modResults);
+
+    return config;
+  });
+}
+
 module.exports = function withSharePdfTarget(config) {
+  config = addLabels(config);
+
   return withAndroidManifest(config, (config) => {
     config.modResults = addPdfAliases(config.modResults);
 

@@ -43,6 +43,8 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
   (debug vs. release keystore), druhý je AdES/QES podpis PDF (PostSignum `.p12` od uživatele).
   Samotné slovo „certifikát“ je zakázané.
 - **Android odkazy jdou přes custom scheme** `dokulachtan://sign` (App Links zrušeny); iOS AASA zůstává.
+- **Lokální buildy mají vlastní applicationId** (`debug` = `.debug`, testovací APK = `.test`), aby se vešly
+  vedle produkce; data jsou oddělená. Detaily: [docs/10-qes.md](docs/10-qes.md#apk-pro-testování).
 - **Fork zůstává AGPL-3.0 + attribution**, patch minimální a rebasovatelný.
 
 ## Pravidla patche forku

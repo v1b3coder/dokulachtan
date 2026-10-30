@@ -169,6 +169,7 @@ zůstává v gitu.
   takže testovací prostředí hlásí `UNTRUSTED` (stejně jako dřív); staging to řeší test CRL na
   staging hostu.
 - **APK z Releases** otevírá signing flow přes custom scheme `dokulachtan://` (systémový chooser);
-  Android App Links byly zrušeny (#18.1). Podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
+  Android App Links byly zrušeny (#18.1). Produkce „Dokulachtan“, debug „Dokulachtan (debug)“,
+  testovací APK „Dokulachtan (test)“ — chooser je rozliší. Podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
 - **iOS build** čeká na Apple Developer účet; appka je cross-platform připravená.
 - **Otevřené nálezy** ze třetí a čtvrté kontroly: [docs/24-triage-issues.md](docs/24-triage-issues.md).

@@ -282,6 +282,8 @@ První verze tohoto triage to měla jako P0 a navrhovala denylist debug otisku v
 Druhá verze to označila za wontfix s argumentem, že jde o konfiguraci distributora appky.
 **Výsledek:** `assetlinks.json` je z forku **úplně odstraněn** — Android jde přes custom scheme
 `dokulachtan://sign` a systémový chooser; ve které aplikaci se signing flow otevře, rozhoduje uživatel.
+Chooser je rozliší podle jména: produkce „Dokulachtan“, debug „Dokulachtan (debug)“, testovací
+APK „Dokulachtan (test)“ (applicationId `.debug` / `.test`, viz [docs/10](10-qes.md#apk-pro-testování)).
 
 Proč to není jen konfigurace:
 
