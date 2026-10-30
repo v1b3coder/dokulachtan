@@ -16,12 +16,10 @@ it('uses the build origin only when no server is configured', async () => {
     .resolves.toBe('https://fallback.test');
 });
 
-it('signs for the built-in production server on a fresh install with no build origin', async () => {
-  expect(DEFAULT_SERVER_URL).toBe('https://dokulachtan.fly.dev');
+it('starts with no server on a fresh install', async () => {
+  expect(DEFAULT_SERVER_URL).toBe('');
   await expect(resolveSigningOrigin(storage(null), 'https://dokulachtan.fly.dev'))
-    .resolves.toBe('https://dokulachtan.fly.dev');
-  await expect(resolveSigningOrigin(storage(null), 'https://attacker.test'))
-    .rejects.toMatchObject({ code: 'foreign_server' });
+    .rejects.toMatchObject({ code: 'invalid_server' });
 });
 
 it('rejects a foreign link before any request and accepts equivalent origins', async () => {
