@@ -764,7 +764,9 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      (`HexaPDF::Document.new(io: StringIO.new(final_document.download))`); dokument se **NEPŘESTAVUJE**
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
-   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, datum) na pozici pole `qes`.
+   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, e-mail, datum) na pozici pole `qes`.
+   E-mail v pečeti je e-mail podepisujícího z DocuSealu, **ne** e-mail z certifikátu: TBS se staví
+   před certifikátem (§ 5.1a), takže certifikát v okamžiku kreslení pečeti ještě není znám.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože TBS se staví **před**
    certifikátem (§ 5.1a); pole je neviditelné (`Rect: [0, 0, 0, 0]`).
@@ -1333,7 +1335,8 @@ Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO
 - časy všech přechodů, `validation_report`, `seal_state`.
 
 Audit trail PDF **MUSÍ** obsahovat stránku QES (§ 7.7) s těmito údaji a s upozorněním, že jde
-o kvalifikovaný/zdokonalený podpis podle zjištěné úrovně.
+o kvalifikovaný/zdokonalený podpis podle zjištěné úrovně. Stránka **MUSÍ** u každého podpisu uvést
+jméno a e-mail podepisujícího (identita, kterou použil DocuSeal) odděleně od předmětu certifikátu.
 
 Hodnoty v `submitter.values[qes_uuid]` **MUSÍ** být `"qes:<session_id>"`, aby bylo možné dohledat
 session z UI a DB. Rozšíření `GET /api/submissions/:id` o `qes` metadata je **mimo v1** (§ 17 #6);
