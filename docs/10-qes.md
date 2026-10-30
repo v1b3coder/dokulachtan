@@ -308,6 +308,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   - debug (`expo run:android`) = `cz.dokulachtan.signer.debug` / „Dokulachtan (debug)“,
   - testovací APK (release bez `ANDROID_KEYSTORE_PATH`) = `cz.dokulachtan.signer.test` / „Dokulachtan (test)“.
   Všechny tři se instalují vedle sebe; data (vault, TOFU, Server URL, API token) jsou oddělená.
+  Lokální buildy podepisuje debug keystore **tohoto počítače** (`~/.android/debug.keystore`),
+  ne kopie z Expo šablony v projektu.
 - Build pro telefon: `cd mobile/app && npx expo prebuild --platform android && cd android &&
   ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a` (bez `ANDROID_KEYSTORE_PATH` = debug keystore
   pro lokální testovací APK; release v CI viz `deploy/android-release/README.md`).
@@ -316,6 +318,11 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   s chybou, aby se nevydal APK, který na telefon nejde nainstalovat.
 - Debug build: `cd mobile/app && npm run android` (= `expo run:android --app-id cz.dokulachtan.signer.debug`;
   bez `--app-id` by Expo CLI otevřel produkční appku, protože čte `defaultConfig.applicationId`).
+  `mobile/app/plugins/withReleaseLikeDebug.js` z něj dělá **release-like build**: JS bundle je
+  vložený v APK, `debuggable false` a `useDevSupport = false`, takže žádný Metro, DevTools, LogBox
+  ani CDP inspector — ten by z běžící appky přečetl klíč při podpisu. Hot reload v debug buildu nefunguje,
+  po změně JS je potřeba build znovu; signatura debug klíče se změnila, takže už nainstalovaný
+  `cz.dokulachtan.signer.debug` je potřeba odinstalovat (a znovu importovat certifikát).
 - Velikost APK: univerzální build se 4 ABI a nekomprimovanými `.so` má ~92 MB; release jen arm64
   s deflate a `shrinkResources` ~14 MB (emulátor/testy jedou na x86_64 debug buildu).
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release

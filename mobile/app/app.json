@@ -48,6 +48,7 @@
       ],
       "./plugins/withSharePdfTarget.js",
       "./plugins/withReleaseSigning.js",
+      "./plugins/withReleaseLikeDebug.js",
       "./plugins/withApkSize.js",
       [
         "expo-splash-screen",

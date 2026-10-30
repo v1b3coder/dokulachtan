@@ -1,5 +1,6 @@
 // Config plugin: release APK podepisuje release keystorem z CI, lokální buildy
-// zůstávají na debug keystore. `android/` je generovaný `expo prebuild`,
+// podepisuje debug keystore tohoto počítače (`~/.android/debug.keystore`), ne
+// kopie z Expo šablony v projektu. `android/` je generovaný `expo prebuild`,
 // takže přímá úprava build.gradle by se při dalším prebuildu ztratila.
 //
 // CI nastaví ANDROID_KEYSTORE_PATH (dekódovaný secret) a hesla; když proměnná
@@ -13,8 +14,10 @@
 // Share/open aliasy mají stejný suffix v `share_pdf_label` a `open_pdf_label`.
 const { withAppBuildGradle } = require('expo/config-plugins');
 
+const LOCAL_DEBUG_KEYSTORE = 'file(System.getProperty("user.home") + "/.android/debug.keystore")';
+
 const RELEASE_SIGNING = `        release {
-            storeFile file(System.getenv("ANDROID_KEYSTORE_PATH") ?: "debug.keystore")
+            storeFile file(System.getenv("ANDROID_KEYSTORE_PATH") ?: (System.getProperty("user.home") + "/.android/debug.keystore"))
             storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "android"
             keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "androiddebugkey"
             keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: "android"
@@ -66,6 +69,14 @@ function addReleaseSigning(contents) {
   );
 }
 
+function useLocalDebugKeystore(contents) {
+  if (!contents.includes("storeFile file('debug.keystore')")) {
+    return contents;
+  }
+
+  return contents.replace("storeFile file('debug.keystore')", `storeFile ${LOCAL_DEBUG_KEYSTORE}`);
+}
+
 function addDebugIdentity(contents) {
   if (contents.includes('applicationIdSuffix ".debug"')) {
     return contents;
@@ -99,8 +110,9 @@ function addTestIdentity(contents) {
 
 module.exports = function withReleaseSigning(config) {
   return withAppBuildGradle(config, (config) => {
-    let contents = addReleaseSigning(config.modResults.contents);
+    let contents = useLocalDebugKeystore(config.modResults.contents);
 
+    contents = addReleaseSigning(contents);
     contents = addDebugIdentity(contents);
     contents = addTestIdentity(contents);
     config.modResults.contents = contents;
