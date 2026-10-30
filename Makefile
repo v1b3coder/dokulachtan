@@ -3,37 +3,36 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
 
-venv:
+help: ## Vypíše všechny cíle s popisem
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | sed -E 's/:.*## / — /'
+
+venv: ## Vytvoří .venv (pyHanko + podman-compose)
 	python3 -m venv .venv
 	.venv/bin/pip install --index-url https://pypi.org/simple pyhanko pyhanko-cli podman-compose
 
-test-pki:
+test-pki: ## Vygeneruje testovací PKI (root, issuing CA, koncové certy)
 	./scripts/make_test_pki.sh
 
-fixtures: test-pki
+fixtures: test-pki ## Vygeneruje testovací fixtures (PDF, podpisy)
 	./scripts/make_fixtures.sh
 
-validate:
+validate: ## Zvaliduje fixtures (pdfsig, pyHanko, OpenSSL)
 	./scripts/validate.sh
 
-# Regenerace testovací PKI (potřebuje test/certs-private/root.key, gitignored)
-test-pki-crl:
+test-pki-crl: ## Regenerace testovací PKI (potřebuje test/certs-private/root.key, gitignored)
 	.venv/bin/python scripts/make_test_pki_crl.py
 
-# Negativní/LTV scénáře: expirace, revokace, tamper, QSCD flag (test/out/negative-report.txt)
-negative:
+negative: ## Negativní/LTV scénáře: expirace, revokace, tamper, QSCD flag → test/out/negative-report.txt
 	.venv/bin/python scripts/negative_tests.py
 
-# vše: fixtures + validace + negativní scénáře
-verify: fixtures validate negative
+verify: fixtures validate negative ## Vše: fixtures + validace + negativní scénáře
 
-# fork: klon + remote upstream + větev dokulachtan (pin = HEAD forku v vendor/docuseal.rev)
-fork-setup:
+fork-setup: ## Klon forku + remote upstream + větev dokulachtan (pin z vendor/docuseal.rev)
 	./scripts/fork-setup.sh
 
 # --- QES test harness (SPEC § 15.1, PLAN 0.2) ---------------------------------
@@ -103,7 +102,7 @@ qes-js-test: ## node --test pro čistou logiku QES kroku (qes_step_logic.mjs)
 qes-e2e: ## E2E: fork + podpis KÓDEM APPKY (mobile/app/src/lib) → validované PDF
 	.venv/bin/python scripts/qes_e2e.py
 
-qes-e2e-two: ## E2E se dvěma signery jednoho dokumentu → 4 signatury (2× appka + 2× pečeť)
+qes-e2e-two: ## E2E se dvěma signery jednoho dokumentu → 6 signatur (2× appka + 2× pečeť + 2× DocTS)
 	QES_E2E_SIGNERS=2 QES_E2E_REPORT=qes-e2e-two-report.txt .venv/bin/python scripts/qes_e2e.py
 
 qes-e2e-pdf: ## E2E přímého podpisu PDF (docs/15): upload + náhled + place + podpis kódem appky
@@ -123,10 +122,10 @@ qes-eu-dss-verify: ## EU DSS compliance check PDF (externí API; volitelné, PDF
 qes-negative: ## Negativní scénáře N1–N17 (SPEC § 15.2) → test/out/qes-negative-report.txt
 	.venv/bin/python scripts/qes_negative_tests.py
 
-qes-staging-e2e: ## Staging E2E: 2 signeři na https://dokulachtan-staging.fly.dev → 4 signatury
+qes-staging-e2e: ## Staging E2E: 2 signeři na https://dokulachtan-staging.fly.dev → 6 signatur
 	QES_STAGING_SIGNERS=2 .venv/bin/python scripts/qes_staging_e2e.py
 
-qes-staging-same-signer: ## Staging: stejný podepisující podepíše 2 pole → 4 signatury INTACT
+qes-staging-same-signer: ## Staging: stejný podepisující podepíše 2 pole → 6 signatur INTACT
 	.venv/bin/python scripts/qes_staging_same_signer_check.py
 
 qes-staging-e2e-pdf: ## Staging: přímý podpis PDF (docs/15) → upload, place, podpis kódem appky, validace
@@ -171,10 +170,10 @@ smtp-test: ## Pošle testovací e-mail na adresu TO= z běžící app (předmět
 	@curl -s -o /dev/null https://$(APP).fly.dev/up || true
 	fly ssh console -a $(APP) -C "sh -c 'echo $(shell base64 -w0 scripts/smtp_probe.rb) | base64 -d > /tmp/smtp_probe.rb && SMTP_PROBE_TO=$(TO) SMTP_PROBE_TAG=$(APP) /app/bin/rails runner /tmp/smtp_probe.rb'"
 
-docuseal-up:
+docuseal-up: ## Spustí lokální DocuSeal z vendor/docuseal (podman-compose)
 	cd vendor/docuseal && ../../.venv/bin/podman-compose up -d
 
-docuseal-down:
+docuseal-down: ## Zastaví lokální DocuSeal
 	cd vendor/docuseal && ../../.venv/bin/podman-compose down
 
 check-public: ## Ověří, že lokální hodnoty z .env.local / deploy/smtp.env nejsou v tracked souborech
@@ -183,5 +182,5 @@ check-public: ## Ověří, že lokální hodnoty z .env.local / deploy/smtp.env 
 apk-fingerprint-test: ## Ověří parser otisku z apksigner (build-tools ≤36 a 37, #18.2)
 	./scripts/apk_fingerprint_test.sh
 
-clean:
+clean: ## Smaže vygenerované artefakty (test/out)
 	rm -rf test/out
