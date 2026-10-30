@@ -26,9 +26,9 @@ jsou označené jako mimo rozsah.
 | 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno (část), zbytek works as designed | P3 |
 | 22 | URL finálního PDF se neověřuje | neplatí (stahování jen v přímém podpisu) | — |
-| 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
+| 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 opraveno | P2 |
 
-**Wontfix v kódu:** #22, #23.1, #23.2.
+**Wontfix v kódu:** #22, #23.1.
 
 ## 2. P0 — bezpečnost a ztráta dat
 
@@ -257,11 +257,20 @@ podpisu“ (docs/16 D15). Testy: `pdfShare.test.ts` (chybějící otisk, přepsa
   `qes_disabled_spec` (4×), `qes_template_errors_spec`; bez guardů 8/8 červených, s guardy T0 447/1
   (1 flaky `qes_session_documents_spec` na hranici sekundy v `expires_at`).
 - **#23.3** `ceremony.ts:115` — `unlockCertificate` před `POST certificate`; podpis až po validaci, takže dopad je jen
-  zbytečně dlouhá doba s odemčeným klíčem. Oprava: veřejný cert a řetěz číst bez odemčení, klíč odemknout až před podpisem.
+  zbytečně dlouhá doba s odemčeným klíčem. **Částečně opraveno (2026-10-29):** `POST certificate` má strop
+  60 s (`CERTIFICATE_TIMEOUT_MS` v `api.ts`), takže okno neřídí server, a po podpisu se `privateKeyPem` zahodí
+  (`ceremony.ts`, SPEC § 9.3 bod 8). Pořadí zůstává podle SPEC § 9.3 (biometrie → `POST certificate`); čtení certu
+  bez odemčení by vyžadovalo jiný formát vaultu a změnu SPEC/DESIGN, proto se nedělá. Testy: `api.test.ts`
+  (timeout → `408 timeout`), `ceremony.test.ts` (klíč je po podpisu prázdný).
 - **#23.4** `sessions_controller.rb:47,69,89` — každý `GET document` / `POST certificate` posune `expires_at` bez stropu;
-  klient s platným tokenem drží session naživu libovolně dlouho. Oprava: absolutní strop `created_at + N`, prodlužovat jen do něj.
-- **#23.5** `sign.tsx:772` — „Zrušit" před načtením dokumentu volá `leaveSignScreen`, ne `cancelReview`,
-  takže server nedostane `postAbort('user_cancelled')`. Oprava: volat `cancelReview`.
+  klient s platným tokenem drží session naživu libovolně dlouho. **Opraveno (2026-10-29):** `QES_SESSION_MAX_TTL`
+  (default 3600 s) je absolutní strop od `created_at` — `QesSession#expired?` ho vynutí i při `expires_at`
+  v budoucnosti a `extend_expiry!` v controlleru na něj `expires_at` zarazí. Testy: `qes_session_spec.rb`
+  (strop i výjimka pro `completed`), `qes_session_documents_spec.rb` (clamp i `410`).
+- **#23.5** `sign.tsx:778` — „Zrušit" před načtením dokumentu volá `leaveSignScreen`, ne `cancelReview`,
+  takže server nedostane `postAbort('user_cancelled')`. **Opraveno (2026-10-29):** tlačítko volá `cancelReview`;
+  web mapuje `user_cancelled` na `qes_error_user_cancelled` (`qes_step_logic.mjs`, `qes_i18n.js`). Testy:
+  `signScreen.test.ts` (abort před načtením dokumentu), `qes_step_logic.test.mjs` (mapování kódu).
 
 ## 5. Mimo rozsah (wontfix)
 
@@ -295,8 +304,9 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 
 - **#23.1 Lexikální detekce šifrovaného PDF v appce** (`preparedDocument.ts:49-65`) — jen UX, server kontroluje parserem
   (`pdf_source.rb`). Nebudeme parsovat xref v JS.
-- **#23.2 Paralelní spouštěč testů** (`scripts/qes-test-parallel.sh:125,167`, `scripts/qes_test_groups.py:85`) —
-  vývojový nástroj, ne produkt. Opraveno samostatně, až bude potřeba.
+- **#23.2 Paralelní spouštěč testů** — **opraveno (2026-10-29):** `scripts/qes-test-parallel.sh` kontroluje
+  návratový kód plánovače a počet skupin, takže prázdný plán neprojde jako úspěch; migrace v kontejneru jdou
+  přes `&&` a při chybě vypíšou log. Test: `scripts/qes_test_parallel_test.sh` (`make qes-test-parallel-selftest`).
 
 ### #22 URL finálního PDF se neověřuje — **neplatí** (rozhodnutí 2026-10-29)
 
@@ -328,7 +338,7 @@ session** (server z odkazu), ne na Nastavení — pravidlo do `docs/17`/SPEC, ne
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
 | F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21 | appka: review, ověření finálního PDF; E2E na emulátoru |
-| F9 | #8, #9, #10, #23.3–5 | drobnosti a dokumentace; bez migrací |
+| F9 | #8, #9, #10, #23.3–5 | hotovo: drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
 před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #14, #16.

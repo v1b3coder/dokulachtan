@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test
+.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -84,6 +84,9 @@ qes-test-parallel-fast: qes-test-images ## T1 paralelně: vše kromě spec/syste
 
 qes-test-parallel-full: qes-test-images ## T2 paralelně: celá sada (potřebuje system image s Chromiem)
 	./scripts/qes-test-parallel.sh --group full --workers $(QES_PARALLEL_WORKERS)
+
+qes-test-parallel-selftest: ## Ověří, že paralelní runner neprojde s prázdným plánem (#23.2)
+	./scripts/qes_test_parallel_test.sh
 
 qes-test-timings: qes-test-images ## Přeměří časy spec souborů pro paralelní runner → test/qes/timings.txt
 	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \

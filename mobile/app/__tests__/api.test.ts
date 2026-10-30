@@ -183,3 +183,25 @@ it('rejects a response without a URL instead of skipping the origin check', asyn
 
   await expect(api.getSession()).rejects.toMatchObject({ code: 'foreign_server' });
 });
+
+it('times out the certificate request instead of holding the unlocked key', async () => {
+  jest.useFakeTimers();
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: ((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    })) as typeof fetch,
+  });
+
+  try {
+    const pending = api.postCertificate({
+      certificate: 'AAA=', chain: [], key_location: 'phone_keystore',
+      app: { platform: 'android', version: '1.3.9' },
+    });
+    jest.advanceTimersByTime(60_000);
+
+    await expect(pending).rejects.toMatchObject({ status: 408, code: 'timeout' });
+  } finally {
+    jest.useRealTimers();
+  }
+});

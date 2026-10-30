@@ -129,9 +129,15 @@ export async function runSigningCeremony(
     keySize: material.info.keySize,
   };
 
-  return completeWithCertificate(deps, material.certificatePem, chain, 'phone_keystore', app, session.hash_algorithm, identity, (dataToSign) =>
-    Promise.resolve(signSignedAttrs(material.privateKeyPem, dataToSign, session.hash_algorithm as HashAlgorithm)),
-  );
+  return completeWithCertificate(deps, material.certificatePem, chain, 'phone_keystore', app, session.hash_algorithm, identity, (dataToSign) => {
+    try {
+      return Promise.resolve(signSignedAttrs(material.privateKeyPem, dataToSign, session.hash_algorithm as HashAlgorithm));
+    } finally {
+      // SPEC § 9.3 bod 8: klíč se po podpisu zahodí. JS string nejde vymazat,
+      // ale reference pustíme hned, místo aby žila do konce obřadu (#23.3).
+      material.privateKeyPem = '';
+    }
+  });
 }
 
 async function completeWithCertificate(

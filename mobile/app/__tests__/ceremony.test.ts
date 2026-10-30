@@ -47,6 +47,16 @@ it.each(['sha256', 'sha384', 'sha512'])('signs verified PDF attributes with %s a
     .verify(material.certificatePem, signature)).toBe(true);
 });
 
+it('drops the unlocked private key right after signing', async () => {
+  const { deps } = setup();
+  const unlocked = { ...material, info: material };
+  unlock.mockResolvedValue(unlocked);
+
+  await runSigningCeremony(deps, 'ades');
+
+  expect(unlocked.privateKeyPem).toBe('');
+});
+
 it('does not sign when the reviewed document differs from the server TBS', async () => {
   const { deps, api } = setup();
   deps.reviewedDocument = new Uint8Array(deps.reviewedDocument);

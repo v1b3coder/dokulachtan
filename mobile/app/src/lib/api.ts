@@ -64,6 +64,7 @@ export class QesApi implements SessionSource {
       'POST',
       `/qes/sessions/${encodeURIComponent(this.token)}/certificate`,
       body,
+      CERTIFICATE_TIMEOUT_MS,
     );
   }
 
@@ -89,34 +90,48 @@ export class QesApi implements SessionSource {
     );
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
-      method,
-      redirect: 'error',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-QES-Protocol': '1',
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+  private async request<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
+    // `POST certificate` běží s odemčeným klíčem (SPEC § 9.3), takže request
+    // nesmí viset bez stropu, když server neodpovídá (#23.3).
+    const controller = timeoutMs === undefined ? undefined : new AbortController();
+    const timer = controller === undefined ? undefined : setTimeout(() => controller.abort(), timeoutMs);
 
-    assertResponseOrigin(response, this.serverUrl);
-    assertProtocolVersion(response);
+    try {
+      const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
+        method,
+        redirect: 'error',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'X-QES-Protocol': '1',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        ...(controller === undefined ? {} : { signal: controller.signal }),
+      });
 
-    const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
+      assertResponseOrigin(response, this.serverUrl);
+      assertProtocolVersion(response);
 
-    if (!response.ok) {
-      throw new QesApiError(response.status, payload.error ?? 'server_error', payload.message);
+      const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
+
+      if (!response.ok) {
+        throw new QesApiError(response.status, payload.error ?? 'server_error', payload.message);
+      }
+
+      return payload;
+    } catch (error) {
+      if (controller?.signal.aborted) throw new QesApiError(408, 'timeout');
+      throw error;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
-
-    return payload;
   }
 }
 
 // Chybová odpověď může být HTML (404/500 stránka), ne jen JSON; `response.json()`
 // by jinak shodilo celý obřad na „Unexpected character: <“.
 const PROTOCOL_VERSION = '1';
+const CERTIFICATE_TIMEOUT_MS = 60_000;
 
 function assertProtocolVersion(response: Response): void {
   const version = response.headers.get('X-QES-Protocol');

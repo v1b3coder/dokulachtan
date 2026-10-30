@@ -72,6 +72,19 @@ async function signOnScreen(screen: ReturnType<typeof create>) {
 }
 afterEach(() => { jest.restoreAllMocks(); jest.clearAllMocks(); });
 
+it('aborts the session when the user cancels before loading the document', async () => {
+  const abort = jest.spyOn(QesApi.prototype, 'postAbort').mockResolvedValue({ state: 'cancelled' });
+  const getDocument = jest.mocked(QesApi.prototype.getDocument);
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+
+  await act(async () => { await screen.root.findByProps({ title: 'Zrušit' }).props.onPress(); });
+
+  expect(abort).toHaveBeenCalledWith('user_cancelled');
+  expect(getDocument).not.toHaveBeenCalled();
+  await act(async () => screen.unmount());
+});
+
 it('offers saving retry after a signature and retries only submission completion', async () => {
   const complete = jest.spyOn(QesApi.prototype, 'completeSubmission')
     .mockRejectedValueOnce(new Error('offline'))

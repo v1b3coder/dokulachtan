@@ -23,6 +23,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_ENABLED` | `true` | feature gate forku: `false` = chování upstream DocuSealu (viz níže) |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
+| `QES_SESSION_MAX_TTL` | `3600` | absolutní strop od `created_at` pro všechna prodloužení [s] |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |

@@ -48,6 +48,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Číslo workerů musí být kladné celé číslo; plánovač by jinak skončil chybou,
+# kterou process substitution níže zahodí (#23.2).
+case "$WORKERS" in
+  ''|*[!0-9]*) echo "--workers musí být číslo >= 1 (dostal jsem '$WORKERS')" >&2; exit 1 ;;
+esac
+[ "$WORKERS" -ge 1 ] || { echo "--workers musí být >= 1" >&2; exit 1; }
+
 if [ "$WRITE_TIMINGS" = 1 ]; then
   json="$REPO/tmp/rspec.json"
   if [ ! -f "$json" ]; then
@@ -114,7 +121,8 @@ case "$GROUP" in
 esac
 
 LIST=$(mktemp)
-trap 'rm -f "$LIST"' EXIT
+PLAN=$(mktemp)
+trap 'rm -f "$LIST" "$PLAN"' EXIT
 group_files "$GROUP" > "$LIST"
 
 if [ ! -s "$LIST" ]; then
@@ -122,11 +130,21 @@ if [ ! -s "$LIST" ]; then
   exit 1
 fi
 
-mapfile -t BINS < <(
-  python3 scripts/qes_test_groups.py \
+# Exit kód plánovače se přes process substitution ztratí, proto se výstup
+# nejdřív uloží do souboru a návratový kód se kontroluje (#23.2).
+if ! python3 scripts/qes_test_groups.py \
     --timings "$TIMINGS" --workers "$WORKERS" \
-    --split-threshold "$SPLIT_THRESHOLD" --repo "$REPO" "$LIST"
-)
+    --split-threshold "$SPLIT_THRESHOLD" --repo "$REPO" "$LIST" > "$PLAN"; then
+  echo "plánovač selhal — nic se nespustilo" >&2
+  exit 1
+fi
+
+mapfile -t BINS < "$PLAN"
+
+if [ "${#BINS[@]}" -ne "$WORKERS" ]; then
+  echo "plánovač vrátil ${#BINS[@]} skupin, čekal jsem $WORKERS" >&2
+  exit 1
+fi
 
 if [ "$DRY_RUN" = 1 ]; then
   for index in "${!BINS[@]}"; do
@@ -136,6 +154,8 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 mkdir -p test/out
+# Staré logy by jinak ve shrnutí vypadaly jako výstup workeru, který neběžel.
+rm -f test/out/qes-parallel-*.txt
 
 run_worker() {
   local index=$1
@@ -148,7 +168,7 @@ run_worker() {
     -e SCHEMA="/app/tmp/qes-parallel-${index}.rb" \
     -e HOME=/tmp -e TZ=UTC -e QES_TEST_DIR=/qes-test \
     "$IMAGE" \
-    sh -c 'bundle exec rake db:create db:migrate >/dev/null 2>&1; bundle exec rspec "$@"' \
+    sh -c 'out=$(bundle exec rake db:create db:migrate 2>&1) || { printf "%s\n" "$out"; exit 1; }; bundle exec rspec "$@"' \
     _ "$@" "${EXTRA[@]}" > "$log" 2>&1
 }
 

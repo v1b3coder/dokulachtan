@@ -53,7 +53,7 @@ na server. Výsledkem je upravený DocuSeal (fork) + mobilní appka.
     `make qes-test` = SQLite (`PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3`, `SCHEMA=tmp/qes-test-schema.rb`,
     test image `test/qes/Dockerfile` + `test/qes/Dockerfile.system`, celá sada kromě `spec/system/dashboard_spec.rb`),
     `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada), `make qes-test-qes` = jen QES vrstva.
-    Aktuální měření: T2 659/0 (SQLite), T3 660/0 (Postgres 18).
+    Aktuální měření: T2 721/0 (SQLite), T3 725/0 (Postgres 18).
     Detail: SPEC § 15.1 a § 22, PLAN 0.2, runbook `test/qes/README.md`.
 13. **Při podpisu se nikdy nezadává heslo** (rozhodnutí uživatele 2026-10-16): heslo k PKCS#12 se používá
     výhradně při importu; klíčový materiál se ihned přešifruje AES-256-GCM klíčem z vaultu a při podpisu
@@ -265,15 +265,15 @@ Testy jsou rozdelené do **tierů** podle ceny a rizika; runbook a naměřené �
 
 | Tier | Cíl | Rozsah | Kdy | Naměřeno |
 |---|---|---|---|---|
-| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 459 ex, 42 s |
-| **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 459 ex, **25 s** |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 526 ex, 81 s |
-| **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 526 ex, 43 s |
-| **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 659 ex, 3 min 20 s |
-| **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 659 ex, **90 s** |
-| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 660 ex, 3 min 37 s |
+| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 478 ex, 43 s |
+| **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 478 ex, **20 s** |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 585 ex, 81 s |
+| **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 585 ex, 43 s |
+| **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 721 ex, 3 min 20 s |
+| **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 721 ex, **111 s** |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | **před vydáním** (parita s upstream CI) | 725 ex, 4 min 15 s |
 | — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` (jinak v T0) | 37 ex, 0,2 s |
-| — | `make qes-app-test` | Jest testy appky | po změně appky | 224 ex, 9 s |
+| — | `make qes-app-test` | Jest testy appky | po změně appky | 230 ex, 12 s |
 | — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
 | — | `make qes-e2e` / `qes-e2e-two` / `qes-e2e-pdf` / `qes-verify-e2e` | E2E s reálným podpisem | před PR, když se mění signing flow | — |
 | — | `make qes-staging-e2e*` | E2E proti stagingu | po nasazení na staging | — |
@@ -309,8 +309,8 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   defaulty pro český deployment jsou v `Qes::Config::DEFAULTS`.
 - Appka: Expo SDK 58, vault s AES-256-GCM a biometrií, import PKCS#12, přímý podpis
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.
-- Testy: tiery T0–T3 a paralelní runner; QES 469/0, appka 225/0, JS 37/0,
-  T2 659/0 a T3 660/0 (2026-10-29).
+- Testy: tiery T0–T3 a paralelní runner; QES 478/0, appka 230/0, JS 37/0,
+  T2 721/0 a T3 725/0 (2026-10-30).
 - Nasazeno: produkční instance **v55** (`dokulachtan`, fork `1694f6e4`), staging **v28**
   (`dokulachtan-staging`, fork `1694f6e4`); `/up` 200 na obou.
 

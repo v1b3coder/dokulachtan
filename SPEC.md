@@ -168,7 +168,7 @@ Pro podepisování platí: každý signer má právě jedno pole `qes` a právě
 | `seal_state` | string | `none`, `applied`, `failed` |
 | `doc_timestamp_state` | string | `none`, `applied`, `failed` (DocTS, § 7.6) |
 | `app_metadata` | text (JSON) | self-reported platforma a verze appky (whitelist, jen `android`/`ios` a `X.Y.Z`); jde do auditní stránky |
-| `expires_at` | datetime | `created_at + QES_SESSION_TTL` |
+| `expires_at` | datetime | `created_at + QES_SESSION_TTL`; prodlužuje se jen do `QES_SESSION_MAX_TTL` |
 | `prepared_at` | datetime | session připravena (TBS se staví až při přijetí certifikátu) |
 | `app_opened_at` | datetime | appka si vyzvedla payload |
 | `signed_at` | datetime | raw signatura přijata |
@@ -382,6 +382,9 @@ nezávislou na certifikátu; `POST /certificate` už TBS **NEPŘESTAVUJE**.
 - Odpověď: `application/pdf` (`Cache-Control: no-store`), hlavička `X-QES-Protocol: 1`.
 - `GET /document` **MUSÍ** prodloužit `expires_at` na `review_ttl` (default 15 min), aby dlouhá kontrola
   neprošla expirací.
+- Žádné prodloužení (`GET /document`, `POST /certificate`) **NESMÍ** přelézt `created_at + QES_SESSION_MAX_TTL`
+  (default 1 h); po stropu vrací `410 expired_token`, i když je `expires_at` v budoucnosti. Bez stropu
+  drží klient s platným tokenem session naživo libovolně dlouho (#23.4).
 - `POST /certificate` **MUSÍ** ověřit, že se hodnoty pole od přípravy TBS nezměnily (`values_changed`).
 - Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 wrong_state`,
   `409 document_missing`, `422 values_changed`.
@@ -1267,6 +1270,7 @@ v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 | `QES_ENABLED` | `true` | vypínač QES (default pro český deployment; `false` pro upstream/ne-QES) |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
+| `QES_SESSION_MAX_TTL` | `3600` | absolutní strop od `created_at` pro všechna prodloužení [s] |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |

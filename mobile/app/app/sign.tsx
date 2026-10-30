@@ -775,7 +775,8 @@ export default function SignScreen() {
               disabled={loadingDocument}
             />
           )}
-          {!reviewPdf && !terminal ? <TextButton title="Zrušit" onPress={leaveSignScreen} /> : null}
+          {/* I před načtením dokumentu se session musí zrušit na serveru (#23.5). */}
+          {!reviewPdf && !terminal ? <TextButton title="Zrušit" onPress={cancelReview} /> : null}
         </>
       ) : (
         <>
