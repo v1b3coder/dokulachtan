@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700' },
   muted: { fontSize: 14, color: '#6b7280' },
   label: { fontSize: 13, color: '#6b7280', marginTop: 4 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16 },
+  input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16, color: '#111827' },
   error: { color: '#991b1b', fontSize: 14 },
   detail: { color: '#b45309', fontSize: 12 },
   row: { flexDirection: 'row', gap: 8 },

@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingRight: 8,
   },
-  passwordInput: { flex: 1, padding: 16, fontSize: 16 },
+  passwordInput: { flex: 1, padding: 16, fontSize: 16, color: '#111827' },
   passwordToggle: { padding: 8 },
   eye: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
   eyeLens: {

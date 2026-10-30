@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, color: '#6b7280', marginTop: 8 },
   muted: { fontSize: 14, color: '#6b7280' },
   error: { fontSize: 14, color: '#991b1b' },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16 },
+  input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16, color: '#111827' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
