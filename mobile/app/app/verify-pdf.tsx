@@ -3,7 +3,7 @@
 // Externí volba je vždy opt-in se souhlasem: PDF se odešle na servery
 // Evropské komise a externí report se do DocuSealu neukládá.
 import { useCallback, useEffect, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   ActivityIndicator,
@@ -78,14 +78,29 @@ export default function VerifyPdfScreen() {
       : null;
 
   useEffect(() => {
-    (async () => {
-      const stored = await loadPdfApiSettings(platformVaultDeps().storage);
-
-      setSettings(stored);
-      setFile(shared);
-      setReady(true);
-    })();
+    setFile(shared);
   }, [shared?.uri]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      (async () => {
+        const stored = await loadPdfApiSettings(platformVaultDeps().storage);
+
+        if (!active) {
+          return;
+        }
+
+        setSettings(stored);
+        setReady(true);
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const api = useCallback(
     () => (settings ? new PdfApi(signingOrigin(settings.serverUrl), settings.apiToken) : null),
@@ -104,6 +119,12 @@ export default function VerifyPdfScreen() {
 
   const verify = useCallback(
     async (upload: PdfUpload) => {
+      if (provider !== 'eu_dss' && !settings) {
+        setError('not_authenticated');
+
+        return;
+      }
+
       setBusy(true);
       setError(null);
       setErrorDetail(null);
@@ -127,7 +148,7 @@ export default function VerifyPdfScreen() {
         setBusy(false);
       }
     },
-    [api, fail, provider],
+    [api, fail, provider, settings],
   );
 
   async function pickFile() {
@@ -186,7 +207,7 @@ export default function VerifyPdfScreen() {
   const view = report ? verdictView(report) : null;
   const signer = report?.signatures.find((signature) => signature.kind === 'qes');
   const external = provider === 'eu_dss';
-  const canVerify = !external || consent;
+  const canVerify = (!external || consent) && (external || !!settings);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -407,6 +428,16 @@ export default function VerifyPdfScreen() {
             </>
           ) : null}
 
+          {!external && !settings ? (
+            <View style={styles.warningCard}>
+              <Text style={styles.warningTitle}>Chybí server a API token</Text>
+              <Text style={styles.warningText}>
+                Pro ověření v DocuSealu nastavte Server URL a API token.
+              </Text>
+              <TextButton title="Otevřít Nastavení" onPress={() => router.push('/settings')} />
+            </View>
+          ) : null}
+
           {shared ? (
             <PrimaryButton
               title={external ? 'Ověřit přes EU DSS' : 'Ověřit PDF'}
@@ -426,12 +457,6 @@ export default function VerifyPdfScreen() {
           ) : null}
 
           {busy ? <ActivityIndicator /> : null}
-
-          {!external && !settings ? (
-            <Text style={styles.warning}>
-              Server URL a API token nastavte v Nastavení (Nastavení → Server a API token).
-            </Text>
-          ) : null}
 
           <TextButton title="Zavřít" onPress={() => router.replace('/')} />
         </>

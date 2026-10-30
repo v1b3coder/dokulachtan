@@ -2,7 +2,7 @@
 // do DocuSealu (šablona ve složce „Direct signing“), klepnutím umístit pečeť a
 // spustit běžný obřad S4. Klíč zůstává v zařízení, server vidí jen PDF.
 import { useCallback, useEffect, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import {
   ActivityIndicator,
@@ -108,21 +108,33 @@ export default function SignPdfScreen() {
       ? { uri: params.share, name: params.name || 'document.pdf', type: 'application/pdf' }
       : null;
 
-  useEffect(() => {
-    (async () => {
-      const deps = platformVaultDeps();
-      const stored = await loadPdfApiSettings(deps.storage);
-      const summary = await certificateSummary(deps);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
 
-      setSettings(stored);
+      (async () => {
+        const deps = platformVaultDeps();
+        const stored = await loadPdfApiSettings(deps.storage);
+        const summary = await certificateSummary(deps);
 
-      if (summary?.subject) {
-        setDisplayName(summary.subject);
-      }
+        if (!active) {
+          return;
+        }
 
-      setReady(true);
-    })();
-  }, []);
+        setSettings(stored);
+
+        if (summary?.subject) {
+          setDisplayName((current) => current || summary.subject);
+        }
+
+        setReady(true);
+      })();
+
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof PdfApiError || err instanceof SigningOriginError) {
@@ -221,13 +233,19 @@ export default function SignPdfScreen() {
       return;
     }
 
+    if (!settings) {
+      setError('not_authenticated');
+
+      return;
+    }
+
     await uploadFile(file);
   }
 
   // Sdílené PDF: po načtení nastavení a jména do pečeti ho rovnou nahrajeme
   // a parametr routy vyčistíme, aby se upload neopakoval při obnově obrazovky.
   useEffect(() => {
-    if (!ready || !shared) {
+    if (!ready || !shared || !settings) {
       return;
     }
 
@@ -243,7 +261,7 @@ export default function SignPdfScreen() {
         router.setParams({ share: '', name: '' });
       }
     });
-  }, [ready, shared?.uri]);
+  }, [ready, shared?.uri, settings]);
 
   async function place() {
     if (!document || !position) {
@@ -397,9 +415,13 @@ export default function SignPdfScreen() {
           ) : null}
 
           {!settings ? (
-            <Text style={styles.muted}>
-              Server URL a API token nastavte v Nastavení (Nastavení → Server a API token).
-            </Text>
+            <View style={styles.warningCard}>
+              <Text style={styles.warningTitle}>Chybí server a API token</Text>
+              <Text style={styles.warningText}>
+                Pro nahrání PDF do DocuSealu nastavte Server URL a API token.
+              </Text>
+              <TextButton title="Otevřít Nastavení" onPress={() => router.push('/settings')} />
+            </View>
           ) : null}
 
           {errorBlock}
@@ -407,7 +429,7 @@ export default function SignPdfScreen() {
           <PrimaryButton
             title={busy ? 'Nahrávám…' : 'Pokračovat'}
             onPress={upload}
-            disabled={busy || !file}
+            disabled={busy || !file || !settings}
           />
           <TextButton title="Zrušit" onPress={() => router.replace('/')} />
         </>
@@ -520,6 +542,16 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16, color: '#111827' },
   error: { color: '#991b1b', fontSize: 14 },
   detail: { color: '#b45309', fontSize: 12 },
+  warningCard: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  warningTitle: { fontSize: 14, fontWeight: '700', color: '#92400e' },
+  warningText: { fontSize: 12, color: '#92400e', lineHeight: 17 },
   row: { flexDirection: 'row', gap: 8 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   fileOpen: {

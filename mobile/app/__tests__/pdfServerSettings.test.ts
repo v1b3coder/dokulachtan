@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, TextInput } from 'react-native';
+import { router } from 'expo-router';
 import { platformVaultDeps } from '../src/lib/platform';
 import { PDF_API_SETTINGS_KEY } from '../src/lib/pdfApi';
 import { TRUSTED_SERVERS_KEY } from '../src/lib/trustedServers';
@@ -9,11 +10,16 @@ import SettingsScreen from '../app/settings';
 import { TextButton } from '../src/ui/buttons';
 
 const { create, act } = require('react-test-renderer');
-jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ share: 'file:///contract.pdf', name: 'contract.pdf' }),
-  useFocusEffect: () => {}, useRouter: () => ({ push: jest.fn() }),
-  router: { push: jest.fn(), replace: jest.fn(), setParams: jest.fn() },
-}));
+jest.mock('expo-router', () => {
+  const React = require('react');
+
+  return {
+    useLocalSearchParams: () => ({ share: 'file:///contract.pdf', name: 'contract.pdf' }),
+    useFocusEffect: (callback: () => void) => React.useEffect(callback, []),
+    useRouter: () => ({ push: jest.fn() }),
+    router: { push: jest.fn(), replace: jest.fn(), setParams: jest.fn() },
+  };
+});
 jest.mock('../src/lib/platform', () => ({ platformVaultDeps: jest.fn(), appVersion: () => '1.3.9' }));
 jest.mock('../src/lib/crypto/vault', () => ({ certificateSummary: async () => null }));
 jest.mock('../src/lib/testCertificate', () => ({ importTestCertificate: jest.fn() }));
@@ -67,6 +73,27 @@ describe.each([
       `${expected}/api/qes/${name === 'sign-pdf' ? 'documents' : 'verify'}`,
       expect.objectContaining({ headers: expect.objectContaining({ 'X-Auth-Token': 'test-token' }) }),
     );
+    await act(async () => screen.unmount());
+  });
+});
+
+describe('missing DocuSeal settings', () => {
+  it.each([
+    ['sign-pdf', SignPdfScreen, 'Pokračovat'],
+    ['verify-pdf', VerifyPdfScreen, 'Ověřit PDF'],
+  ] as const)('%s blocks the action and links to Settings', async (_name, Component, actionTitle) => {
+    storage.getItem.mockResolvedValue(null);
+    let screen: ReturnType<typeof create>;
+    await act(async () => { screen = create(React.createElement(Component)); });
+
+    expect(JSON.stringify(screen.toJSON())).toContain('Chybí server a API token');
+    expect(screen.root.findByProps({ title: actionTitle }).props.disabled).toBe(true);
+
+    await act(async () => {
+      await screen.root.findByProps({ title: 'Otevřít Nastavení' }).props.onPress();
+    });
+    expect(router.push).toHaveBeenCalledWith('/settings');
+    expect(global.fetch).not.toHaveBeenCalled();
     await act(async () => screen.unmount());
   });
 });
