@@ -12,7 +12,7 @@ Pravidla pro práci v repu a aktuální stav jsou v [AGENTS.md](AGENTS.md).
 | `vendor/docuseal` | lokální klon forku, gitignored; pin = `vendor/docuseal.rev` |
 | `scripts/` | testovací a e2e skripty |
 | `test/` | fixtures, certifikáty, QES test image |
-| `deploy/` | Fly.io konfigurace a stránka s APK |
+| `deploy/` | Fly.io konfigurace DocuSealu a release keystore (gitignored) |
 | `docs/` | průzkum, runbooky a triage (mapa níže) |
 
 Fork obsahuje **jen kód patche**. Dokumentace, appka, skripty ani deploy konfigurace ve forku nejsou.
@@ -96,8 +96,8 @@ Reporty jdou do `test/out/`. E2E potřebuje `.venv` a klon forku z `make fork-se
 
 Konfigurace prostředí je v `deploy/docuseal/`: `fly.toml` = produkční instance, `fly.staging.toml` = staging.
 Produkce = **privátní instance uživatele s produkčním kódem** (dnes Fly app `dokulachtan`), ne centrální
-služba; adresa instance se v každém nasazení mění. Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Stránka s APK je
-v `deploy/apk/`; hotový APK najdeš v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest).
+služba; adresa instance se v každém nasazení mění. Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Hotový APK najdeš
+v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest); testovací build se staví lokálně.
 Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 
 ## Konfigurace

@@ -304,6 +304,10 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 **Návrh:** hotovo — `assetlinks.json` odstraněn z forku (#18.1), včetně routy, controlleru,
 `QES_ANDROID_CERT_SHA256`, `intentFilters` v `app.json` a testů; E2E ověřuje 404.
 
+**Navazující (2026-10-30):** veřejná download stránka `dokulachtan-download` servírovala APK
+s produkčním `applicationId` a veřejným debug podpisem (šablona `debug.keystore`), takže kdokoli mohl
+dodat update. Stránka i Fly app byly zrušeny; testovací APK se staví lokálně a předává přímo.
+
 - **#23.1 Lexikální detekce šifrovaného PDF v appce** (`preparedDocument.ts:49-65`) — jen UX, server kontroluje parserem
   (`pdf_source.rb`). Nebudeme parsovat xref v JS.
 - **#23.2 Paralelní spouštěč testů** — **opraveno (2026-10-29):** `scripts/qes-test-parallel.sh` kontroluje

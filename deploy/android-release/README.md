@@ -75,9 +75,10 @@ stejnými názvy.
 - Stávající instalace s debug podpisem **nepůjde aktualizovat** release APK.
   Je potřeba odinstalovat, nainstalovat novou verzi a znovu importovat `.p12`
   (klíč se v telefonu neuchovává mimo aplikaci).
-- Starý debug podpis už nikdy nepoužívej pro distribuci; testovací APK na
-  `dokulachtan-download.fly.dev` může zůstat debug, ale nesmí se vydávat za
-  produkci.
+- Starý debug podpis už nikdy nepoužívej pro distribuci; testovací APK se
+  podepisuje debug keystoorem **tohoto počítače** a předává se přímo, ne přes
+  veřejnou download stránku (zrušena 2026-10-30). Podpis je vázaný na stroj, takže
+  po přestavbě jinde je potřeba testovací appku odinstalovat.
 
 ## Lokální build
 

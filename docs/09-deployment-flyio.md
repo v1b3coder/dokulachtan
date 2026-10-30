@@ -210,8 +210,8 @@ fronta ve *Real time → Usage and plan → Email queue*.
 
 - Build: EAS (cloud) nebo lokálně `npx expo run:android` (SDK + Gradle jsou k dispozici).
 - Staging: APK s `EXPO_PUBLIC_API_URL` na staging URL; distribuce interně (přímý APK / Firebase
-  App Distribution; TestFlight později). Testovací APK z `deploy/apk/` má výchozí adresu produkční instance
-uživatele a na staging se přepíná v appce *Nastavení → Server URL*.
+  App Distribution; TestFlight později). Testovací APK se staví lokálně, výchozí Server URL je prázdná
+  a vyplňuje se v appce *Nastavení → Server URL*.
 - Deep link: custom scheme `dokulachtan://` funguje vždy a na libovolném hostu (systémový chooser);
   Android App Links (`assetlinks.json`) **zrušeny** (#18.1). iOS Universal Links (`apple-app-site-association`)
   zůstávají a jsou vázané na host zapečený v APK.

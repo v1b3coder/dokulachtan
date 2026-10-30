@@ -13,9 +13,6 @@ mobile/android-signer-poc/.gradle/
 mobile/android-signer-poc/build/
 mobile/android-signer-poc/app/build/
 
-# APK build artifact (nahraje se na Fly.io, ne do gitu)
-deploy/apk/*.apk
-
 # SMTP přihlašovací údaje (fly secrets) — staging i produkce
 deploy/smtp*.env
 !deploy/smtp*.env.example

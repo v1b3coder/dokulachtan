@@ -298,11 +298,11 @@ slouží k vyzkoušení toku z appky (nebo ji smažte).
 
 ### APK pro testování
 
-Testovací build appky (debug podpis, testovací certifikát v appce) je ke stažení na:
+Testovací build appky (testovací certifikát v appce) se staví lokálně a předává se přímo
+(soubor, vlastní pre-release); veřejná download stránka byla zrušena 2026-10-30
+(`deploy/apk/` i Fly app `dokulachtan-download`), protože servírovala APK s produkčním
+`applicationId` a veřejným debug podpisem.
 
-**<https://dokulachtan-download.fly.dev/dokulachtan-signer.apk>**
-
-- `deploy/apk/` obsahuje nginx image s APK (build se negituje, `deploy/apk/*.apk` je v `.gitignore`).
 - Identity buildů (`mobile/app/plugins/withReleaseSigning.js`):
   - produkce (release keystore z CI) = `cz.dokulachtan.signer` / „Dokulachtan“,
   - debug (`expo run:android`) = `cz.dokulachtan.signer.debug` / „Dokulachtan (debug)“,
@@ -312,7 +312,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   ne kopie z Expo šablony v projektu.
 - Build pro telefon: `cd mobile/app && npx expo prebuild --platform android && cd android &&
   ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a` (bez `ANDROID_KEYSTORE_PATH` = debug keystore
-  pro lokální testovací APK; release v CI viz `deploy/android-release/README.md`).
+  tohoto počítače pro lokální testovací APK; release v CI viz `deploy/android-release/README.md`).
+  Testovací APK se nevyvěšuje veřejně; podpis je vázaný na počítač, kde vznikl.
   `mobile/app/plugins/withApkSize.js` při prebuildu nastaví komprimované `.so` (`expo.useLegacyPackaging`),
   `shrinkResources` a výchozí ABI `x86_64` pro emulátor; release build bez `arm64-v8a` spadne
   s chybou, aby se nevydal APK, který na telefon nejde nainstalovat.
@@ -330,8 +331,8 @@ Testovací build appky (debug podpis, testovací certifikát v appce) je ke sta�
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
 - Android App Links (assetlinks.json) **zrušeny** (#18.1): odkaz jde přes custom scheme a systémový
   chooser, takže `QES_ANDROID_CERT_SHA256` už není potřeba a `/qes/sign` v prohlížeči funguje
-  jako web fallback s QR a tlačítkem. Testovací APK na `dokulachtan-download.fly.dev` je debug-signed
-  a má label „Dokulachtan (test)“; debug build „Dokulachtan (debug)“; chooser je rozliší.
+  jako web fallback s QR a tlačítkem. Testovací build má applicationId `.test` a label
+  „Dokulachtan (test)“; debug build „Dokulachtan (debug)“; chooser je rozliší.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan-staging.fly.dev"`
   → chooser (produkce + testovací APK + debug). Pro debug build přímo:
   `adb shell am start -a android.intent.action.VIEW -n cz.dokulachtan.signer.debug/cz.dokulachtan.signer.MainActivity -d "…"`
