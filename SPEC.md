@@ -1047,7 +1047,7 @@ spolu s `key_location`, `reader` (u A) a verzí protokolu.
 | S1 | **Home** | stav certifikátu (žádný / platný / **expiruje** = méně než 30 dní, jen varování); s klíčem primární „Podepsat PDF“ + sekundární „Ověřit PDF“, bez klíče primární „Importovat klíč (PKCS#12)“ + sekundární „Ověřit PDF“; karta certifikátu je klikací → S3, varování u expirace odkazuje na import; terciárně „Připojit čtečku“ (A) a „Nastavení“ | — |
 | S2 | **Import certifikátu** | výběr PKCS#12 (sekundární), heslo, primární „Importovat“ (vypnuté bez souboru), **testovací certifikát až za oddělovačem „Nebo“ jako alternativní cesta**; po uložení souhrn + primární „Hotovo“ | `invalid_p12`, `wrong_password`, `no_signing_key`, `qscd_certificate` (telefon není QSCD, § 5.2) |
 | S3 | **Detail certifikátu** | subject, issuer, platnost, sériové číslo, úroveň (AdES/QES dle QCStatements), „Importovat jiný klíč“ (sekundární), nebezpečná zóna s odstraněním (potvrzení + biometrie) | — |
-| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout“ + sekundární „Sdílet“ + terciární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neobsahuje reviewed TBS) |
+| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout“ + sekundární „Sdílet“ + terciární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neodpovídá otisku, který server označil za podepsaný, nebo neobsahuje reviewed TBS) |
 | S5 | **Biometrie** | systémová výzva (`expo-local-authentication`) před každým podpisem | zamítnuto → zpět na S4 |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba + „Zkusit znovu" / „Vyžádat nový odkaz" | — |
 | S7 | **Nastavení** | sekce Přímý podpis a ověření PDF (URL + API token jen pro přímý podpis PDF a ověření PDF + primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A), Pokročilé (testovací certifikát); smazání dat je jen v S3 | — |
@@ -1083,8 +1083,10 @@ odkazy, mazání oddělené a s potvrzením.
 5. Podpis: `node-forge` `privateKey.sign(forge.md.sha256.create().update(data_to_sign))`
    (`RSASSA-PKCS1-V1_5`, SHA-256; `pki.rsa.sign` v node-forge neexistuje) → raw signatura (256/384/512 B).
 6. `POST /complete` → S6; appka porovná `completed.document_digest` s reviewed digestem.
-7. Po stažení finálního PDF appka ověří `final_pdf_sha256` a přítomnost reviewed TBS
-   (prefix/suffix mimo `/Contents`); při neshodě PDF nenabídne.
+7. Po stažení finálního PDF appka zkontroluje **konzistenci**: `final_pdf_sha256` (otisk, který server označil
+   za podepsaný) a přítomnost reviewed TBS (prefix/suffix mimo `/Contents`); při neshodě nebo chybějícím otisku
+   PDF nenabídne. **Podpis appka neověřuje** — verifikace je na serveru (`Ověřit PDF`, docs/16) nebo v jiném software
+   (EU DSS); server finální PDF validuje před `completed` (§ 7.5).
 8. Klíč se ihned po podpisu vymaže z paměti (`key = null`, `p12 = null`).
 
 ### 9.4 Varianta A (karta) — tok

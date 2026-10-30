@@ -2,7 +2,8 @@ import React from 'react';
 import { QesApi, QesApiError } from '../src/lib/api';
 import { PdfApi } from '../src/lib/pdfApi';
 import { CeremonyError, runSigningCeremony } from '../src/lib/ceremony';
-import { downloadPdf, previewPdf, sharePdf } from '../src/lib/pdfShare';
+import { downloadPdf, previewPdf, savePdf, sharePdf } from '../src/lib/pdfShare';
+import { sha256Hex } from '../src/lib/preparedDocument';
 import { resolveWorkflowOrigin, trustServer } from '../src/lib/trustedServers';
 import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
@@ -59,6 +60,7 @@ beforeEach(() => {
     completed: {
       state: 'completed', session_id: 1, submitter_id: 42, level: 'ades',
       document_digest: fixture.prepared.document_digest, signed_pdf_sha256: 'hash',
+      final_pdf_sha256: sha256Hex(fixture.bytes),
     },
     level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1, documentDigest: fixture.prepared.document_digest,
   });
@@ -137,6 +139,7 @@ it.each([false, true])('recovers an already completed submission (reopen: %s) an
   if (reopen) {
     jest.mocked(QesApi.prototype.getSession).mockResolvedValue({
       state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash',
+      final_pdf_sha256: sha256Hex(fixture.bytes),
     });
   }
   const documentsResponse = new Response(JSON.stringify({ documents: [{ name: 'contract', url: 'https://server/final.pdf' }] }));
@@ -164,6 +167,23 @@ it.each([false, true])('recovers an already completed submission (reopen: %s) an
     'GET https://server/api/submitters/42',
   ]);
   expect(downloadPdf).toHaveBeenCalledWith('https://server/final.pdf', expect.stringContaining('-signed.pdf'));
+  await act(async () => screen.unmount());
+});
+
+it('refuses to save a completed PDF without the server hash', async () => {
+  jest.mocked(QesApi.prototype.getSession).mockResolvedValue({
+    state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash',
+  });
+  const documentsResponse = new Response(JSON.stringify({ documents: [{ name: 'contract', url: 'https://server/final.pdf' }] }));
+  Object.defineProperty(documentsResponse, 'url', { value: 'https://server/api/submitters/42' });
+  jest.spyOn(global, 'fetch').mockResolvedValueOnce(documentsResponse);
+  jest.spyOn(QesApi.prototype, 'completeSubmission')
+    .mockResolvedValue({ state: 'completed', submitter_id: 42, completed: true });
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await act(async () => { await screen.root.findByProps({ title: 'Stáhnout' }).props.onPress(); });
+  expect(savePdf).not.toHaveBeenCalled();
+  expect(JSON.stringify(screen.toJSON())).toContain('nelze potvrdit jako dokument');
   await act(async () => screen.unmount());
 });
 

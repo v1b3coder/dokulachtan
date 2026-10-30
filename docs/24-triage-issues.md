@@ -1,6 +1,6 @@
 # 24 — Triage GitHub issues (R3/R4, 28. 10. 2026)
 
-Triage 17 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
+Triage 16 otevřených issues z 22 z `v1b3coder/dokulachtan` (nálezy „třetí a čtvrté kontroly“, R3-*/R4-*).
 Každý nález byl ověřen **proti aktuálnímu kódu**: fork `cfd36b2c` + `f1c28c2b`, parent `53cbf39` + `2d1088b`
 (nálezy byly hlášeny staticky na `cfd36b2c` / `53cbf39`, testy se nespouštěly).
 
@@ -24,7 +24,7 @@ jsou označené jako mimo rozsah.
 | 17 | Podepisující nemusí dokument vidět | potvrzeno | P1 |
 | 18 | Ladicí otisk v assetlinks + rozbité CI | 18.1 vyřešeno (App Links zrušeny), 18.2 opraveno | P2 |
 | 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
-| 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno | P1 |
+| 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno (část), zbytek works as designed | P3 |
 | 22 | URL finálního PDF se neověřuje | neplatí (stahování jen v přímém podpisu) | — |
 | 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 potvrzeno | P2 |
 
@@ -206,7 +206,7 @@ Oprava: (a) vlastní VIEW alias z resolveru vyřadit přes `Intent.createChooser
 (tam to Android respektuje), (b) odemykat „Podepsat" až po potvrzení zobrazení — ideálně PDF uvnitř appky
 (`react-native-pdf` / WebView s pdf.js) s odemčením po doscrollování na konec.
 
-### #21 „Ověření finálního PDF" neověřuje podpis
+### #21 „Ověření finálního PDF" neověřuje podpis — **část opravena, zbytek works as designed**
 
 `pdfShare.ts:145` (`verifyFinalPdf`) kontroluje jen `finalSha256` a reviewed prefix/suffix mimo `/Contents`;
 CMS podpis neověřuje a přidané revize nehlídá. Reprodukce z třetí kontroly (přidaná revize „100 Kč" → „900 Kč")
@@ -217,6 +217,17 @@ Chrání proti chybě přenosu, ne proti podvrženému serveru — název a UI s
 Oprava: buď ověřit, že finální PDF má přesně jednu revizi navíc a `/Contents` odpovídá podpisu, který appka vytvořila
 (bajty podpisu má), nebo funkci i UI přejmenovat na „kontrola shody s připraveným dokumentem" a chybějící kontroly
 udělat jako chybu, ne jako průchod.
+
+**Vyřešeno (2026-10-29):** ověřování podpisu je podle designu vždy na serveru (docs/16 D15) — server finální PDF
+validuje **před** `completed` (`mobile_app.rb:257-262`: `inspection == complete`, `!modified` přes `RevisionChanges`,
+`intact`, `trusted`, DocTS) a servíruje přesně validované bajty (`final_document`, hash z téhož pole; `pipeline_spec.rb:168`,
+`result_attachments_spec.rb:45`). Přidaná revize „900 Kč“ je tedy chyba serveru, ne appky; honest server ji odmítne
+a uživatel ji má čím ověřit (`Ověřit PDF`, EU DSS, jiný software). Appka zůstává u konzistenční kontroly.
+
+Skutečná vada byl jen tichý průchod: `finalSha256` byl optional. Opraveno — `FinalPdfCheck` má otisk povinný a volající
+místo bez něj skončí `verification_failed` (`pdfShare.ts`, `sign.tsx`); texty a SPEC říkají „konzistence“, ne „ověření
+podpisu“ (docs/16 D15). Testy: `pdfShare.test.ts` (chybějící otisk, přepsané bajty) a `signScreen.test.ts`
+(dokončená session bez otisku).
 
 ## 4. P2 — nízké, provozní a dokumentační
 

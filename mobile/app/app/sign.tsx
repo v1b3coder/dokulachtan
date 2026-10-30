@@ -33,7 +33,7 @@ import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 const ERROR_TEXT: Record<string, string> = {
   invalid_submission: 'Chybí údaj pro dokončení uložení dokumentu. Otevřete původní odkaz.',
   document_mismatch: 'Server připravil jiný dokument, než jste viděli. Podpis byl odmítnut. Vyžádejte nový odkaz.',
-  verification_failed: 'Stažené PDF neodpovídá podepsanému dokumentu. Nestahujte ho a kontaktujte podporu.',
+  verification_failed: 'Stažené PDF nelze potvrdit jako dokument, který server označil za podepsaný. Nestahujte ho a ověřte přes Domů → Ověřit PDF.',
   user_cancelled: 'Podpis byl zrušen.',
   pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
   foreign_server: 'Odkaz vede na jiný server, než se očekávalo. Podpis byl odmítnut.',
@@ -481,10 +481,14 @@ export default function SignScreen() {
     const name = `${(session?.document_name ?? 'document').replace(/\.pdf$/i, '')}-signed.pdf`;
     const file = await downloadPdf(url, name);
 
-    // Ověříme, že stažené PDF je skutečně to, co server podepsal, a že
-    // obsahuje reviewed TBS (prefix/suffix mimo `/Contents`).
+    // Konzistenční kontrola: otisk, který server označil za podepsaný, a reviewed
+    // TBS beze změny. Podpis neověřujeme — to dělá server (`Ověřit PDF`).
+    if (!done?.finalPdfSha256) {
+      throw new PdfActionError('verification_failed');
+    }
+
     await verifyFinalPdf(file, {
-      finalSha256: done?.finalPdfSha256,
+      finalSha256: done.finalPdfSha256,
       reviewedDocument: reviewPdf,
     });
 

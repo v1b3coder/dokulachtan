@@ -34,9 +34,10 @@ a hledat v appce. Výsledek se zobrazí v appce, PDF zůstává v zařízení a 
 | D12 | **Jedna nová ENV**: `QES_VERIFICATION_TRUST_ROOTS` vedle stávajících `QES_ENABLED`, `QES_PDF_MAX_BYTES`, `QES_TRUST_ROOTS` | signing a verification trust store musí být oddělené |
 | D13 | **Uložení na tlačítko**: `POST /api/qes/verified_documents` znovu ověří PDF a uloží ho jako template ve složce „Verified documents“; report JSON do `template.preferences['qes_verification']` | reuse DocuSeal Documents, žádná nová tabulka; PDF + výsledek pro audit |
 | D14 | Ukládají se jen `intact && !modified` PDF (`valid`, `valid_untrusted`, `valid_unqualified`); `invalid`/`unsigned` ne | složka „Verified documents“ nemá obsahovat prokazatelně změněné PDF; server to vynutí |
+| D15 | **Appka podpis neověřuje.** Po stažení finálního PDF jen konzistenční kontrola (`final_pdf_sha256` + reviewed TBS); chybějící otisk je chyba, ne průchod. Verifikace = server (`Ověřit PDF`), EU DSS nebo jiný software | server finální PDF validuje **před** `completed` (`Qes::Validator` + `RevisionChanges`: `intact`, `!modified`, `trusted`, DocTS) a servíruje přesně validované bajty; reimplementace CMS v appce by duplikovala `Qes::Validator` a nemá threat, proti kterému by v tomto modelu (důvěra v nakonfigurovaný server) chránila |
 
 **Zamítnuto:** vlastní PDF parser v appce (žádný v JS), nová tabulka `qes_verifications`, vlastní
-auditní záznam, ověřování bez API tokenu. **Přijato:** explicitní uložení do Documents na
+auditní záznam, ověřování bez API tokenu, ověřování podpisu v appce (D15). **Přijato:** explicitní uložení do Documents na
 tlačítko (D13) — PDF se neukládá při každém ověření.
 
 ## 3. Architektura a tok

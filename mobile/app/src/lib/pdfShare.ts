@@ -140,23 +140,27 @@ export async function sha256File(file: PdfFileLike): Promise<string> {
   return sha256Hex(await readFileBytes(file));
 }
 
-// Ověří, že stažené finální PDF je skutečně to, co server podepsal, a že
-// obsahuje reviewed TBS beze změny (prefix/suffix mimo `/Contents`).
-export async function verifyFinalPdf(
-  file: File,
-  options: { finalSha256?: string; reviewedDocument?: Uint8Array | null } = {},
-): Promise<void> {
+// Konzistenční kontrola staženého finálního PDF (docs/16 D15): porovná otisk,
+// který server označil za podepsaný, a přítomnost reviewed TBS beze změny
+// (prefix/suffix mimo `/Contents`). Podpis neověřuje — to dělá server (`Ověřit
+// PDF`, EU DSS, jiný software). Chybějící otisk je chyba, ne průchod.
+export interface FinalPdfCheck {
+  finalSha256: string;
+  reviewedDocument?: Uint8Array | null;
+}
+
+export async function verifyFinalPdf(file: File, check: FinalPdfCheck): Promise<void> {
   const bytes = new Uint8Array(await file.bytes());
 
-  if (options.finalSha256 && sha256Hex(bytes) !== options.finalSha256.toLowerCase()) {
+  if (!check.finalSha256 || sha256Hex(bytes) !== check.finalSha256.toLowerCase()) {
     throw new PdfActionError('verification_failed');
   }
 
-  if (options.reviewedDocument) {
-    const { byteRange } = documentDigest(options.reviewedDocument);
+  if (check.reviewedDocument) {
+    const { byteRange } = documentDigest(check.reviewedDocument);
     const [start, firstLength, secondStart, secondLength] = byteRange;
-    const prefix = options.reviewedDocument.slice(start, start + firstLength);
-    const suffix = options.reviewedDocument.slice(secondStart, secondStart + secondLength);
+    const prefix = check.reviewedDocument.slice(start, start + firstLength);
+    const suffix = check.reviewedDocument.slice(secondStart, secondStart + secondLength);
 
     if (!sameBytes(bytes.slice(start, start + firstLength), prefix)
       || !sameBytes(bytes.slice(secondStart, secondStart + secondLength), suffix)) {

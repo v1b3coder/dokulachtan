@@ -369,6 +369,15 @@ it('verifies the downloaded final PDF hash and reviewed bytes', async () => {
   tampered[tampered.length - 2] = 0x20;
 
   await expect(verifyFinalPdf(file('file:///cache/tampered.pdf', tampered), {
+    finalSha256: sha256Hex(tampered),
     reviewedDocument: fixture.bytes,
   })).rejects.toMatchObject({ code: 'verification_failed' });
+});
+
+it('fails closed when the server hash is missing', async () => {
+  const fixture = preparedPdf('sha256');
+  const final = file('file:///cache/final.pdf', fixture.bytes);
+
+  await expect(verifyFinalPdf(final, { finalSha256: '' }))
+    .rejects.toMatchObject({ code: 'verification_failed' });
 });
