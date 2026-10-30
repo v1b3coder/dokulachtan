@@ -4,13 +4,16 @@ Release APK se podepisuje **vlastním release keystorem**, který není v gitu.
 Lokální buildy bez `ANDROID_KEYSTORE_PATH` dál používají standardní debug
 keystore z `expo prebuild`.
 
-## Soubory
+## Kde klíč žije
 
-| Soubor | Význam | V gitu |
+Lokální kopie v repu **nejsou** — po nahrání do CI secrets byly smazány.
+Zůstává jen tento README s otiskem certifikátu.
+
+| Kde | Co | Poznámka |
 |---|---|---|
-| `dokulachtan-release.jks` | privátní klíč release podpisu | **ne** (gitignored) |
-| `dokulachtan-release.jks.b64` | stejný soubor v base64 pro CI secret | **ne** (gitignored) |
-| `release.properties` | hesla a alias pro lokální/CI použití | **ne** (gitignored) |
+| password manager (záloha uživatele) | `dokulachtan-release.jks`, obě hesla, alias `dokulachtan` | jediná trvalá kopie klíče |
+| CI secrets (GitHub i Gitea) | stejné hodnoty + `ANDROID_RELEASE_CERT_SHA256` | write-only, klíč z nich stáhnout nelze |
+| repo | jen tento README a `.gitignore` | klíč nikdy nebyl v gitu |
 
 **Release certifikát (SHA-256):**
 
@@ -24,21 +27,22 @@ Bez dvojteček: `80dc86ef10a715961acf4959d11f56c944a91476a399558de17c1389595ec3e
 
 Do repozitáře nastav tyto secrets (nikdy je necommituj):
 
-| Secret | Hodnota |
+| Secret | Hodnota (z password manageru) |
 |---|---|
-| `ANDROID_KEYSTORE_BASE64` | obsah `dokulachtan-release.jks.b64` |
-| `ANDROID_KEYSTORE_PASSWORD` | `ANDROID_KEYSTORE_PASSWORD` z `release.properties` |
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 dokulachtan-release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | heslo keystore |
 | `ANDROID_KEY_ALIAS` | `dokulachtan` |
-| `ANDROID_KEY_PASSWORD` | `ANDROID_KEY_PASSWORD` z `release.properties` |
+| `ANDROID_KEY_PASSWORD` | heslo klíče |
 | `ANDROID_RELEASE_CERT_SHA256` | SHA-256 otisk výše |
 
-Příklad pro GitHub CLI (spusť z kořene repa):
+Příklad pro GitHub CLI (spusť z kořene repa s obnoveným `.jks`; bez hodnoty se
+`gh` zeptá interaktivně):
 
 ```bash
-gh secret set ANDROID_KEYSTORE_BASE64 < deploy/android-release/dokulachtan-release.jks.b64
-gh secret set ANDROID_KEYSTORE_PASSWORD --body "$(sed -n 's/^ANDROID_KEYSTORE_PASSWORD=//p' deploy/android-release/release.properties)"
+base64 -w0 dokulachtan-release.jks | gh secret set ANDROID_KEYSTORE_BASE64
+gh secret set ANDROID_KEYSTORE_PASSWORD
 gh secret set ANDROID_KEY_ALIAS --body dokulachtan
-gh secret set ANDROID_KEY_PASSWORD --body "$(sed -n 's/^ANDROID_KEY_PASSWORD=//p' deploy/android-release/release.properties)"
+gh secret set ANDROID_KEY_PASSWORD
 gh secret set ANDROID_RELEASE_CERT_SHA256 --body "80:DC:86:EF:10:A7:15:96:1A:CF:49:59:D1:1F:56:C9:44:A9:14:76:A3:99:55:8D:E1:7C:13:89:59:5E:C3:E0"
 ```
 
@@ -87,20 +91,26 @@ Bez `-PreactNativeArchitectures=arm64-v8a` release build spadne — výchozí AB
 `x86_64` (emulátor a testy). Pro emulátor stačí `./gradlew assembleDebug` nebo
 `npx expo run:android`.
 
-Pro ověření release podpisu lokálně:
+Podepsaný lokální build potřebuje klíč ze zálohy — obnov ho z password
+manageru, ověř otisk a nastav proměnné:
 
 ```bash
-set -a
-. ../../deploy/android-release/release.properties
-set +a
-export ANDROID_KEYSTORE_PATH="$PWD/../../deploy/android-release/dokulachtan-release.jks"
+cd mobile/app/android
+keytool -list -keystore /cesta/k/dokulachtan-release.jks -alias dokulachtan  # SHA256 musí sedět výše
+export ANDROID_KEYSTORE_PATH=/cesta/k/dokulachtan-release.jks
+export ANDROID_KEY_ALIAS=dokulachtan
+export ANDROID_KEYSTORE_PASSWORD='…'
+export ANDROID_KEY_PASSWORD='…'
 ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 ```
 
+Obnovený `.jks` z pracovního adresáře po buildu zase smaž.
+
 ## Bezpečnost
 
-- `release.properties`, `.jks` a `.b64` jsou v `.gitignore`; nikdy je
+- Klíč a hesla jsou jen v password manageru a v CI secrets; nikdy je
   necommituj ani nedávej do issue/PR.
-- Hesla a keystore jsou jen v CI secrets a v lokálním gitignored souboru.
-- Release keystore zálohuj mimo repo (password manager / šifrovaný trezor);
-  ztráta klíče znamená, že další verze už nepůjde aktualizovat.
+- `.jks`, `.b64` a `release.properties` zůstávají v `.gitignore` pro případ,
+  že si při obnově ze zálohy položíš klíč do `deploy/android-release/`.
+- Ztráta klíče znamená, že další verze už nepůjde aktualizovat; obnovu ze
+  zálohy si předem vyzkoušej (`keytool -list` + otisk výše).
