@@ -138,8 +138,9 @@ o aplikaci → „Smazat certifikát a klíč“ (obrys).
 3. **Podepisování** — řádek „Certifikát“ (subject + úroveň) → S3; řádek „Čtečka“ (Android) → S8.
    Sem se přesouvá párování čtečky z Home.
 4. **O aplikaci** — verze + attribution MOI SDK (beze změny).
-5. **Pokročilé (testování)** — tlumené vysvětlení + **terciární** „Importovat testovací certifikát“.
-6. Mazání certifikátu zde **není** — jediné místo je S3 (rozhodnutí D3).
+5. Mazání certifikátu zde **není** — jediné místo je S3 (rozhodnutí D3).
+
+Testovací certifikát zde **není** — importuje se jen v S2 za oddělovačem „Nebo“.
 
 ### S10 Setup (wizard)
 
@@ -254,7 +255,7 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
 - Obrazovky přepsané na sdílené váhy: S1 (klikací karta, primární podle stavu klíče, terciární
   řádek), S2 (sekundární výběr souboru, testovací certifikát za oddělovačem, souhrn místo formuláře),
   S3 (import jiného klíče + nebezpečná zóna s `Alert` potvrzením), S7 (sekce Server/Podepisování/
-  Diagnostika/O aplikaci/Pokročilé, „Uložit“ vypnuté dokud není změna), S10 (dvě skutečné cesty +
+  Diagnostika/O aplikaci, „Uložit“ vypnuté dokud není změna), S10 (dvě skutečné cesty +
   testovací certifikát na konci + „Zpět“), S11/S12 (výběr souboru jako pole, primární „Pokračovat“/
   „Podepsat“), S4 (při chybě certifikátu primární „Nastavit podepisování“ → S10), S14/S15 (dvě stejně
   silné volby u share PDF, primární „Ověřit jiné PDF“, uložení sekundární), S8 (sdílené tlačítko).

@@ -270,7 +270,7 @@ na stav, alternativy za oddělovačem, navigace a „Zrušit“ jako textové od
 | S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, úroveň, automaticky zvolený podepisující (§ 9.8 SPEC), „Podepsat“ |
 | S5 | **Biometrie** | systémová výzva (otisk/obličej) před každým podpisem |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba s možností zkusit znovu |
-| S7 | **Nastavení** | server URL + API token jen pro přímý podpis PDF a ověření PDF (primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, sekce Podepisování (certifikát → S3, čtečka → S8), diagnostika, o aplikaci (+ attribution MOI SDK), testovací certifikát jen v Pokročilém; smazání dat je jen v S3 |
+| S7 | **Nastavení** | server URL + API token jen pro přímý podpis PDF a ověření PDF (primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, sekce Podepisování (certifikát → S3, čtečka → S8), diagnostika, o aplikaci (+ attribution MOI SDK); smazání dat je jen v S3, testovací certifikát jen v S2 |
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů, jen kvalifikované, QPIN |
 | S10 | **Konfigurační wizard** | když není podepisující: primární import klíče (PKCS#12), sekundární nastavení čtečky, testovací certifikát až na konci, „Zpět“ |

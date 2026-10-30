@@ -1,5 +1,6 @@
 // S7 Nastavení (SPEC § 9.1, docs/17): server a token, podepisování (certifikát,
-// čtečka), o aplikaci a testovací cesty až na konci. Mazání klíče patří do S3.
+// čtečka), o aplikaci. Testovací certifikát se importuje jen v S2 (/import).
+// Mazání klíče patří do S3.
 import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
@@ -13,7 +14,6 @@ import {
   revokeTrustedServer,
   type TrustedServer,
 } from '../src/lib/trustedServers';
-import { importTestCertificate } from '../src/lib/testCertificate';
 import { PrimaryButton, TextButton } from '../src/ui/buttons';
 
 export default function SettingsScreen() {
@@ -22,7 +22,6 @@ export default function SettingsScreen() {
   const [apiToken, setApiToken] = useState('');
   const [loaded, setLoaded] = useState<{ serverUrl: string; apiToken: string } | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
-  const [testCert, setTestCert] = useState<string | null>(null);
   const [trustedServers, setTrustedServers] = useState<TrustedServer[]>([]);
   const [trustError, setTrustError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -74,17 +73,6 @@ export default function SettingsScreen() {
       setSaveError(err instanceof SigningOriginError
         ? 'Zadejte platnou HTTPS adresu serveru bez cesty, parametrů, fragmentu a přihlašovacích údajů.'
         : 'Nastavení se nepodařilo uložit. Zkuste to znovu.');
-    }
-  }
-
-  async function importTestCert() {
-    try {
-      const info = await importTestCertificate(platformVaultDeps());
-
-      setTestCert(info.subject);
-      setSubject(info.subject);
-    } catch (err) {
-      setTestCert(`chyba: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -202,13 +190,6 @@ export default function SettingsScreen() {
         MONET+, a.s. Softwarový produkt Podpisové SDK může být užíván pouze v souladu s licenčními podmínkami,
         pod kterými je šířen.
       </Text>
-
-      <Text style={styles.section}>Pokročilé</Text>
-      <Text style={styles.muted}>
-        Testovací certifikát je jen pro staging — nemá důvěryhodný kořen a podpis na produkci neprojde.
-      </Text>
-      <TextButton title="Importovat testovací certifikát" onPress={importTestCert} />
-      {testCert ? <Text style={styles.muted}>Uloženo: {testCert}</Text> : null}
     </ScrollView>
   );
 }
