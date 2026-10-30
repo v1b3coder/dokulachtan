@@ -139,7 +139,7 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty) → `/data/docuseal`;
   starý volume `dokulachtan_data` byl smazán 2026-10-18.
-- Release **v55** (`deployment-01M650QAXQV2X3ZNV0F33DW4QB`), fork `1694f6e4`.
+- Release **v56** (`deployment-01M654P9TVE84R14B873C6GB2F`), fork `1f5d603c`.
 - `Qes::Config`: signing trust roots 6× PostSignum, verification trust roots 15 vydávajících CA
   (`config/qes/czech.pem`, anchory — žádné rooty), `require_ltv=true`, `tsa_url=http://timestamp.digicert.com`,
   TSA roots 1, `tsa_required=true`; CRL fetch z produkční instance OK.
@@ -158,15 +158,15 @@ Adresy platí jen pro tyto konkrétní instance; v jiném nasazení se mění (`
 - machine `78111546b1dd68`, volume `dokulachtan_stg_restore` (1 GB, `fra`) → `/data/docuseal`;
   obnovený ze snapshotu starého staging volume, má účet `<SMTP_FROM>` a šablonu
   „QES E2E (staging)“.
-- Release **v28** (`deployment-01M650K1FWD2H6SK54HBXQ9GV7`), fork `1694f6e4`.
+- Release **v29** (`deployment-01M654ET567T9CPHSGBQ2E6Z3H`), fork `1f5d603c`.
 - Override: `QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem`,
   `QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem`,
   `QES_REQUIRE_LTV=false`,
   `QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dokulachtan-staging.fly.dev`,
   `QES_TEST_CRL_PATH=/app/config/qes/test-root.crl`,
   `QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev`.
-- Ověřeno: `make qes-staging-e2e` 2 signeři → 6 signatur INTACT (report
-  `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury,
+- Ověřeno (v29, 2026-10-30): `make qes-staging-e2e` 2 signeři → 6 signatur INTACT
+  (report `test/out/qes-staging-e2e-report.txt`), `make qes-staging-e2e-pdf` 3 signatury,
   podpis appky INTACT:TRUSTED (report `test/out/qes-pdf-staging-report.txt`).
 - SMTP Brevo free (300 e-mailů/den), stejné creds jako produkční instance (`deploy/smtp.env`);
   ověřeno `make smtp-check` a `make smtp-test`.
@@ -292,7 +292,7 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
 
 ## Stav
 
-Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí teď.
+Aktuální stav k 2026-10-30. Historie je v gitu; níže je jen to, co platí teď.
 
 **Hotovo**
 
@@ -311,8 +311,8 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
   i ověření PDF, TOFU pro podpisové odkazy z více instancí.
 - Testy: tiery T0–T3 a paralelní runner; QES 478/0, appka 230/0, JS 37/0,
   T2 721/0 a T3 725/0 (2026-10-30).
-- Nasazeno: produkční instance **v55** (`dokulachtan`, fork `1694f6e4`), staging **v28**
-  (`dokulachtan-staging`, fork `1694f6e4`); `/up` 200 na obou.
+- Nasazeno: produkční instance **v56** (`dokulachtan`, fork `1f5d603c`), staging **v29**
+  (`dokulachtan-staging`, fork `1f5d603c`); `/up` 200 na obou.
 
 **Zbývá**
 
@@ -341,3 +341,4 @@ Aktuální stav k 2026-10-29. Historie je v gitu; níže je jen to, co platí te
 - Tajemství (SMTP, klíče) jen přes `fly secrets` / `.env`, nikdy do repa.
 - **„Produkce“ = privátní instance uživatele** s produkčním kódem (dnes Fly app `dokulachtan`), ne centrální
   služba ani konkrétní URL; `RAILS_ENV=production` je jen prostředí Rails. Adresa instance se v každém nasazení mění.
+- Drž AGENTS.md kompaktní (do 100 řádků) a up-to-date. Uváděj pouze aktuální pravidla, ne stará rozhodnutí, žádná duplikace docs a kódu. Linkuj progressive disclosure docs.
