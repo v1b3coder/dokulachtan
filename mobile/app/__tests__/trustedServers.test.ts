@@ -66,6 +66,11 @@ it('rejects an invalid origin when trusting', async () => {
     .rejects.toMatchObject({ code: 'invalid_server' });
 });
 
+it('uses the link origin on a fresh install without Settings', async () => {
+  await expect(resolveWorkflowOrigin(memoryStorage(), 'https://link.test'))
+    .resolves.toEqual({ origin: 'https://link.test', trusted: false });
+});
+
 it('uses the link origin and reports trust for workflows', async () => {
   const storage = memoryStorage({
     [PDF_API_SETTINGS_KEY]: JSON.stringify({ serverUrl: 'https://settings.test', apiToken: '' }),
