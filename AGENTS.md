@@ -267,7 +267,7 @@ Testy jsou rozdelené do **tierů** podle ceny a rizika; runbook a naměřené �
 |---|---|---|---|---|
 | **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | **po každé změně** QES vrstvy (výchozí smyčka) | 478 ex, 43 s |
 | **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji | 478 ex, **20 s** |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 585 ex, 81 s |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | **před commitem** forku | 585 ex, 96 s |
 | **T1** | `make qes-test-parallel-fast` | totéž, 4 workery | před commitem, když spěcháš | 585 ex, 43 s |
 | **T2** | `make qes-test` | celá sada kromě `dashboard_spec` | **před PR / po rebase** | 721 ex, 3 min 20 s |
 | **T2** | `make qes-test-parallel-full` | totéž, 4 workery | před PR, když spěcháš | 721 ex, **111 s** |
