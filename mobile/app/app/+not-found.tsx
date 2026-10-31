@@ -2,13 +2,14 @@ import { Redirect } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-import { consumeOpenPdf, type OpenedPdf } from '../modules/dokulachtan-open-pdf';
+import { consumeOpenPdf } from '../modules/dokulachtan-open-pdf';
+import { offerPdf } from '../src/lib/pdfHandoff';
 
 // Expo Router sem pošle `dokulachtan://media/...` z ACTION_VIEW; tady intent
-// přečteme, zkopírujeme PDF do cache a přesměrujeme na S14. Když žádné
-// otevřené PDF není, zobrazíme běžnou 404.
+// přečteme, zkopírujeme PDF do cache a přesměrujeme na S14 s handoffem.
+// Když žádné otevřené PDF není, zobrazíme běžnou 404.
 export default function NotFoundScreen() {
-  const [pdf, setPdf] = useState<OpenedPdf | null | undefined>(undefined);
+  const [handoff, setHandoff] = useState<string | null | undefined>(undefined);
   const consumed = useRef(false);
 
   useEffect(() => {
@@ -21,7 +22,7 @@ export default function NotFoundScreen() {
 
     void consumeOpenPdf().then((value) => {
       if (active) {
-        setPdf(value);
+        setHandoff(value ? offerPdf(value) : null);
       }
     });
 
@@ -30,7 +31,7 @@ export default function NotFoundScreen() {
     };
   }, []);
 
-  if (pdf === undefined) {
+  if (handoff === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator />
@@ -38,8 +39,8 @@ export default function NotFoundScreen() {
     );
   }
 
-  if (pdf) {
-    return <Redirect href={{ pathname: '/verify-pdf', params: { share: pdf.uri, name: pdf.name } }} />;
+  if (handoff) {
+    return <Redirect href={{ pathname: '/verify-pdf', params: { handoff } }} />;
   }
 
   return (

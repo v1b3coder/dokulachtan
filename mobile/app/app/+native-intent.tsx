@@ -5,11 +5,18 @@
 // Android App Links jsou zrušeny (#18.1) — Android jde jen přes custom scheme.
 const APP_LINK = /^(https?:\/\/[^/?#]+)?\/qes(\/[^?#]*)?(?:\?([^#]*))?$/;
 
+// Routy, které nikdy nesmí přijmout parametry z odkazu: lokální soubor se
+// předává handoffem v paměti (opaque id), takže `?share=file:///…` zvenku
+// nesmí projít. `dokulachtan://` je schéma appky, ne kanál serveru.
+const PARAM_FREE_LINK =
+  /^(?:dokulachtan:\/\/|(?:https?:\/\/[^/?#]+)?\/qes\/)(sign-pdf|verify-pdf)(?:[?#].*)?$/i;
+
 export function redirectSystemPath({ path }: { path: string; initial: boolean }): string {
-  const match = path.match(APP_LINK);
+  const stripped = PARAM_FREE_LINK.test(path) ? path.replace(/[?#].*$/, '') : path;
+  const match = stripped.match(APP_LINK);
 
   if (!match) {
-    return path;
+    return stripped;
   }
 
   const route = match[2] === undefined || match[2] === '/app' ? '/' : match[2];

@@ -140,7 +140,8 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 | Soubor | Obsah |
 |---|---|
 | `app/sign-pdf.tsx` | S11 (výběr PDF, jméno do pečeti, úroveň) + S12 (náhled, klepnutí, obrys, „Podepsat“) |
-| `app/_layout.tsx` | sdílené PDF: `expo-share-intent` → routa `/sign-pdf` s parametrem souboru |
+| `app/_layout.tsx` | sdílené PDF: `expo-share-intent` → S14 s interním handoffem (`?handoff=<id>`), ne s cestou v URL |
+| `src/lib/pdfHandoff.ts` | jednorázové předání lokálního PDF mezi S14 a S11 (opaque id, soubor zůstává v paměti) |
 | `src/lib/shareIntent.ts` | PDF ze share intentu (`sharedPdfFile`), ostatní soubory ignoruje |
 | `plugins/withSharePdfTarget.js` | config plugin: Android `activity-alias` „Podepsat PDF“ pro `ACTION_SEND` `application/pdf` |
 | `src/lib/pdfApi.ts` | klient (`createDocument`, `setStampArea`, `createSubmission`, `startSession`, `completeSubmission`, `documentUrl`, `user`), `stampArea`, mapování klepnutí |
@@ -163,9 +164,10 @@ volby QES (čtečka eObčanky je Android-only, SPEC § 9.4). Build čeká na App
 
 **Sdílení PDF (Android, SPEC § 9.9 krok 0):** v Android manifestu je `activity-alias` „**Podepsat PDF**“
 (`plugins/withSharePdfTarget.js`) pro `ACTION_SEND` s `application/pdf`; `app/_layout.tsx` přes
-`expo-share-intent` přijme soubor a otevře `/sign-pdf` s parametrem souboru. `app/sign-pdf.tsx` po načtení
+`expo-share-intent` přijme soubor a otevře S14 s interním handoffem (`?handoff=<id>`). `app/sign-pdf.tsx` po načtení
 nastavení a jména do pečeti **rovnou nahraje** sdílené PDF (bez ručního ukládání a hledání). Zdroj je v cache
-appky (`file://`), takže se nic nekopíruje do Documents; iOS share extension není v rozsahu.
+appky (`file://`), takže se nic nekopíruje do Documents; iOS share extension není v rozsahu. Cesta k souboru
+nikdy nejde v URL — `dokulachtan://sign-pdf?share=file:///…` zvenku `+native-intent` stripne a `takePdf` nic nevrátí.
 
 **Stažení, uložení a sdílení finálního PDF (docs/17):** finální PDF se stahuje nativně přes
 `File.downloadFileAsync` přímo do cache — ne přes `arrayBuffer`/`FileReader` v JS (velké PDF s LTV, CRL a DocTS

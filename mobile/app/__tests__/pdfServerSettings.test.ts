@@ -10,11 +10,19 @@ import SettingsScreen from '../app/settings';
 import { TextButton } from '../src/ui/buttons';
 
 const { create, act } = require('react-test-renderer');
+jest.mock('../src/lib/pdfHandoff', () => ({
+  offerPdf: jest.fn(() => 'handoff-id'),
+  takePdf: jest.fn(() => ({
+    uri: 'file:///contract.pdf',
+    name: 'contract.pdf',
+    type: 'application/pdf',
+  })),
+}));
 jest.mock('expo-router', () => {
   const React = require('react');
 
   return {
-    useLocalSearchParams: () => ({ share: 'file:///contract.pdf', name: 'contract.pdf' }),
+    useLocalSearchParams: () => ({ handoff: 'handoff-id' }),
     useFocusEffect: (callback: () => void) => React.useEffect(callback, []),
     useRouter: () => ({ push: jest.fn() }),
     router: { push: jest.fn(), replace: jest.fn(), setParams: jest.fn() },

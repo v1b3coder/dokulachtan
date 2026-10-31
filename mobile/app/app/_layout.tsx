@@ -3,11 +3,13 @@ import { StatusBar } from 'expo-status-bar';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 import { useEffect } from 'react';
 
+import { offerPdf } from '../src/lib/pdfHandoff';
 import { resolveSharedPdfFile } from '../src/lib/shareIntent';
 
-// Sdílené PDF (ACTION_SEND, share sheet „Podepsat PDF“) → S14 s volbou
-// „Podepsat PDF“ / „Ověřit PDF“. Soubor se předá jako parametr routy,
-// aby ho nesežrala starší obrazovka ve stacku.
+// Sdílené PDF (ACTION_SEND, share sheet „Podepsat PDF") → S14 s volbou
+// „Podepsat PDF" / „Ověřit PDF". Soubor se předá interním handoffem
+// (opaque id), aby ho nesežrala starší obrazovka ve stacku a cesta
+// k souboru se nikdy neobjevila v URL.
 function ShareIntentRoute() {
   const { shareIntent, resetShareIntent } = useShareIntentContext();
   const navigationState = useRootNavigationState();
@@ -27,7 +29,7 @@ function ShareIntentRoute() {
 
       router.push({
         pathname: '/verify-pdf',
-        params: { share: file.uri ?? '', name: file.name },
+        params: { handoff: offerPdf(file) },
       });
       resetShareIntent();
     });

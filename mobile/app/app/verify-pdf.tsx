@@ -2,7 +2,7 @@
 // ověření v DocuSealu, nebo nezávislé ověření přes veřejné API EU DSS.
 // Externí volba je vždy opt-in se souhlasem: PDF se odešle na servery
 // Evropské komise a externí report se do DocuSealu neukládá.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -16,6 +16,7 @@ import {
 
 import { EuDssApi, EuDssError } from '../src/lib/euDssApi';
 import { levelLabel } from '../src/lib/level';
+import { offerPdf, takePdf } from '../src/lib/pdfHandoff';
 import { platformVaultDeps } from '../src/lib/platform';
 import { signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import {
@@ -71,15 +72,27 @@ export default function VerifyPdfScreen() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 
-  const params = useLocalSearchParams<{ share?: string; name?: string }>();
-  const shared =
-    typeof params.share === 'string' && params.share.length > 0
-      ? { uri: params.share, name: params.name || 'document.pdf', type: 'application/pdf' }
-      : null;
+  // Soubor z trusted cesty (share sheet, open-with) přišel handoffem:
+  // route param je opaque id, ne cesta. Externí odkaz s `?share=` se sem
+  // nedostane (strip v +native-intent) a `takePdf` neznámé id odmítne.
+  const params = useLocalSearchParams<{ handoff?: string }>();
+  const [shared, setShared] = useState<PdfUpload | null>(null);
+  const handoffTaken = useRef(false);
 
   useEffect(() => {
-    setFile(shared);
-  }, [shared?.uri]);
+    if (handoffTaken.current) {
+      return;
+    }
+
+    handoffTaken.current = true;
+
+    const upload = takePdf(params.handoff);
+
+    if (upload) {
+      setShared(upload);
+      setFile(upload);
+    }
+  }, [params.handoff]);
 
   useFocusEffect(
     useCallback(() => {
@@ -170,8 +183,7 @@ export default function VerifyPdfScreen() {
       return;
     }
 
-    router.push({ pathname: '/sign-pdf', params: { share: shared.uri ?? '', name: shared.name } });
-    router.setParams({ share: '', name: '' });
+    router.push({ pathname: '/sign-pdf', params: { handoff: offerPdf(shared) } });
   }
 
   async function store() {
@@ -197,11 +209,11 @@ export default function VerifyPdfScreen() {
     setProvider('local');
     setConsent(false);
     setFile(null);
+    setShared(null);
     setReport(null);
     setError(null);
     setErrorDetail(null);
     setShowDetails(false);
-    router.setParams({ share: '', name: '' });
   }
 
   const view = report ? verdictView(report) : null;

@@ -395,7 +395,8 @@ async storeVerifiedDocument(file: PdfUpload): Promise<PdfVerification> {
 
 - `plugins/withSharePdfTarget.js` přidá `.SharePdfAlias` s labelem **„Podepsat PDF“**.
 - `app/_layout.tsx` přes `screenLayout` otevře S14 se souborem ze share sheetu;
-  S14 nabídne **„Podepsat PDF“** / **„Ověřit PDF“**.
+  S14 nabídne **„Podepsat PDF“** / **„Ověřit PDF“**. Soubor se předává interním
+  handoffem (`src/lib/pdfHandoff.ts`, opaque id), ne cestou v URL.
 
 **Open with** (`ACTION_VIEW`, `application/pdf`):
 
@@ -403,7 +404,7 @@ async storeVerifiedDocument(file: PdfUpload): Promise<PdfVerification> {
 - malý nativní modul `modules/dokulachtan-open-pdf` (`OpenPdfModule`) přečte původní
   `content://` URI, zkopíruje obsah do cache a předá ho JS.
 - `app/+not-found.tsx` (Expo Router na `dokulachtan://media/...` spadne sem) soubor převezme
-  a přesměruje na S14 se stejným souborem; S14 opět nabídne **„Podepsat PDF“** / **„Ověřit PDF“**.
+  a přesměruje na S14 se stejným souborem přes handoff; S14 opět nabídne **„Podepsat PDF“** / **„Ověřit PDF“**.
 
 **Proč open intent:** PDF editor při share často re-exportuje dokument; `ACTION_VIEW` z file manageru
 / e-mailu předá původní soubor. Obě cesty končí na stejné S14, takže uživatel má vždy volbu.

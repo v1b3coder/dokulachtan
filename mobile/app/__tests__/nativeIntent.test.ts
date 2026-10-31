@@ -43,4 +43,27 @@ describe('redirectSystemPath', () => {
 
     expect(server(path)).toBe('https://dokulachtan.fly.dev');
   });
+
+  it('stripne parametry z odkazu na routy s lokálním souborem', () => {
+    expect(
+      redirectSystemPath({
+        path: 'dokulachtan://sign-pdf?share=file%3A%2F%2F%2Fdata%2Fuser%2F0%2Fcz.dokulachtan.signer%2Ffiles%2Fvault%2Fcertificate.json',
+        initial: true,
+      }),
+    ).toBe('dokulachtan://sign-pdf');
+
+    expect(
+      redirectSystemPath({
+        path: 'dokulachtan://verify-pdf?share=file%3A%2F%2F%2Fdata%2Fx&name=certificate.json',
+        initial: false,
+      }),
+    ).toBe('dokulachtan://verify-pdf');
+
+    expect(
+      redirectSystemPath({
+        path: 'https://dokulachtan.fly.dev/qes/sign-pdf?share=file%3A%2F%2F%2Fdata%2Fx',
+        initial: true,
+      }),
+    ).toBe('/sign-pdf');
+  });
 });

@@ -1,7 +1,7 @@
 // S11 Výběr PDF + S12 umístění pečeti (docs/15 § 7.1): vybrat PDF, nahrát ho
 // do DocuSealu (šablona ve složce „Direct signing“), klepnutím umístit pečeť a
 // spustit běžný obřad S4. Klíč zůstává v zařízení, server vidí jen PDF.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -20,6 +20,7 @@ import {
 
 import { certificateSummary } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
+import { offerPdf, takePdf } from '../src/lib/pdfHandoff';
 import { platformVaultDeps } from '../src/lib/platform';
 import { signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import {
@@ -100,13 +101,27 @@ export default function SignPdfScreen() {
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
-  // PDF ze share sheetu (docs/15 § 6): soubor předává layout jako parametr
-  // routy, obrazovka ho po načtení nastavení a jména do pečeti rovnou nahraje.
-  const params = useLocalSearchParams<{ share?: string; name?: string }>();
-  const shared =
-    typeof params.share === 'string' && params.share.length > 0
-      ? { uri: params.share, name: params.name || 'document.pdf', type: 'application/pdf' }
-      : null;
+  // PDF z trusted cesty (share sheet, open-with) přišlo handoffem: route param
+  // je opaque id, ne cesta. Externí odkaz s `?share=` se sem nedostane
+  // (strip v +native-intent) a `takePdf` neznámé id odmítne.
+  const params = useLocalSearchParams<{ handoff?: string }>();
+  const [shared, setShared] = useState<PdfUpload | null>(null);
+  const handoffTaken = useRef(false);
+  const sharedUploaded = useRef(false);
+
+  useEffect(() => {
+    if (handoffTaken.current) {
+      return;
+    }
+
+    handoffTaken.current = true;
+
+    const upload = takePdf(params.handoff);
+
+    if (upload) {
+      setShared(upload);
+    }
+  }, [params.handoff]);
 
   useFocusEffect(
     useCallback(() => {
@@ -242,12 +257,15 @@ export default function SignPdfScreen() {
     await uploadFile(file);
   }
 
-  // Sdílené PDF: po načtení nastavení a jména do pečeti ho rovnou nahrajeme
-  // a parametr routy vyčistíme, aby se upload neopakoval při obnově obrazovky.
+  // Sdílené PDF: po načtení nastavení ho rovnou nahrajeme. Handoff je
+  // jednorázový, takže upload se neopakuje při změně nastavení ani při
+  // obnovení obrazovky.
   useEffect(() => {
-    if (!ready || !shared || !settings) {
+    if (!ready || !shared || !settings || sharedUploaded.current) {
       return;
     }
+
+    sharedUploaded.current = true;
 
     setFile(shared);
     setDocument(null);
@@ -256,12 +274,8 @@ export default function SignPdfScreen() {
     setSession(null);
     setSubmittedArea(null);
     setPosition(null);
-    void uploadFile(shared).then((ok) => {
-      if (ok) {
-        router.setParams({ share: '', name: '' });
-      }
-    });
-  }, [ready, shared?.uri, settings]);
+    void uploadFile(shared);
+  }, [ready, shared, settings]);
 
   async function place() {
     if (!document || !position) {
