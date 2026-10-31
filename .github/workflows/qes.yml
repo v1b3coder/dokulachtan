@@ -1,0 +1,218 @@
+name: QES tests
+
+# GitHub-hosted runner: Podman 4.9.3 + Buildah jsou předinstalované, takže
+# Makefile cílům stačí `podman` beze změny. `workflow_call` s `full: true`
+# používá release, aby se APK nevydalo bez zelené celé sady.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *'        # early warning: T2 + T3 + negativní + E2E
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      full:
+        description: 'Kompletní sada (release)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qes-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '22'
+  TZ: UTC
+
+jobs:
+  t0:
+    name: T0 QES + JS
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: vendor/docuseal/yarn.lock
+      - working-directory: vendor/docuseal
+        run: yarn install --frozen-lockfile --prefer-offline
+      - run: make qes-test-image
+      - run: make qes-test-qes
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: t0-report
+          path: test/out/qes-report.txt
+          retention-days: 14
+
+  t1:
+    name: T1 bez system
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: vendor/docuseal/yarn.lock
+      - working-directory: vendor/docuseal
+        run: yarn install --frozen-lockfile --prefer-offline
+      - run: make qes-test-image
+      - run: make qes-test-fast
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: t1-report
+          path: test/out/qes-test-fast-report.txt
+          retention-days: 14
+
+  app:
+    name: App Jest + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - working-directory: mobile/app
+        run: npm ci
+      - run: make qes-app-test
+      - run: make qes-app-typecheck
+
+  t2:
+    name: T2 celá sada
+    if: inputs.full || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'ci/full')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - run: make qes-test-system-image
+      - run: make qes-test-assets
+      - run: make qes-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: t2-report
+          path: test/out/qes-test-report.txt
+          retention-days: 14
+
+  postgres:
+    name: T3 Postgres 18
+    if: inputs.full || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - run: make qes-test-system-image
+      - run: make qes-test-assets
+      - run: make qes-test-postgres
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: postgres-report
+          path: test/out/qes-test-postgres-report.txt
+          retention-days: 14
+
+  negative:
+    name: Negativní scénáře N1–N17
+    if: inputs.full || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QES_E2E_IMAGE: dokulachtan-qes-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-qes.txt
+      - run: make venv
+      - run: make qes-test-image
+      - run: make qes-test-assets
+      - run: make qes-negative
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: negative-report
+          path: test/out/qes-negative-report.txt
+          retention-days: 14
+
+  e2e:
+    name: E2E podpis + validace
+    if: inputs.full || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      QES_E2E_IMAGE: dokulachtan-qes-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fork na pinu
+        env:
+          FORK_SETUP_REV: '1'
+        run: ./scripts/fork-setup.sh
+      - name: Nástroje pro nezávislou validaci PDF
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends qpdf poppler-utils
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - name: Závislosti appky (tsx + node-forge)
+        working-directory: mobile/app
+        run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-qes.txt
+      - run: make venv
+      - run: make qes-test-image
+      - run: make qes-test-assets
+      - run: make qes-e2e
+      - run: make qes-e2e-two
+      - run: make qes-e2e-pdf
+      - run: make qes-verify-e2e
+      - run: QES_E2E_REPORT=qes-e2e-card-report.txt make qes-e2e-card
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-reports
+          path: |
+            test/out/qes-e2e-report.txt
+            test/out/qes-e2e-two-report.txt
+            test/out/qes-pdf-e2e-report.txt
+            test/out/qes-verify-e2e-report.txt
+            test/out/qes-e2e-card-report.txt
+          retention-days: 14
