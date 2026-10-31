@@ -5,6 +5,8 @@ name: Android APK release
 # kompatibilní se syntaxí GitHub Actions); release krok se podle hostu rozhodne
 # mezi `gh` (GitHub) a REST API Gitea, protože `gh` s Giteou neumí mluvit.
 # Podpis: release keystore z CI secrets; lokální buildy používají debug keystore.
+# Gate: `qes` job pouští kompletní QES sadu (T0–T3, negativní, E2E, app);
+# build na něm závisí, takže APK bez zelených testů nevznikne.
 # Keystore se generuje mimo repo (deploy/android-release/, gitignored).
 # ABI: release jen arm64-v8a (telefony) — x86_64 je pro emulátor a testy, viz
 # mobile/app/plugins/withApkSize.js; build bez arm64 na release úkolu spadne.
@@ -23,7 +25,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  qes:
+    uses: ./.github/workflows/qes.yml
+    with:
+      full: true
+
   build:
+    needs: qes
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
