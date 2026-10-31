@@ -1,0 +1,29 @@
+# Python závislosti pro QES harness (E2E, negativní scénáře, validace PDF).
+# Pin z `pip freeze` dne 2026-10-31; bump vědomě a přeměř `make qes-e2e` + `make qes-negative`.
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.5
+aiosignal==1.4.0
+asn1crypto==1.5.1
+attrs==26.1.0
+certifi==2026.7.22
+cffi==2.1.1
+click==8.5.0
+cryptography==50.0.2
+frozenlist==1.8.0
+idna==3.20
+lxml==6.1.3
+multidict==7.1.0
+oscrypto==1.3.0
+platformdirs==4.13.0
+podman-compose==1.6.0
+propcache==0.5.4
+pycparser==3.11
+pyHanko==0.37.0
+pyhanko-certvalidator==0.32.1
+pyhanko-cli==0.5.0
+python-dotenv==1.2.4
+PyYAML==6.0.3
+typing_extensions==4.16.0
+tzlocal==5.4.4
+uritools==6.1.3
+yarl==1.25.1

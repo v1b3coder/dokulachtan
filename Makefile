@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -11,9 +11,13 @@ APP ?= dokulachtan-staging
 help: ## Vypíše všechny cíle s popisem
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | sed -E 's/:.*## / — /'
 
-venv: ## Vytvoří .venv (pyHanko + podman-compose)
+venv: ## Vytvoří .venv (pyHanko + podman-compose, pin z requirements-qes.txt)
 	python3 -m venv .venv
-	.venv/bin/pip install --index-url https://pypi.org/simple pyhanko pyhanko-cli podman-compose
+	.venv/bin/pip install --index-url https://pypi.org/simple -r requirements-qes.txt
+
+hooks: ## Nainstaluje git hooky z .githooks (pre-push: T0 + app testy + typecheck)
+	git config core.hooksPath .githooks
+	chmod +x .githooks/pre-push
 
 test-pki: ## Vygeneruje testovací PKI (root, issuing CA, koncové certy)
 	./scripts/make_test_pki.sh
@@ -41,22 +45,32 @@ fork-setup: ## Klon forku + remote upstream + větev dokulachtan (pin z vendor/d
 QES_REPO := vendor/docuseal
 QES_IMAGE ?= dokulachtan-qes-test
 QES_SYSTEM_IMAGE ?= dokulachtan-qes-system-test
-QES_RUN := podman run --rm -v "$(PWD)/$(QES_REPO):/app" -v "$(PWD)/test:/qes-test:ro" -w /app \
+QES_CONTAINER ?= podman
+QES_BUILD ?= $(QES_CONTAINER) build
+QES_RUN := $(QES_CONTAINER) run --rm -v "$(PWD)/$(QES_REPO):/app" -v "$(PWD)/test:/qes-test:ro" -w /app \
 	-e RAILS_ENV=test -e BUNDLE_WITHOUT= -e BUNDLE_GEMFILE=/app/Gemfile \
 	-e PRIMARY_DATABASE_URL=sqlite3:/app/db/qes-test.sqlite3 \
 	-e SCHEMA=/app/tmp/qes-test-schema.rb -e HOME=/tmp -e TZ=UTC -e QES_TEST_DIR=/qes-test
 
-qes-test-images: ## postaví QES test image (dev/test gemy) a system image (+ chromium)
-	podman build -t $(QES_IMAGE) -f test/qes/Dockerfile .
-	podman build -t $(QES_SYSTEM_IMAGE) -f test/qes/Dockerfile.system .
+# Reporty se v čerstvém klonu tee do neexistujícího adresáře jinak rozbijí (pipefail).
+test/out:
+	mkdir -p $@
+
+qes-test-image: ## postaví QES test image (dev/test gemy, bez Chromia)
+	$(QES_BUILD) -t $(QES_IMAGE) -f test/qes/Dockerfile .
+
+qes-test-system-image: qes-test-image ## postaví system image (test image + Chromium)
+	$(QES_BUILD) -t $(QES_SYSTEM_IMAGE) -f test/qes/Dockerfile.system .
+
+qes-test-images: qes-test-image qes-test-system-image ## postaví oba image (test + system)
 
 qes-test-assets: ## zkopíruje buildnuté assety z produkčního image do forku (public/packs-test, gitignored)
-	podman run --rm docker.io/docuseal/docuseal:latest tar -C /app/public -cf - packs \
+	$(QES_CONTAINER) run --rm docker.io/docuseal/docuseal:latest tar -C /app/public -cf - packs \
 		| tar -C $(QES_REPO)/public -xf -
 	rm -rf $(QES_REPO)/public/packs-test
 	cp -r $(QES_REPO)/public/packs $(QES_REPO)/public/packs-test
 
-qes-test: qes-test-images ## RSpec na SQLite (jako staging) bez fulltext specu → test/out/qes-test-report.txt
+qes-test: qes-test-system-image test/out ## RSpec na SQLite (jako staging) bez fulltext specu → test/out/qes-test-report.txt
 	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
 		bundle exec rspec --exclude-pattern "spec/system/dashboard_spec.rb"' 2>&1 | tee test/out/qes-test-report.txt
 
@@ -64,36 +78,36 @@ qes-test: qes-test-images ## RSpec na SQLite (jako staging) bez fulltext specu �
 # T2 = qes-test / qes-test-parallel-full, T3 = qes-test-postgres.
 QES_PARALLEL_WORKERS ?= 4
 
-qes-test-qes: qes-test-images ## T0: QES vrstva + JS testy (rychlá smyčka) → test/out/qes-report.txt
+qes-test-qes: qes-test-image test/out ## T0: QES vrstva + JS testy (rychlá smyčka) → test/out/qes-report.txt
 	$(QES_RUN) $(QES_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null; \
 		paths=$$(ls -d spec/lib/qes spec/models/qes_session_spec.rb spec/models/template_spec.rb spec/models/submission_spec.rb spec/jobs/qes spec/requests/qes_*_spec.rb spec/requests/doc_ts_verification_spec.rb 2>/dev/null); \
 		if [ -z "$$paths" ]; then echo "QES specy zatím nejsou - nic k běhu"; exit 0; fi; \
 		bundle exec rspec $$paths' 2>&1 | tee test/out/qes-report.txt
 	$(MAKE) qes-js-test
 
-qes-test-fast: qes-test-images ## T1: celá sada bez spec/system (bez Chromia) → test/out/qes-test-fast-report.txt
+qes-test-fast: qes-test-image test/out ## T1: celá sada bez spec/system (bez Chromia) → test/out/qes-test-fast-report.txt
 	$(QES_RUN) $(QES_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
 		bundle exec rspec spec/models spec/lib spec/requests spec/jobs' 2>&1 | tee test/out/qes-test-fast-report.txt
 
-qes-test-parallel: qes-test-images ## T0 paralelně: QES vrstva, N workerů (QES_PARALLEL_WORKERS=4)
+qes-test-parallel: qes-test-image ## T0 paralelně: QES vrstva, N workerů (QES_PARALLEL_WORKERS=4)
 	./scripts/qes-test-parallel.sh --group qes --workers $(QES_PARALLEL_WORKERS)
 
-qes-test-parallel-fast: qes-test-images ## T1 paralelně: vše kromě spec/system
+qes-test-parallel-fast: qes-test-image ## T1 paralelně: vše kromě spec/system
 	./scripts/qes-test-parallel.sh --group fast --workers $(QES_PARALLEL_WORKERS)
 
-qes-test-parallel-full: qes-test-images ## T2 paralelně: celá sada (potřebuje system image s Chromiem)
+qes-test-parallel-full: qes-test-system-image ## T2 paralelně: celá sada (potřebuje system image s Chromiem)
 	./scripts/qes-test-parallel.sh --group full --workers $(QES_PARALLEL_WORKERS)
 
 qes-test-parallel-selftest: ## Ověří, že paralelní runner neprojde s prázdným plánem (#23.2)
 	./scripts/qes_test_parallel_test.sh
 
-qes-test-timings: qes-test-images ## Přeměří časy spec souborů pro paralelní runner → test/qes/timings.txt
+qes-test-timings: qes-test-system-image test/out ## Přeměří časy spec souborů pro paralelní runner → test/qes/timings.txt
 	$(QES_RUN) $(QES_SYSTEM_IMAGE) sh -c 'bundle exec rake db:create db:migrate >/dev/null && \
 		bundle exec rspec --exclude-pattern "spec/system/dashboard_spec.rb" \
 			--format json --out /app/tmp/rspec.json --format progress'
 	./scripts/qes-test-parallel.sh --write-timings
 
-qes-test-postgres: qes-test-images ## Paritní běh celé sady na Postgresu 18 (jako upstream CI)
+qes-test-postgres: qes-test-system-image ## Paritní běh celé sady na Postgresu 18 (jako upstream CI)
 	./scripts/qes-test-postgres.sh
 
 qes-js-test: ## node --test pro čistou logiku QES kroku (qes_step_logic.mjs)
