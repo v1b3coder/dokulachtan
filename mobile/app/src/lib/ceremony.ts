@@ -1,9 +1,9 @@
-// Obřad podpisu v appce (SPEC § 9.3): GET metadata → odemčení vaultu biometrií
-// → POST certificate → podepsané atributy → POST complete. Klíč zůstává v zařízení.
+// Obřad podpisu v appce (SPEC § 9.3): cert → POST certificate → GET /document
+// → kontrola → biometrie → podpis → POST complete. Klíč zůstává v zařízení.
 //
-// Kontrola dokumentu je už hotová v `sign.tsx` (GET /document před certifikátem);
-// tady se ověřuje, že `data_to_sign` kryje přesně reviewed dokument, a teprve
-// potom se odemyká klíč a podepisuje.
+// Certifikát je veřejný, takže se posílá před kontrolou: server podle něj
+// postaví TBS s pečetí (CN + e-mail z certu). Kontrola i odemčení klíče
+// zůstávají až po sobě.
 import {
   certificateIdentityFromPem,
   verifyPreparedDocument,
@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 
 import { certificateMatchesLevel, selectSigner, type SignerConfiguration } from './signer';
 import { signSignedAttrs, toBase64, type HashAlgorithm } from './crypto/softwareSigner';
-import { unlockCertificate, type VaultDeps } from './crypto/vault';
+import { certificateSummary, unlockCertificate, type VaultDeps } from './crypto/vault';
 import { CardSignerError, createCardSigner, type CardSigner } from './cardSigner';
 import type {
   QesAppMetadata,
@@ -28,14 +28,25 @@ import type {
 export interface CeremonyDeps {
   api: SessionSource;
   vault: VaultDeps;
-  reviewedDocument: Uint8Array;
-  reviewedDigest?: string;
   cardSigner?: CardSigner;
   configuration: SignerConfiguration;
   // Reálná verze appky z `app.json` (`expo-constants`); e2e harness ji neposílá.
   appVersion?: string;
   app?: QesAppMetadata;
 }
+
+export interface PreparedCeremony {
+  document: Uint8Array;
+  prepared: PreparedDocument;
+  identity: CertificateIdentity;
+  keyLocation: 'phone_keystore' | 'card';
+  sign: () => Promise<Uint8Array>;
+  finalize: () => Promise<void>;
+}
+
+export type CeremonyPreparation =
+  | { kind: 'prepared'; ceremony: PreparedCeremony }
+  | { kind: 'completed'; completed: QesCompletedPayload };
 
 export interface CeremonyResult {
   completed: QesCompletedPayload;
@@ -57,19 +68,13 @@ export class CeremonyError extends Error {
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 30_000;
 
-export async function runSigningCeremony(
+export async function prepareCeremony(
   deps: CeremonyDeps,
   levelRequired: QesLevel,
-): Promise<CeremonyResult> {
+): Promise<CeremonyPreparation> {
   const session = await deps.api.getSession();
   if (session.state === 'completed') {
-    return {
-      completed: session,
-      level: session.level,
-      keyLocation: null,
-      biometricPrompts: 0,
-      documentDigest: session.document_digest,
-    };
+    return { kind: 'completed', completed: session };
   }
   const required = session.level_required ?? levelRequired;
   const selection = selectSigner(required, deps.configuration);
@@ -99,47 +104,75 @@ export async function runSigningCeremony(
         throw new CeremonyError(required === 'qes' ? 'qes_required_qscd' : 'level_mismatch');
       }
 
-      return await completeWithCertificate(
+      const prepared = await prepareWithCertificate(
         deps, card.certificatePem, chain, 'card', app, session.hash_algorithm, identity,
-        (dataToSign) => cardSigner.signData('', dataToSign),
       );
+
+      return {
+        kind: 'prepared',
+        ceremony: {
+          ...prepared,
+          identity,
+          keyLocation: 'card',
+          sign: () => cardSigner.signData('', prepared.prepared.dataToSign),
+          finalize: () => cardSigner.finalizeSession(),
+        },
+      };
     } catch (error) {
+      await cardSigner.finalizeSession();
       if (error instanceof CardSignerError) throw new CeremonyError(error.code);
       throw error;
-    } finally {
-      await cardSigner.finalizeSession();
     }
   }
 
-  const material = await unlockCertificate(deps.vault, 'sign');
+  const info = await certificateSummary(deps.vault);
 
-  if (!certificateMatchesLevel(required, material.info.level)) {
+  if (!info) {
+    throw new CeremonyError('certificate_missing');
+  }
+
+  if (!certificateMatchesLevel(required, info.level)) {
     throw new CeremonyError('qes_required_qscd');
   }
 
-  const chain = material.chainPems.map((pem) => toBase64(pemCertificateToDer(pem)));
+  const chain = info.chainPems.map((pem) => toBase64(pemCertificateToDer(pem)));
   const identity: CertificateIdentity = {
-    serial: material.info.serial,
-    notBefore: material.info.notBefore,
-    notAfter: material.info.notAfter,
-    level: material.info.level,
-    qcStatements: material.info.qcStatements,
-    keyType: material.info.keyType,
-    keySize: material.info.keySize,
+    serial: info.serial,
+    notBefore: info.notBefore,
+    notAfter: info.notAfter,
+    level: info.level,
+    qcStatements: info.qcStatements,
+    keyType: info.keyType,
+    keySize: info.keySize,
   };
+  const prepared = await prepareWithCertificate(
+    deps, info.certificatePem, chain, 'phone_keystore', app, session.hash_algorithm, identity,
+  );
 
-  return completeWithCertificate(deps, material.certificatePem, chain, 'phone_keystore', app, session.hash_algorithm, identity, (dataToSign) => {
-    try {
-      return Promise.resolve(signSignedAttrs(material.privateKeyPem, dataToSign, session.hash_algorithm as HashAlgorithm));
-    } finally {
-      // SPEC § 9.3 bod 8: klíč se po podpisu zahodí. JS string nejde vymazat,
-      // ale reference pustíme hned, místo aby žila do konce obřadu (#23.3).
-      material.privateKeyPem = '';
-    }
-  });
+  return {
+    kind: 'prepared',
+    ceremony: {
+      ...prepared,
+      identity,
+      keyLocation: 'phone_keystore',
+      sign: async () => {
+        const material = await unlockCertificate(deps.vault, 'sign');
+        try {
+          return await signSignedAttrs(
+            material.privateKeyPem, prepared.prepared.dataToSign, session.hash_algorithm as HashAlgorithm,
+          );
+        } finally {
+          // SPEC § 9.3 bod 8: klíč se po podpisu zahodí. JS string nejde vymazat,
+          // ale referenci pustíme hned, místo aby žila do konce obřadu (#23.3).
+          material.privateKeyPem = '';
+        }
+      },
+      finalize: async () => undefined,
+    },
+  };
 }
 
-async function completeWithCertificate(
+async function prepareWithCertificate(
   deps: CeremonyDeps,
   certificatePem: string,
   chain: string[],
@@ -147,42 +180,43 @@ async function completeWithCertificate(
   app: QesAppMetadata,
   hashAlgorithm: string,
   identity: CertificateIdentity,
-  sign: (dataToSign: Uint8Array) => Promise<Uint8Array>,
-): Promise<CeremonyResult> {
+): Promise<{ document: Uint8Array; prepared: PreparedDocument }> {
   const certificateDer = pemCertificateToDer(certificatePem);
-  const prepared = await deps.api.postCertificate({
+  const response = await deps.api.postCertificate({
     certificate: toBase64(certificateDer),
     chain,
     key_location: keyLocation,
     app,
   });
+  const document = await deps.api.getDocument();
 
-  let verified: PreparedDocument;
   try {
-    verified = verifyPreparedDocument(
-      deps.reviewedDocument, prepared, hashAlgorithm, certificateDer, identity,
-    );
-    if (deps.reviewedDigest && verified.digest !== deps.reviewedDigest) {
-      throw new Error('reviewed digest');
-    }
+    return {
+      document,
+      prepared: verifyPreparedDocument(document, response, hashAlgorithm, certificateDer, identity),
+    };
   } catch {
     await deps.api.postAbort('document_mismatch').catch(() => {});
     throw new CeremonyError('document_mismatch');
   }
+}
 
-  const signature = await sign(verified.dataToSign);
-
-  const response: QesCompleteResponse = await deps.api.postComplete(toBase64(signature));
+export async function signCeremony(
+  api: SessionSource,
+  ceremony: PreparedCeremony,
+): Promise<CeremonyResult> {
+  const signature = await ceremony.sign();
+  const response: QesCompleteResponse = await api.postComplete(toBase64(signature));
   const completed = response.state === 'embedded'
-    ? await pollCompletion(deps.api, response)
+    ? await pollCompletion(api, response)
     : response;
 
   return {
     completed,
     level: completed.level,
-    keyLocation,
+    keyLocation: ceremony.keyLocation,
     biometricPrompts: 1,
-    documentDigest: verified.digest,
+    documentDigest: ceremony.prepared.digest,
   };
 }
 

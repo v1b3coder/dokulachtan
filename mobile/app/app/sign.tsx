@@ -7,7 +7,7 @@ import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, Vi
 import { resolveSigningOrigin, signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import { resolveWorkflowOrigin, trustServer, type WorkflowOrigin } from '../src/lib/trustedServers';
 import { QesApi, QesApiError } from '../src/lib/api';
-import { runSigningCeremony, CeremonyError } from '../src/lib/ceremony';
+import { prepareCeremony, signCeremony, CeremonyError, type PreparedCeremony } from '../src/lib/ceremony';
 import { certificateSummary, hasCertificate, VaultError, type StoredCertificateInfo } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
 import { PdfApi, PdfApiError, loadPdfApiSettings } from '../src/lib/pdfApi';
@@ -25,7 +25,6 @@ import {
   type SaveFolder,
   type SavedPdf,
 } from '../src/lib/pdfShare';
-import { documentDigest } from '../src/lib/preparedDocument';
 import { appVersion, platformVaultDeps } from '../src/lib/platform';
 import type { QesSessionPayload, QesValidationReport } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
@@ -160,6 +159,7 @@ export default function SignScreen() {
 
   const [reviewPdf, setReviewPdf] = useState<Uint8Array | null>(null);
   const [reviewDigest, setReviewDigest] = useState<string | null>(null);
+  const preparedCeremony = useRef<PreparedCeremony | null>(null);
   const [reviewOpened, setReviewOpened] = useState(false);
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
   const [trusting, setTrusting] = useState(false);
@@ -175,6 +175,8 @@ export default function SignScreen() {
 
     return () => {
       generation.current += 1;
+      void preparedCeremony.current?.finalize().catch(() => {});
+      preparedCeremony.current = null;
     };
   }, [token, server]);
 
@@ -376,7 +378,8 @@ export default function SignScreen() {
     }
   }, [reviewPdf, openingPdf]);
 
-  // Kontrola dokumentu: jen GET /document, žádný klíč, žádný POST /certificate.
+  // Kontrola dokumentu: cert (veřejný) → POST /certificate → GET /document.
+  // Klíč se odemyká až po kontrole v `sign`.
   const startReview = useCallback(async () => {
     if (!token || !serverUrl || loadingDocument) return;
 
@@ -386,22 +389,42 @@ export default function SignScreen() {
     setReviewOpened(false);
 
     try {
-      const pdf = await qesApi(serverUrl).getDocument();
-      let digest: string;
+      const vault = platformVaultDeps();
+      const preparation = await prepareCeremony(
+        {
+          api: qesApi(serverUrl),
+          vault,
+          configuration: {
+            hasKey: await hasCertificate(vault),
+            hasReader: false,
+            readerReady: false,
+          },
+          appVersion: appVersion(),
+        },
+        session?.level_required ?? 'ades',
+      );
 
-      try {
-        ({ digest } = documentDigest(pdf));
-      } catch {
-        setError('document_mismatch');
-        setErrorDetail('Server nevrátil platný nepodepsaný TBS.');
+      if (preparation.kind === 'completed') {
+        setDone({
+          level: preparation.completed.level,
+          digest: preparation.completed.document_digest,
+          verified: null,
+          validation: preparation.completed.validation,
+          sealState: preparation.completed.seal_state,
+          docTimestampState: preparation.completed.doc_timestamp_state,
+          finalPdfSha256: preparation.completed.final_pdf_sha256,
+        });
+        if (isPdfFlow) void finishSubmissionRef.current(serverUrl, preparation.completed.submitter_id);
         return;
       }
 
-      setReviewPdf(pdf);
-      setReviewDigest(digest);
-      await openReview(pdf);
+      preparedCeremony.current = preparation.ceremony;
+      setReviewPdf(preparation.ceremony.document);
+      setReviewDigest(preparation.ceremony.prepared.digest);
+      await openReview(preparation.ceremony.document);
     } catch (err) {
-      if (err instanceof QesApiError || err instanceof SigningOriginError) {
+      if (err instanceof QesApiError || err instanceof SigningOriginError
+        || err instanceof CeremonyError || err instanceof VaultError) {
         setError(err.code);
       } else {
         setError('network');
@@ -410,9 +433,12 @@ export default function SignScreen() {
     } finally {
       setLoadingDocument(false);
     }
-  }, [token, serverUrl, loadingDocument, qesApi, openReview]);
+  }, [token, serverUrl, loadingDocument, qesApi, openReview, session?.level_required, isPdfFlow]);
 
   const cancelReview = useCallback(async () => {
+    const ceremony = preparedCeremony.current;
+    preparedCeremony.current = null;
+    await ceremony?.finalize().catch(() => {});
     if (token && serverUrl) {
       await qesApi(serverUrl).postAbort('user_cancelled').catch(() => {});
     }
@@ -423,7 +449,8 @@ export default function SignScreen() {
   }, [token, serverUrl, qesApi]);
 
   const sign = useCallback(async () => {
-    if (!token || !serverUrl || !reviewPdf || signingLock.current) {
+    const ceremony = preparedCeremony.current;
+    if (!token || !serverUrl || !ceremony || signingLock.current) {
       return;
     }
 
@@ -434,22 +461,7 @@ export default function SignScreen() {
     setErrorDetail(null);
 
     try {
-      const vault = platformVaultDeps();
-      const result = await runSigningCeremony(
-        {
-          api: qesApi(serverUrl),
-          vault,
-          reviewedDocument: reviewPdf,
-          reviewedDigest: reviewDigest ?? undefined,
-          configuration: {
-            hasKey: await hasCertificate(vault),
-            hasReader: false,
-            readerReady: false,
-          },
-          appVersion: appVersion(),
-        },
-        session?.level_required ?? 'ades',
-      );
+      const result = await signCeremony(qesApi(serverUrl), ceremony);
 
       if (currentGeneration !== generation.current) return;
 
@@ -475,10 +487,12 @@ export default function SignScreen() {
 
       setErrorDetail(err instanceof Error ? err.message : null);
     } finally {
+      await ceremony.finalize().catch(() => {});
+      preparedCeremony.current = null;
       signingLock.current = false;
       setSigning(false);
     }
-  }, [token, server, serverUrl, session, reviewPdf, reviewDigest, isPdfFlow, finishSubmission]);
+  }, [token, server, serverUrl, session, qesApi, isPdfFlow, finishSubmission]);
 
   // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
   const finalPdf = useCallback(async () => {
@@ -777,6 +791,8 @@ export default function SignScreen() {
             </>
           ) : terminal ? (
             <PrimaryButton title="Zavřít" onPress={leaveSignScreen} />
+          ) : needsSetup ? (
+            <PrimaryButton title="Nastavit podepisování" onPress={() => router.push('/setup')} />
           ) : (
             <PrimaryButton
               title={loadingDocument ? 'Načítám dokument…' : 'Zobrazit dokument'}

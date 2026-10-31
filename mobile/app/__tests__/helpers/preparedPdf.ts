@@ -69,6 +69,7 @@ export function preparedPdf(algorithm = 'sha256') {
       qc_statements: material.qcStatements,
       key_type: material.keyType,
       key_size: material.keySize,
+      email: null,
     },
   };
   return { bytes, prepared, digest, certificateDer, identity };

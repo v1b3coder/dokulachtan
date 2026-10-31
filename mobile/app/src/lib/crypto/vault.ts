@@ -50,6 +50,10 @@ export interface StoredCertificateInfo {
   level: QesLevel;
   keyType: string;
   keySize: number;
+  // Veřejný cert a chain leží mimo šifrovaný payload: appka je posílá
+  // serveru před odemčením klíče (TBS s pečetí z certu).
+  certificatePem: string;
+  chainPems: string[];
 }
 
 interface StoredPayload {
@@ -61,8 +65,6 @@ interface StoredPayload {
 
 interface KeyMaterial {
   privateKeyPem: string;
-  certificatePem: string;
-  chainPems: string[];
 }
 
 const VAULT_KEY = 'cz.dokulachtan.signer.vault';
@@ -232,7 +234,8 @@ function aadFor(payload: StoredPayload): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(payload.info));
 }
 
-// Import: dešifruje PKCS#12 heslem a klíčový materiál přešifruje vault klíčem.
+// Import: dešifruje PKCS#12 heslem; veřejný cert a chain uloží nešifrovaně
+// (posílají se serveru před odemčením klíče), privátní klíč přešifruje vault klíčem.
 export async function importCertificate(
   deps: VaultDeps,
   p12Bytes: Uint8Array,
@@ -260,11 +263,7 @@ export async function importCertificate(
 
   const iv = deps.crypto.randomBytes(IV_LENGTH);
   const plaintext = new TextEncoder().encode(
-    JSON.stringify({
-      privateKeyPem: parsed.privateKeyPem,
-      certificatePem: parsed.certificatePem,
-      chainPems: parsed.chainPems,
-    }),
+    JSON.stringify({ privateKeyPem: parsed.privateKeyPem }),
   );
 
   const info: StoredCertificateInfo = {
@@ -277,6 +276,8 @@ export async function importCertificate(
     level: parsed.level,
     keyType: parsed.keyType,
     keySize: parsed.keySize,
+    certificatePem: parsed.certificatePem,
+    chainPems: parsed.chainPems,
   };
 
   const aad = new TextEncoder().encode(JSON.stringify(info));
@@ -300,11 +301,11 @@ export async function importCertificate(
   return info;
 }
 
-// Podpis: biometrie → odemčení vault klíče → dešifrování klíčového materiálu.
+// Podpis: biometrie → odemčení vault klíče → dešifrování privátního klíče.
 export async function unlockCertificate(
   deps: VaultDeps,
   reason: string,
-): Promise<{ privateKeyPem: string; certificatePem: string; chainPems: string[]; info: StoredCertificateInfo }> {
+): Promise<{ privateKeyPem: string; info: StoredCertificateInfo }> {
   const payload = await readStoredPayload(deps);
 
   if (!payload) {
@@ -332,7 +333,7 @@ export async function unlockCertificate(
   );
   const material = parseKeyMaterial(plaintext);
 
-  return { ...material, info: payload.info };
+  return { privateKeyPem: material.privateKeyPem, info: payload.info };
 }
 
 function parseKeyMaterial(plaintext: Uint8Array): KeyMaterial {

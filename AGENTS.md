@@ -15,8 +15,9 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
 1. **Jen self-custody**: žádný remote QTSP, OAuth ani CSC. Klíč v čipu (A) nebo v telefonu (B).
 2. **B je hlavní cesta**, A je doplňková pro QES a musí být client-side (čtečka u uživatele).
 3. **Vše ve forku**, žádný sidecar: jedna aplikace, jedna evidence, jeden audit.
-4. **Dvoukrokový protokol**: `GET /qes/sessions/:token` → `POST …/certificate` (cert → `data_to_sign`)
-   → `POST …/complete` (raw signatura). Server cert podepisujícího předem nezná.
+4. **Dvoukrokový protokol**: `GET /qes/sessions/:token` → `POST …/certificate` (cert → TBS s pečetí
+   z certu → `data_to_sign`) → `GET …/document` (kontrola) → `POST …/complete` (raw signatura).
+   Cert je veřejný, posílá se před kontrolou; klíč se odemyká až po ní.
 5. Podepisují se **podepsané atributy CMS**, ne digest dokumentu. **LTV patří do DSS**, ne do CMS
    (HexaPDF ho neumí, pyHanko unsigned CMS atributy nečte).
 6. **Pečeť DocuSealu se přidává inkrementálně** až po podpisu appky; podpis appky zůstává INTACT.
@@ -29,11 +30,14 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
 11. **Varianta A = MOI Podpisové SDK** v appce, ne PKCS#11 na serveru.
 12. **Dev/test na SQLite**, Postgres 18 jen jako parita s upstream CI.
 13. **České defaulty jsou ve forku** (`Qes::Config::DEFAULTS`), ENV je jen override.
+14. **Pečeť nese identitu z certifikátu** (CN + první SAN e-mail), ne submittera; `complete` ověří
+    shodu (`stamp_mismatch`).
 
 ## Nepřekročitelná pravidla
 
 - **Klíč nikdy neopustí telefon/čip**; server vidí jen hash a podpis.
 - **AdES se nikdy nesmí vydávat za QES** (kontrola QCStatements `QcSSCD`).
+- **Stampa se kreslí z certifikátu, ne ze submittera**; `complete` po podpisu ověří shodu.
 - **Tajemství** (SMTP, klíče) jen přes `fly secrets` / `.env` (gitignored), nikdy do repa.
 - **„Produkce“ = privátní instance uživatele** (dnes Fly app `dokulachtan`), ne centrální služba ani
   konkrétní URL; `RAILS_ENV=production` je jen prostředí Rails. Proti produkční instanci nic netestuj.

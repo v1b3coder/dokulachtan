@@ -217,12 +217,13 @@ Sender        DocuSeal (fork)        Appka (Expo)         Signer
 6. **Předání do appky.** Deep link `dokulachtan://sign?token=…&server=<origin>` (na desktopu QR). Appka token
    vymění za payload: `GET /qes/sessions/:token` → `{document_name, signer_name, hash_algorithm,
    level_required, expires_at, server_url}`.
-7. **Potvrzení v appce.** Appka zobrazí: název dokumentu, kdo podepisuje, jaký certifikát se použije,
-   a vyžádá biometrii (B) / QPIN (A).
-8. **Podpis.** Appka pošle certifikát (`POST /qes/sessions/:token/certificate`); server postaví TBS PDF
-   s rezervou podle CRL podepisujícího a spočítá `document_digest`, appka dostane `data_to_sign`;
-   podepíše ho klíčem z úložiště (`node-forge`, PKCS#1 v1.5 / MOI SDK `signData`)
-   a pošle `POST /qes/sessions/:token/complete` s raw signaturou.
+7. **Příprava a kontrola.** Appka pošle veřejný certifikát (`POST /qes/sessions/:token/certificate`);
+   server ověří cert, postaví TBS s pečetí z certifikátu (CN + první SAN e-mail) a vrátí `data_to_sign`.
+   Appka stáhne TBS (`GET /document`), zobrazí název dokumentu, kdo podepisuje a jaký certifikát,
+   a uživatel potvrdí. **Klíč se odemyká až po kontrole.**
+8. **Podpis.** Po biometrii (B) / QPIN (A) appka podepíše `data_to_sign` klíčem z úložiště
+   (`node-forge`, PKCS#1 v1.5 / MOI SDK `signData`) a pošle `POST /qes/sessions/:token/complete`
+   s raw signaturou.
 9. **Vložení a validace.** Server:
    - ověří raw signaturu proti certifikátu (kryptograficky),
    - sestaví finální CMS (raw signatura do `SignerInfo`, TSA token do unsigned attrs; LTV jde do DSS),

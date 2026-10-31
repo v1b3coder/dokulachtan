@@ -29,6 +29,7 @@ export interface QesCertificateInfo {
   qc_statements: string[];
   key_type: string;
   key_size: number;
+  email: string | null;
 }
 
 export interface QesCertificatePayload {

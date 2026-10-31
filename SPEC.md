@@ -373,12 +373,12 @@ Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 session_
 
 ### 5.1a `GET /qes/sessions/:token/document` — nepodepsaný TBS pro kontrolu
 
-Server **MUSÍ** vrátit **nepodepsaný TBS** (PDF s prázdnou rezervou `/Contents`) **před** přijetím
-certifikátu, aby appka mohla uživateli zobrazit přesně ty bajty, které se budou podepisovat. TBS se staví
-při prvním volání (nebo při vytvoření session) s pevnou rezervou `QES_SIGNATURE_RESERVE` (default 64 KB),
-nezávislou na certifikátu; `POST /certificate` už TBS **NEPŘESTAVUJE**.
+Server **MUSÍ** vrátit **nepodepsaný TBS** (PDF s prázdnou rezervou `/Contents`) **až po** přijetí
+certifikátu (`POST /certificate`): viditelná pečeť nese CN a první SAN e-mail z certifikátu, takže TBS bez
+certifikátu neexistuje. TBS se staví při `POST /certificate` s pevnou rezervou `QES_SIGNATURE_RESERVE`
+(default 64 KB), nezávislou na certifikátu; `GET /document` TBS **NEPŘESTAVUJE**.
 
-- Stav: `awaiting_app`, `app_opened`, `awaiting_signature`.
+- Stav: jen `awaiting_signature`.
 - Odpověď: `application/pdf` (`Cache-Control: no-store`), hlavička `X-QES-Protocol: 1`.
 - `GET /document` **MUSÍ** prodloužit `expires_at` na `review_ttl` (default 15 min), aby dlouhá kontrola
   neprošla expirací.
@@ -386,7 +386,7 @@ nezávislou na certifikátu; `POST /certificate` už TBS **NEPŘESTAVUJE**.
   (default 1 h); po stropu vrací `410 expired_token`, i když je `expires_at` v budoucnosti. Bez stropu
   drží klient s platným tokenem session naživo libovolně dlouho (#23.4).
 - `POST /certificate` **MUSÍ** ověřit, že se hodnoty pole od přípravy TBS nezměnily (`values_changed`).
-- Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 wrong_state`,
+- Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 wrong_state` (i před certifikátem),
   `409 document_missing`, `422 values_changed`.
 
 ### 5.2 `POST /qes/sessions/:token/certificate` — certifikát a podepsané atributy
@@ -409,7 +409,10 @@ Server **MUSÍ** ověřit:
 3. `key_location == "card"` → certifikát **MUSÍ** mít `QcSSCD`; `key_location == "phone_keystore"` → certifikát
    **NESMÍ** tvrdit `QcSSCD` (jinak `422 level_mismatch`),
 4. `level_required == "qes"` → certifikát **MUSÍ** mít `QcSSCD` (jinak `422 qes_required_qscd`),
-5. `level_required == "ades"` → stačí `QcCompliance` (bez něj `422 not_qualified`).
+5. `level_required == "ades"` → stačí `QcCompliance` (bez něj `422 not_qualified`),
+6. TBS se staví **až z ověřeného certifikátu**; viditelná pečeť nese CN a první SAN e-mail. Identita
+   pečeti se uloží do metadat TBS (`qes_stamp_identity`) a `complete` **MUSÍ** ověřit, že sedí s certifikátem
+   podpisu (`422 stamp_mismatch`); jiný cert v `awaiting_signature` je `409 wrong_state`.
 
 Odmítnutý certifikát **NEMĚNÍ** stav session (zůstává `app_opened`, uživatel může poslat jiný certifikát);
 do session se zapíše jen `failure_code` pro diagnostiku. Volání je přípustné z `awaiting_app` i `app_opened`
@@ -455,6 +458,7 @@ Request:
 ```
 
 Server **MUSÍ**:
+0. ověřit, že `qes_stamp_identity` v TBS sedí s certifikátem podpisu (`422 stamp_mismatch`),
 1. ověřit `signature` proti `certificate.public_key` a `signed_attrs_der`
    (`OpenSSL::PKey#verify` s `SHA256`; ECDSA raw r||s),
 2. sestavit finální CMS (raw signatura do `SignerInfo`, TSA token do unsigned attrs; LTV jde do DSS, § 7.4),
@@ -547,6 +551,7 @@ App                                   Server
 | 422 | `signature_invalid` | signatura neodpovídá | retry podpisu |
 | 422 | `completion_failed` | submission po podpisu nejde dokončit | znovu načíst stav |
 | 422 | `signing_context_mismatch` | podepsané atributy fáze 2 se liší od fáze 1 | znovu načíst stav |
+| 422 | `stamp_mismatch` | pečeť v TBS neodpovídá certifikátu podpisu | „Vyžádejte nový odkaz" |
 | 422 | `not_trusted` | certifikát nevede řetězem k trust rootu | „Použijte kvalifikovaný certifikát (I.CA/PostSignum)" |
 | 422 | `revoked` | certifikát je v CRL revokovaný | „Certifikát byl revokován" |
 | 429 | `rate_limited` | příliš pokusů | zpožděný retry |
@@ -1077,13 +1082,14 @@ odkazy, mazání oddělené a s potvrzením.
 
 0. Automatická volba podepisujícího dle § 9.8 (bez ptaní; dle `level_required`); když není ani klíč, ani čtečka, spustí se S10 místo S4.
 1. Deep link → S4 (`GET /qes/sessions/:token`).
-2. **Kontrola:** `GET /qes/sessions/:token/document` → nepodepsaný TBS; appka ho otevře
-   a uživatel potvrdí. **Žádný klíč, žádná biometrie, žádný `POST /certificate`.**
-3. Biometrie (S5) → odemčení vault klíče (`expo-secure-store`) → dešifrování klíčového materiálu
-   v paměti. **Heslo k PKCS#12 se při podpisu nevyžaduje** (jen při importu, § 9.5).
-4. `POST /certificate` s certifikátem a **řetězem** z PKCS#12 → `data_to_sign`; appka ověří
-   `messageDigest`, `signingCertificateV2`, `signingTime` a `certificate_info` proti reviewed TBS
+2. **Příprava:** veřejný certifikát + řetěz z PKCS#12 → `POST /certificate`; server ověří cert,
+   postaví TBS s pečetí z certifikátu (CN + první SAN e-mail) a vrátí `data_to_sign`.
+   **Žádný klíč, žádná biometrie.**
+3. **Kontrola:** `GET /document` → nepodepsaný TBS s pečetí z certifikátu; appka ho otevře a uživatel
+   potvrdí. Ověří `messageDigest`, `signingCertificateV2`, `signingTime` a `certificate_info` proti TBS
    (§ 5.1a); při neshodě `POST /abort` a konec.
+4. Biometrie (S5) → odemčení vault klíče (`expo-secure-store`) → dešifrování privátního klíče
+   v paměti. **Heslo k PKCS#12 se při podpisu nevyžaduje** (jen při importu, § 9.5).
 5. Podpis: `node-forge` `privateKey.sign(forge.md.sha256.create().update(data_to_sign))`
    (`RSASSA-PKCS1-V1_5`, SHA-256; `pki.rsa.sign` v node-forge neexistuje) → raw signatura (256/384/512 B).
 6. `POST /complete` → S6; appka porovná `completed.document_digest` s reviewed digestem.
@@ -1102,8 +1108,9 @@ odkazy, mazání oddělené a s potvrzením.
    `Feitian-v2.0.2-release.aar`, `AirID-v2.0.0-release.aar`, `USB-v1.0.3-release.aar`,
    `AirIdDriverAndroid-2.0.3-GA.aar`, `com.aheaditec:ccid:0.3.2`).
 3. S9: `ApduProvider.initializeSession` → `getContainerList` → výběr kontejneru s kvalifikovaným certem
-   → `getCertificate` → kontrola QCStatements (QcCompliance; QcSSCD ⇒ QES).
-4. `POST /certificate` s certifikátem a `key_location = "card"` → `data_to_sign`.
+   → `getCertificate` → kontrola QCStatements (QcCompliance; QcSSCD ⇒ QES). Cert je veřejný, čte se před kontrolou.
+4. `POST /certificate` s certifikátem a `key_location = "card"` → server postaví TBS s pečetí z certu
+   → `data_to_sign`; `GET /document` → kontrola TBS uživatelem.
 5. `provider.signData(container, data_to_sign, AlgorithmID.RSA_SHA256_PKCS1_PADDING, callback)`;
    SDK si vyžádá **QPIN** (kvalifikovaný podpis) nebo PIN (ostatní) — zadává uživatel v dialogu SDK.
 6. `POST /complete` → S6; `provider.finalizeSession` (reset stavu karty).
@@ -1316,6 +1323,7 @@ Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO
 | Záměna dokumentu (MITM) | `data_to_sign` obsahuje `message-digest`; server po podpisu ověří signaturu i digest |
 | Appka pošle cizí signaturu | ověření `OpenSSL::PKey#verify` proti certifikátu a `signed_attrs_der` |
 | Appka pošle cizí/nekvalifikovaný certifikát | kontrola `key_location` × `QcSSCD`, platnost, `keyUsage` |
+| Appka podsuní jiný cert, než podepsala | `complete` ověří `qes_stamp_identity` z TBS proti certifikátu podpisu (`stamp_mismatch`) |
 | Replay tokenu | jednorázové použití (`state`); opakované volání → `410 used_token` |
 | DoS na endpointy | rate limiting (§ 5), max 1 aktivní session na submittera |
 | Únik klíče z telefonu | AES-GCM + SecureStore + biometrie; klíč nikdy neopustí zařízení |

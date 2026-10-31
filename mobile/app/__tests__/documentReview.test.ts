@@ -1,6 +1,6 @@
 import React from 'react';
 import { QesApi } from '../src/lib/api';
-import { runSigningCeremony } from '../src/lib/ceremony';
+import { prepareCeremony, signCeremony, type PreparedCeremony } from '../src/lib/ceremony';
 import { previewPdf } from '../src/lib/pdfShare';
 import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
@@ -28,7 +28,7 @@ jest.mock('../src/lib/trustedServers', () => ({
   resolveWorkflowOrigin: async () => ({ origin: 'https://server', trusted: true }),
 }));
 jest.mock('../src/lib/ceremony', () => ({
-  ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
+  ...jest.requireActual('../src/lib/ceremony'), prepareCeremony: jest.fn(), signCeremony: jest.fn(),
 }));
 jest.mock('../src/lib/crypto/vault', () => ({
   ...jest.requireActual('../src/lib/crypto/vault'),
@@ -37,6 +37,19 @@ jest.mock('../src/lib/crypto/vault', () => ({
 
 const fixture = preparedPdf('sha256');
 const bytes = fixture.bytes;
+const preparedDocument = {
+  dataToSign: Uint8Array.from(Buffer.from(fixture.prepared.data_to_sign, 'base64')),
+  digest: fixture.prepared.document_digest,
+  byteRange: fixture.prepared.byte_range,
+};
+const ceremony: PreparedCeremony = {
+  document: bytes,
+  prepared: preparedDocument,
+  identity: fixture.identity,
+  keyLocation: 'phone_keystore',
+  sign: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+  finalize: jest.fn().mockResolvedValue(undefined),
+};
 
 beforeEach(() => {
   jest.spyOn(QesApi.prototype, 'getSession').mockResolvedValue({
@@ -46,6 +59,14 @@ beforeEach(() => {
   jest.spyOn(QesApi.prototype, 'getDocument').mockResolvedValue(bytes);
   jest.spyOn(QesApi.prototype, 'postAbort').mockResolvedValue({ state: 'cancelled' });
   jest.mocked(previewPdf).mockResolvedValue();
+  jest.mocked(prepareCeremony).mockResolvedValue({ kind: 'prepared', ceremony });
+  jest.mocked(signCeremony).mockResolvedValue({
+    completed: {
+      state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest',
+      signed_pdf_sha256: 'hash',
+    },
+    level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1, documentDigest: 'digest',
+  });
 });
 
 afterEach(() => {
@@ -54,29 +75,20 @@ afterEach(() => {
 });
 
 it('reviews the unsigned document before unlocking the key and signs the same bytes', async () => {
-  jest.mocked(runSigningCeremony).mockResolvedValue({
-    completed: {
-      state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest',
-      signed_pdf_sha256: 'hash',
-    },
-    level: 'ades', keyLocation: 'phone_keystore', biometricPrompts: 1, documentDigest: 'digest',
-  });
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
 
   await act(async () => { await screen.root.findByProps({ title: 'Zobrazit dokument' }).props.onPress(); });
 
-  expect(QesApi.prototype.getDocument).toHaveBeenCalledTimes(1);
+  expect(prepareCeremony).toHaveBeenCalledTimes(1);
   expect(previewPdf).toHaveBeenCalledWith(bytes);
-  expect(runSigningCeremony).not.toHaveBeenCalled();
+  expect(signCeremony).not.toHaveBeenCalled();
   expect(screen.root.findByProps({ title: 'Podepsat dokument' }).props.disabled).toBe(false);
 
   await act(async () => { await screen.root.findByProps({ title: 'Podepsat dokument' }).props.onPress(); });
 
-  expect(runSigningCeremony).toHaveBeenCalledWith(
-    expect.objectContaining({ reviewedDocument: bytes }),
-    'ades',
-  );
+  expect(signCeremony).toHaveBeenCalledWith(expect.anything(), ceremony);
+  expect(ceremony.finalize).toHaveBeenCalledTimes(1);
   await act(async () => screen.unmount());
 });
 
@@ -88,6 +100,7 @@ it('cancels the session without unlocking the key', async () => {
   await act(async () => { await screen.root.findByProps({ title: 'Zrušit' }).props.onPress(); });
 
   expect(QesApi.prototype.postAbort).toHaveBeenCalledWith('user_cancelled');
-  expect(runSigningCeremony).not.toHaveBeenCalled();
+  expect(ceremony.finalize).toHaveBeenCalledTimes(1);
+  expect(signCeremony).not.toHaveBeenCalled();
   await act(async () => screen.unmount());
 });

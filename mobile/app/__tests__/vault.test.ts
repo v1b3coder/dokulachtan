@@ -135,8 +135,8 @@ describe('vault', () => {
     expect(storagePrompts).toEqual(['sign']);
     expect(biometricPrompts).toEqual([]);
     expect(material.privateKeyPem).toContain('BEGIN RSA PRIVATE KEY');
-    expect(material.certificatePem).toContain('BEGIN CERTIFICATE');
-    expect(material.chainPems.length).toBeGreaterThan(0);
+    expect(material.info.certificatePem).toContain('BEGIN CERTIFICATE');
+    expect(material.info.chainPems.length).toBeGreaterThan(0);
   });
 
   it('refuses to unlock when biometrics are unavailable', async () => {

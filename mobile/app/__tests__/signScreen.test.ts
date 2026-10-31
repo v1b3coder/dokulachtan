@@ -1,7 +1,6 @@
 import React from 'react';
 import { QesApi, QesApiError } from '../src/lib/api';
-import { PdfApi } from '../src/lib/pdfApi';
-import { CeremonyError, runSigningCeremony } from '../src/lib/ceremony';
+import { CeremonyError, prepareCeremony, signCeremony, type PreparedCeremony } from '../src/lib/ceremony';
 import { downloadPdf, previewPdf, savePdf, sharePdf } from '../src/lib/pdfShare';
 import { sha256Hex } from '../src/lib/preparedDocument';
 import { resolveWorkflowOrigin, trustServer } from '../src/lib/trustedServers';
@@ -40,7 +39,7 @@ jest.mock('../src/lib/pdfApi', () => ({
   loadPdfApiSettings: async () => ({ serverUrl: 'https://server', apiToken: 'token' }),
 }));
 jest.mock('../src/lib/ceremony', () => ({
-  ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
+  ...jest.requireActual('../src/lib/ceremony'), prepareCeremony: jest.fn(), signCeremony: jest.fn(),
 }));
 jest.mock('../src/lib/crypto/vault', () => ({
   ...jest.requireActual('../src/lib/crypto/vault'),
@@ -48,6 +47,19 @@ jest.mock('../src/lib/crypto/vault', () => ({
 }));
 
 const fixture = preparedPdf('sha256');
+const preparedDocument = {
+  dataToSign: Uint8Array.from(Buffer.from(fixture.prepared.data_to_sign, 'base64')),
+  digest: fixture.prepared.document_digest,
+  byteRange: fixture.prepared.byte_range,
+};
+const ceremony: PreparedCeremony = {
+  document: fixture.bytes,
+  prepared: preparedDocument,
+  identity: fixture.identity,
+  keyLocation: 'phone_keystore',
+  sign: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+  finalize: jest.fn().mockResolvedValue(undefined),
+};
 
 beforeEach(() => {
   mockParams = { token: 'tok', flow: 'pdf' };
@@ -60,7 +72,8 @@ beforeEach(() => {
     uri: 'file:///cache/contract-signed.pdf',
     bytes: async () => fixture.bytes,
   } as never);
-  jest.mocked(runSigningCeremony).mockResolvedValue({
+  jest.mocked(prepareCeremony).mockResolvedValue({ kind: 'prepared', ceremony });
+  jest.mocked(signCeremony).mockResolvedValue({
     completed: {
       state: 'completed', session_id: 1, submitter_id: 42, level: 'ades',
       document_digest: fixture.prepared.document_digest, signed_pdf_sha256: 'hash',
@@ -70,22 +83,25 @@ beforeEach(() => {
   });
 });
 
-async function signOnScreen(screen: ReturnType<typeof create>) {
+async function prepareOnScreen(screen: ReturnType<typeof create>) {
   await act(async () => { await screen.root.findByProps({ title: 'Zobrazit dokument' }).props.onPress(); });
+}
+
+async function signOnScreen(screen: ReturnType<typeof create>) {
+  await prepareOnScreen(screen);
   await act(async () => { await screen.root.findByProps({ title: 'Podepsat dokument' }).props.onPress(); });
 }
 afterEach(() => { jest.restoreAllMocks(); jest.clearAllMocks(); });
 
 it('aborts the session when the user cancels before loading the document', async () => {
   const abort = jest.spyOn(QesApi.prototype, 'postAbort').mockResolvedValue({ state: 'cancelled' });
-  const getDocument = jest.mocked(QesApi.prototype.getDocument);
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
 
   await act(async () => { await screen.root.findByProps({ title: 'Zrušit' }).props.onPress(); });
 
   expect(abort).toHaveBeenCalledWith('user_cancelled');
-  expect(getDocument).not.toHaveBeenCalled();
+  expect(prepareCeremony).not.toHaveBeenCalled();
   await act(async () => screen.unmount());
 });
 
@@ -102,11 +118,12 @@ it('offers saving retry after a signature and retries only submission completion
   expect(screen.root.findByProps({ title: 'Stáhnout' })).toBeTruthy();
   expect(complete).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenLastCalledWith();
-  expect(runSigningCeremony).toHaveBeenCalledTimes(1);
-  expect(runSigningCeremony).toHaveBeenCalledWith(
+  expect(prepareCeremony).toHaveBeenCalledTimes(1);
+  expect(prepareCeremony).toHaveBeenCalledWith(
     expect.objectContaining({ configuration: expect.objectContaining({ hasKey: true }) }),
     'ades',
   );
+  expect(signCeremony).toHaveBeenCalledTimes(1);
   await act(async () => screen.unmount());
 });
 
@@ -124,7 +141,7 @@ it('does not offer a completion retry when the submission is no longer active', 
 });
 
 it('offers check again when the server is still completing', async () => {
-  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError('server_pending'));
+  jest.mocked(signCeremony).mockRejectedValueOnce(new CeremonyError('server_pending'));
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
   await signOnScreen(screen);
@@ -146,10 +163,10 @@ it.each([
   'not_trusted', 'revoked', 'qes_required_qscd', 'level_mismatch',
   'not_qualified', 'unsupported_key', 'invalid_certificate',
 ])('shows a terminal error without setup for %s', async (code) => {
-  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError(code));
+  jest.mocked(prepareCeremony).mockRejectedValueOnce(new CeremonyError(code));
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
-  await signOnScreen(screen);
+  await prepareOnScreen(screen);
 
   expect(screen.root.findByProps({ title: 'Zavřít' })).toBeTruthy();
   expect(screen.root.findAllByProps({ title: 'Nastavit podepisování' })).toHaveLength(0);
@@ -160,10 +177,10 @@ it.each([
   'certificate_missing', 'certificate_expired', 'vault_decrypt_failed',
   'key_invalidated', 'no_signer', 'needs_qes_key', 'unsupported_certificate',
 ])('offers setup for a recoverable %s error', async (code) => {
-  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError(code));
+  jest.mocked(prepareCeremony).mockRejectedValueOnce(new CeremonyError(code));
   let screen: ReturnType<typeof create>;
   await act(async () => { screen = create(React.createElement(SignScreen)); });
-  await signOnScreen(screen);
+  await prepareOnScreen(screen);
 
   expect(screen.root.findByProps({ title: 'Nastavit podepisování' })).toBeTruthy();
   await act(async () => screen.unmount());
@@ -179,7 +196,7 @@ it('opens a completed link directly as success and finishes only saving', async 
   await act(async () => { screen = create(React.createElement(SignScreen)); });
   expect(screen.root.findByProps({ title: 'Stáhnout' })).toBeTruthy();
   expect(complete).toHaveBeenCalledTimes(1);
-  expect(runSigningCeremony).not.toHaveBeenCalled();
+  expect(prepareCeremony).not.toHaveBeenCalled();
   await act(async () => screen.unmount());
 });
 
@@ -210,7 +227,8 @@ it.each([false, true])('recovers an already completed submission (reopen: %s) an
   await act(async () => { await screen.root.findByProps({ title: 'Sdílet' }).props.onPress(); });
   expect(sharePdf).toHaveBeenCalledWith(expect.objectContaining({ uri: 'file:///cache/contract-signed.pdf' }));
   expect(complete).toHaveBeenCalledTimes(reopen ? 1 : 2);
-  expect(runSigningCeremony).toHaveBeenCalledTimes(reopen ? 0 : 1);
+  expect(prepareCeremony).toHaveBeenCalledTimes(reopen ? 0 : 1);
+  expect(signCeremony).toHaveBeenCalledTimes(reopen ? 0 : 1);
   expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`)).toEqual([
     'GET https://server/api/submitters/42',
   ]);
@@ -278,6 +296,6 @@ it('rejects a workflow server that claims a different origin in the payload', as
 
   expect(JSON.stringify(screen.toJSON())).toContain('Odkaz vede na jiný server');
   expect(screen.root.findAllByProps({ title: 'Zobrazit dokument' })).toHaveLength(0);
-  expect(QesApi.prototype.getDocument).not.toHaveBeenCalled();
+  expect(prepareCeremony).not.toHaveBeenCalled();
   await act(async () => screen.unmount());
 });
