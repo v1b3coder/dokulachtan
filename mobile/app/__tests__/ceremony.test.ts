@@ -26,6 +26,7 @@ function setup(algorithm = 'sha256') {
     vault: {} as VaultDeps,
     reviewedDocument: fixture.bytes,
     reviewedDigest: fixture.prepared.document_digest,
+    configuration: { hasKey: true, hasReader: false, readerReady: false },
   };
   return { ...fixture, api, deps };
 }
@@ -33,6 +34,25 @@ function setup(algorithm = 'sha256') {
 beforeEach(() => {
   jest.clearAllMocks();
   unlock.mockResolvedValue({ ...material, info: material });
+});
+
+it('does not pretend a key exists when configuration says there is none', async () => {
+  const { deps } = setup();
+  deps.configuration = { hasKey: false, hasReader: false, readerReady: false };
+
+  await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'no_signer' });
+  expect(unlock).not.toHaveBeenCalled();
+});
+
+it('does not try the vault for qes without a reader', async () => {
+  const { deps, api } = setup();
+  deps.configuration = { hasKey: true, hasReader: false, readerReady: false };
+  api.getSession.mockResolvedValueOnce({
+    state: 'app_opened', level_required: 'qes', hash_algorithm: 'sha256',
+  });
+
+  await expect(runSigningCeremony(deps, 'qes')).rejects.toMatchObject({ code: 'needs_qes_key' });
+  expect(unlock).not.toHaveBeenCalled();
 });
 
 it.each(['sha256', 'sha384', 'sha512'])('signs verified PDF attributes with %s after one unlock', async (algorithm) => {

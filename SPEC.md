@@ -1203,6 +1203,10 @@ Pravidla:
 - **NESMÍ** se stát, že appka pošle certifikát, který neodpovídá `level_required` (zbytečná chyba
   `qes_required_qscd`/`level_mismatch`).
 
+**Stav implementace (2026-10-31):** volba podepisujícího je v appce hotová jen pro klíč;
+zapojení čtečky je odloženo do dodání reálného hardware. `StubCardSigner` vrací `reader_not_found`,
+fake card mód je jen v e2e skriptu (`scripts/qes-app-e2e.ts`); QES v appce není dosažitelné.
+
 ### 9.9 Přímý podpis PDF — tok (S11–S13)
 
 0. S11 ze **share sheetu** (Android, docs/15 § 6): `ACTION_SEND` `application/pdf` → appka otevře S11 s už vybraným PDF
@@ -1506,7 +1510,8 @@ jsou dostupná; pečeť DocuSealu zůstává `UNTRUSTED` (test trust list neobsa
   `p12.test.ts` (import odmítne PKCS#12 s `QcSSCD`), `api.ts` (chybové stavy).
 - **Bez hesla při podpisu**: test, že podpis vyžaduje jen biometrii (žádné zadání hesla k PKCS#12).
 - **Dev fake card**: `EXPO_PUBLIC_QES_FAKE_CARD=1` nahradí `cardSigner` testovacím PKCS#12
-  (stejné rozhraní jako MOI SDK) → test celého A toku bez hardwaru.
+  v e2e skriptu (`scripts/qes-app-e2e.ts`) → test celého A toku bez hardwaru.
+  **Stav 2026-10-31:** zapojení čtečky v appce je odloženo do dodání hardware; QES v appce není dosažitelné.
 - **Manuální (A)**: reálná čtečka + eObčanka — protokol v příloze C (§ 20.1).
 - **Manuální (B)**: import PKCS#12 z iSignum, biometrie, podpis, validace — příloha C (§ 20.2).
 - **Emulátor (Android)**: deep link, síťové chyby, expirace tokenu, chybové obrazovky.

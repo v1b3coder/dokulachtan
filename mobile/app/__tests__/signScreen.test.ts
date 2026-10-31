@@ -42,6 +42,10 @@ jest.mock('../src/lib/pdfApi', () => ({
 jest.mock('../src/lib/ceremony', () => ({
   ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
 }));
+jest.mock('../src/lib/crypto/vault', () => ({
+  ...jest.requireActual('../src/lib/crypto/vault'),
+  hasCertificate: jest.fn().mockResolvedValue(true),
+}));
 
 const fixture = preparedPdf('sha256');
 
@@ -99,6 +103,10 @@ it('offers saving retry after a signature and retries only submission completion
   expect(complete).toHaveBeenCalledTimes(2);
   expect(complete).toHaveBeenLastCalledWith();
   expect(runSigningCeremony).toHaveBeenCalledTimes(1);
+  expect(runSigningCeremony).toHaveBeenCalledWith(
+    expect.objectContaining({ configuration: expect.objectContaining({ hasKey: true }) }),
+    'ades',
+  );
   await act(async () => screen.unmount());
 });
 
@@ -131,6 +139,33 @@ it('offers check again when the server is still completing', async () => {
   await act(async () => { await screen.root.findByProps({ title: 'Zkontrolovat znovu' }).props.onPress(); });
   await act(async () => {});
   expect(screen.root.findByProps({ title: 'Stáhnout' })).toBeTruthy();
+  await act(async () => screen.unmount());
+});
+
+it.each([
+  'not_trusted', 'revoked', 'qes_required_qscd', 'level_mismatch',
+  'not_qualified', 'unsupported_key', 'invalid_certificate',
+])('shows a terminal error without setup for %s', async (code) => {
+  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError(code));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await signOnScreen(screen);
+
+  expect(screen.root.findByProps({ title: 'Zavřít' })).toBeTruthy();
+  expect(screen.root.findAllByProps({ title: 'Nastavit podepisování' })).toHaveLength(0);
+  await act(async () => screen.unmount());
+});
+
+it.each([
+  'certificate_missing', 'certificate_expired', 'vault_decrypt_failed',
+  'key_invalidated', 'no_signer', 'needs_qes_key', 'unsupported_certificate',
+])('offers setup for a recoverable %s error', async (code) => {
+  jest.mocked(runSigningCeremony).mockRejectedValueOnce(new CeremonyError(code));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await signOnScreen(screen);
+
+  expect(screen.root.findByProps({ title: 'Nastavit podepisování' })).toBeTruthy();
   await act(async () => screen.unmount());
 });
 

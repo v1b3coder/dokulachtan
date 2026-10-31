@@ -12,8 +12,8 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | API pro appku (`/qes/sessions/:token`) | hotové (SPEC § 5, `spec/requests/qes_sessions_spec.rb`) |
 | API pro prohlížeč (`/s/:slug/qes_sessions`) | hotové (SPEC § 6); krok `QesStep.vue` po kliknutí rovnou vykreslí QR kód + „Open the app“ (žádná mezistránka) |
 | Hooky do DocuSealu (documents, combined, audit, hodnota pole) | hotové (SPEC § 7.7) |
-| Appka (Expo): vault, podpis, automatická volba podepisujícího | hotové (SPEC § 9, `mobile/app`) |
-| Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); `FakeCardSigner` (test QSCD cert) umí celý A tok |
+| Appka (Expo): vault, podpis, automatická volba podepisujícího | hotové pro klíč (SPEC § 9, `mobile/app`); volba čtečky odložena do dodání hardware |
+| Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); appka ji dnes nezapojuje (QES v appce nedosažitelné). `FakeCardSigner` (test QSCD cert) umí A tok jen v e2e skriptu; zapojení odloženo do dodání hardware |
 | TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkční instanci; v CI/testech prázdné |
 
 ## Konfigurace (ENV)
@@ -208,9 +208,10 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
   předchozího); každá předchozí revize zůstává INTACT. Všechny strany musí podepisovat certifikátem
   (žádné kreslené podpisy v QES šabloně).
 - Pečeť DocuSealu se aplikuje po každé QES session (N podpisů + N pečetí).
-- Varianta A (čip) je client-side přes MOI Podpisové SDK; v této fázi je `StubCardSigner`
-  (vrací `reader_not_found`), fake card mód `EXPO_PUBLIC_QES_FAKE_CARD=1` umí celý A tok
-  s testovacím QSCD certem (`signer-qscd.p12`, server vyžaduje `key_location=card` → QcSSCD).
+- Varianta A (čip) je client-side přes MOI Podpisové SDK; **zapojení v appce je odloženo do dodání reálného hardware**.
+  Dnes je `StubCardSigner` (vrací `reader_not_found`), fake card mód `EXPO_PUBLIC_QES_FAKE_CARD=1`
+  umí A tok jen v e2e skriptu (`scripts/qes-app-e2e.ts`), ne v appce; QES v appce není dosažitelné.
+  Testovací QSCD cert (`signer-qscd.p12`) vyžaduje `key_location=card` → QcSSCD.
 - ECDSA/RSA-PSS mimo v1 (HexaPDF 1.7 CMS umí jen RSA, SPEC § 4.2).
 - Desktop varianta A, push notifikace a hromadné podepisování více dokumentů mimo v1 (SPEC § 17).
 

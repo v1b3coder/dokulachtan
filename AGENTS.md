@@ -87,6 +87,7 @@ Hotovo P0–P8 kromě reálné čtečky (P5 je stub + fake card): QES vrstva, kr
 ověření PDF, appka s vaultem a importem PKCS#12, tiery T0–T3.
 
 Zbývá: reálná čtečka eObčanky (MOI SDK) a kvalifikované časové razítko (nyní DigiCert free).
+Zapojení čtečky v appce je odloženo do dodání hardware; QES v appce je dnes nedosažitelné.
 
 Historie je v gitu. Drž tento soubor kompaktní (do 100 řádků), jen aktuální pravidla, žádná duplikace
 docs ani kódu — linkuj.

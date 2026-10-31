@@ -45,8 +45,9 @@ export default function SetupScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Nastavit podepisování</Text>
       <Text style={styles.muted}>
-        Nejdřív nastavte podepisování: importujte klíč (PKCS#12), nebo nastavte čtečku. Volba
-        podepisujícího je pak automatická dle požadované úrovně.
+        Pro AdES stačí importovaný klíč (PKCS#12). Pro QES je potřeba čtečka s eObčankou;
+        její zapojení v této verzi ještě není hotové, takže QES v aplikaci zatím podepsat nelze.
+        Volba podepisujícího je jinak automatická dle požadované úrovně.
       </Text>
 
       <PrimaryButton title="Importovat klíč (PKCS#12)" onPress={() => router.push('/import')} />

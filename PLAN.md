@@ -249,6 +249,7 @@ Cíl: reálná appka podepíše dokument klíčem z PKCS#12 v telefonu.
       pro AdES klíč → čtečka → wizard); kontrola `level_required` proti lokálnímu certu; wizard nabídne
       import klíče / nastavení čtečky
       → verify: Jest `signer.test.ts` (pět stavů konfigurace × úroveň pole); manuálně S4 → S10 → S4
+      **Stav:** volba klíče hotová; čtečková část odložena do fáze 5 (hardware).
 - [ ] 4.12 Anglické texty (`mobile/app/src/i18n/en.ts`) se stejnými klíči jako příloha D (SPEC § 21)
       → verify: aplikace v `en` zobrazí všechny obrazovky bez chybějícího klíče
 
@@ -261,6 +262,10 @@ submission → deep link → podpis v appce → finální PDF validované pyHank
 ## Phase 5: Expo appka — varianta A (eObčanka)
 
 Cíl: QES z čipu eObčanky přes BLE čtečku.
+
+**Stav 2026-10-31:** zapojení čtečky v appce je odloženo do dodání reálného hardware.
+Dnes `StubCardSigner` vrací `reader_not_found`, fake card mód je jen v e2e skriptu
+(`scripts/qes-app-e2e.ts`); QES v appce není dosažitelné. Kroky 5.1–5.9 platí až po dodání hardware.
 
 - [ ] 5.1 Expo Module `eop-signing-sdk`: `app.plugin.js` kopíruje AAR do `android/libs/`,
       `build.gradle` přidá závislosti (AAR + `spongycastle` + `com.aheaditec:ccid`)

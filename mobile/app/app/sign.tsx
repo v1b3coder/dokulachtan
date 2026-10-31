@@ -8,7 +8,7 @@ import { resolveSigningOrigin, signingOrigin, SigningOriginError } from '../src/
 import { resolveWorkflowOrigin, trustServer, type WorkflowOrigin } from '../src/lib/trustedServers';
 import { QesApi, QesApiError } from '../src/lib/api';
 import { runSigningCeremony, CeremonyError } from '../src/lib/ceremony';
-import { certificateSummary, VaultError, type StoredCertificateInfo } from '../src/lib/crypto/vault';
+import { certificateSummary, hasCertificate, VaultError, type StoredCertificateInfo } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
 import { PdfApi, PdfApiError, loadPdfApiSettings } from '../src/lib/pdfApi';
 import {
@@ -185,7 +185,10 @@ export default function SignScreen() {
     || error === 'expired_token' || error === 'unknown_token'
     || error === 'missing_server' || error === 'failed' || error === 'cancelled'
     || error === 'values_changed' || error === 'document_set_changed'
-    || error === 'signing_context_mismatch' || error === 'ltv_unavailable';
+    || error === 'signing_context_mismatch' || error === 'ltv_unavailable'
+    || error === 'not_trusted' || error === 'revoked' || error === 'qes_required_qscd'
+    || error === 'level_mismatch' || error === 'not_qualified' || error === 'unsupported_key'
+    || error === 'invalid_certificate';
   const pending = error === 'server_pending';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
@@ -431,12 +434,18 @@ export default function SignScreen() {
     setErrorDetail(null);
 
     try {
+      const vault = platformVaultDeps();
       const result = await runSigningCeremony(
         {
           api: qesApi(serverUrl),
-          vault: platformVaultDeps(),
+          vault,
           reviewedDocument: reviewPdf,
           reviewedDigest: reviewDigest ?? undefined,
+          configuration: {
+            hasKey: await hasCertificate(vault),
+            hasReader: false,
+            readerReady: false,
+          },
           appVersion: appVersion(),
         },
         session?.level_required ?? 'ades',
@@ -794,9 +803,7 @@ function needsSetupError(code: string): boolean {
   return code === 'certificate_missing' || code === 'vault_decrypt_failed'
     || code === 'key_invalidated' || code === 'no_signer' || code === 'needs_reader'
     || code === 'needs_qes_key' || code === 'certificate_expired'
-    || code === 'not_trusted' || code === 'revoked' || code === 'unsupported_certificate'
-    || code === 'qes_required_qscd' || code === 'level_mismatch' || code === 'not_qualified'
-    || code === 'unsupported_key' || code === 'invalid_certificate';
+    || code === 'unsupported_certificate';
 }
 
 const styles = StyleSheet.create({

@@ -30,6 +30,10 @@ jest.mock('../src/lib/trustedServers', () => ({
 jest.mock('../src/lib/ceremony', () => ({
   ...jest.requireActual('../src/lib/ceremony'), runSigningCeremony: jest.fn(),
 }));
+jest.mock('../src/lib/crypto/vault', () => ({
+  ...jest.requireActual('../src/lib/crypto/vault'),
+  hasCertificate: jest.fn().mockResolvedValue(true),
+}));
 
 const fixture = preparedPdf('sha256');
 const bytes = fixture.bytes;

@@ -31,7 +31,7 @@ export interface CeremonyDeps {
   reviewedDocument: Uint8Array;
   reviewedDigest?: string;
   cardSigner?: CardSigner;
-  configuration?: SignerConfiguration;
+  configuration: SignerConfiguration;
   // Reálná verze appky z `app.json` (`expo-constants`); e2e harness ji neposílá.
   appVersion?: string;
   app?: QesAppMetadata;
@@ -72,8 +72,7 @@ export async function runSigningCeremony(
     };
   }
   const required = session.level_required ?? levelRequired;
-  const configuration = deps.configuration ?? { hasKey: true, hasReader: false, readerReady: false };
-  const selection = selectSigner(required, configuration);
+  const selection = selectSigner(required, deps.configuration);
 
   if (selection.kind === 'wizard') {
     throw new CeremonyError(selection.reason ?? 'no_signer');

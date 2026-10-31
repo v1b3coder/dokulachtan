@@ -34,12 +34,16 @@ export default function ReaderScreen() {
         Podporované čtečky: ACR 3901 U-S1, bR301 BLE (černá), CT 1100, AirID 2 (+ USB OTG). Komunikace
         probíhá přes MOI Podpisové SDK v aplikaci, klíč zůstává v čipu.
       </Text>
-      <Text style={styles.label}>Režim: {fakeCard ? 'fake card (testovací cert)' : 'reálná čtečka (stub)'}</Text>
+      <Text style={styles.label}>
+        Režim: {fakeCard ? 'fake card (testovací cert)' : 'reálná čtečka (v této verzi nepodporovaná)'}
+      </Text>
 
       {status ? (
         <Text style={styles.error}>
           {status === 'reader_not_found'
-            ? 'Čtečka nenalezena. Spárujte ji v aplikaci eObčanka.'
+            ? fakeCard
+              ? 'Čtečka nenalezena. Spárujte ji v aplikaci eObčanka.'
+              : 'Tato verze aplikace čtečku nepodporuje. Reálné zapojení přijde s hardwarem.'
             : status}
         </Text>
       ) : null}

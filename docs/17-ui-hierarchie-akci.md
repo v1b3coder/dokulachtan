@@ -156,6 +156,9 @@ Testovací certifikát zde **není** — importuje se jen v S2 za oddělovačem 
    prázdné aplikace, existující klíč by přepsal“ (s uloženým klíčem `certificate_present`).
 5. **Terciární** „Zpět“.
 
+**Stav 2026-10-31:** čtečka je v appce jen stub; wizard ji nabízí, ale QES zatím nefunguje.
+Zapojení čtečky je odloženo do dodání reálného hardware.
+
 ### S11/S12 Podepsat PDF
 
 **Před změnou (2026-10-22):** Vybrat PDF (plné) → jméno → úroveň → Pokračovat (plné) → Zrušit (obrys);
@@ -190,6 +193,9 @@ submission + session a přejde na S4), **terciární** „Vybrat jiné PDF“, *
   proti reviewed TBS a podepíše), **terciární** „Zrušit“ (zruší session).
 - **Chyba `certificate_missing` / `no_signer` / `needs_reader` / `needs_qes_key`:**
   **primární** „Nastavit podepisování“ → S10, kontrola dokumentu zůstává viditelná.
+- **Terminální chyby certifikátu** (`not_trusted`, `revoked`, `qes_required_qscd`, `level_mismatch`,
+  `not_qualified`, `unsupported_key`, `invalid_certificate`): **primární „Zavřít“**, žádné S10 —
+  setup je neopraví.
 - **Hotovo:** **primární** „Stáhnout“ (uložit do telefonu), **sekundární** „Sdílet“ (share sheet),
   **terciární** „Zavřít“; po návratu ze share sheetu jdou obě akce znovu.
 - **Neshoda digestu / finálního PDF:** místo stahování se zobrazí chyba
@@ -198,6 +204,9 @@ submission + session a přejde na S4), **terciární** „Vybrat jiné PDF“, *
 ### S8 Připojení čtečky
 
 Jediná akce „Vyhledat čtečku“ (plné) — beze změny. Vstup se přesouvá do S7/S10.
+
+**Stav 2026-10-31:** zapojení čtečky v appce je odloženo do dodání reálného hardware; S8 dnes
+zobrazí jen stub (`StubCardSigner`), QES v appce není dosažitelné. Až hardware dorazí, platí výše uvedené.
 
 ### S14/S15 Ověřit PDF
 
@@ -279,3 +288,10 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
 - Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (223/0), ručně na emulátoru
   (uložení do `Download/Dokulachtan/`, uložení do Documents + zapamatování, otevření v Drive PDF Viewer,
   share sheet, druhé sdílení i uložení po back).
+
+## 10. Realizace (2026-10-31)
+
+- S4: terminální chyby certifikátu (`not_trusted`, `revoked`, `qes_required_qscd`, `level_mismatch`,
+  `not_qualified`, `unsupported_key`, `invalid_certificate`) už neposílají do S10; primární je „Zavřít“.
+- S10 text už neslibuje automatickou volbu pro QES bez čtečky; čtečka je odložena do dodání hardware.
+- S8 zůstává stub; zapojení čtečky v appce je odloženo do dodání reálného hardware.
