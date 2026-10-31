@@ -47,10 +47,13 @@ QES_IMAGE ?= dokulachtan-qes-test
 QES_SYSTEM_IMAGE ?= dokulachtan-qes-system-test
 QES_CONTAINER ?= podman
 QES_BUILD ?= $(QES_CONTAINER) build
+# Fresh DB pro hook/CI: QES_DB=qes-hook-$$.sqlite3 make qes-test-qes
+QES_DB ?= qes-test.sqlite3
+QES_SCHEMA ?= qes-test-schema.rb
 QES_RUN := $(QES_CONTAINER) run --rm -v "$(PWD)/$(QES_REPO):/app" -v "$(PWD)/test:/qes-test:ro" -w /app \
 	-e RAILS_ENV=test -e BUNDLE_WITHOUT= -e BUNDLE_GEMFILE=/app/Gemfile \
-	-e PRIMARY_DATABASE_URL=sqlite3:/app/db/qes-test.sqlite3 \
-	-e SCHEMA=/app/tmp/qes-test-schema.rb -e HOME=/tmp -e TZ=UTC -e QES_TEST_DIR=/qes-test
+	-e PRIMARY_DATABASE_URL=sqlite3:/app/db/$(QES_DB) \
+	-e SCHEMA=/app/tmp/$(QES_SCHEMA) -e HOME=/tmp -e TZ=UTC -e QES_TEST_DIR=/qes-test
 
 # Reporty se v čerstvém klonu tee do neexistujícího adresáře jinak rozbijí (pipefail).
 test/out:

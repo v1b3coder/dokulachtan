@@ -121,6 +121,7 @@ jen `t.binary`/`text`/`serialize` + `LockEvent` (`unique: connection.supports_pa
 | `bundle exec rspec` v image | image má `BUNDLE_WITHOUT=development:test` | test image z `test/qes/Dockerfile` |
 | `--out /tmp/rspec.json` | `/tmp` je v kontejneru, ne na hostu → soubor se ztratí | `--out /app/tmp/rspec.json` (mountované) |
 | víc workerů na jedné SQLite | `SQLite3::BusyException: database is locked` | vlastní DB soubor per worker (`qes-parallel-N.sqlite3`) |
+| `verifier_spec` flake (2026-10-31) | `valid` → `invalid` u LTA/DocTS scénářů (2/10 běhů na staré DB, 0/5 na čerstvé) | CI i hook používají čerstvou DB; při výskytu rerun a vyšetřit `RevisionChanges.allowed?` |
 
 ## CI
 

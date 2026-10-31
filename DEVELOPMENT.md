@@ -64,7 +64,7 @@ s vlastní SQLite DB. Dělení podle naměřených časů v `test/qes/timings.tx
 `make hooks` nainstaluje `.githooks/pre-push` (repo-lokální `core.hooksPath`). Podle změněných cest pustí:
 
 - `mobile/*` → `make qes-app-test qes-app-typecheck` (~18 s),
-- `vendor/docuseal.rev`, `Makefile`, `test/*`, `scripts/*` → `make qes-test-qes` (~47 s),
+- `vendor/docuseal.rev`, `Makefile`, `test/*`, `scripts/*` → `make qes-test-qes` (~47 s, čerstvá DB),
 - obojí / nová větev / neznámý diff → vše (~65 s).
 
 Hook zároveň zablokuje push, když je fork špinavý nebo když `vendor/docuseal.rev` nesedí na HEAD forku.

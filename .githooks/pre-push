@@ -12,7 +12,13 @@ fi
 
 zero=0000000000000000000000000000000000000000
 refs=$(mktemp)
-trap 'rm -f "$refs"' EXIT
+qes_db=""
+qes_schema=""
+cleanup() {
+  rm -f "$refs"
+  [ -n "$qes_db" ] && rm -f "vendor/docuseal/db/$qes_db" "vendor/docuseal/tmp/$qes_schema"
+}
+trap cleanup EXIT
 cat > "$refs"
 
 need_qes=0
@@ -51,8 +57,10 @@ if [ "$need_qes" = 1 ]; then
     echo "pre-push: vendor/docuseal.rev ($pin) nesedí na HEAD forku" >&2
     echo "  → git -C vendor/docuseal rev-parse --short HEAD > vendor/docuseal.rev" >&2
     exit 1; }
-  echo "pre-push: T0 (QES + JS)…" >&2
-  make qes-test-qes
+  qes_db="qes-hook-$$.sqlite3"
+  qes_schema="qes-hook-$$.rb"
+  echo "pre-push: T0 (QES + JS, čerstvá DB)…" >&2
+  QES_DB="$qes_db" QES_SCHEMA="$qes_schema" make qes-test-qes
 fi
 
 if [ "$need_app" = 1 ]; then
