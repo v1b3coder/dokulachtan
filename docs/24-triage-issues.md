@@ -334,6 +334,23 @@ Co zůstává platné: kdyby někdy přibylo stahování finálního PDF ve work
 session** (server z odkazu), ne na Nastavení — pravidlo do `docs/17`/SPEC, ne kód dnes. Integritu finálního PDF
 řeší #21, podmínku důvěry v orchestraci #17.
 
+### Testovací certifikát v produkční appce — **wontfix (gating), opraveno (přepis klíče)** (2026-10-31)
+
+Nález: `mobile/app/app/setup.tsx:14-21,51-55` a `mobile/app/app/import.tsx:207-216` nabízejí
+„Použít testovací certifikát“ bez gatu a `src/lib/testCertificate.ts:5,7` má v produkčním bundlu PKCS#12
+i heslo `test`.
+
+**Wontfix — gating:** testovací certifikát zůstává dostupný i v produkční appce. Je to záměr: uživatel si tak
+zkouší workflow proti stagingu, aniž by potřeboval reálný `.p12`. Payload v bundlu **není tajemství** (leží v repu
+jako `test/certs/pki/signer-ades.p12`, heslo `test`) a produkce ho odmítne na `not_trusted`
+(`QES_TRUST_ROOTS=config/qes/postsignum.pem`), takže se nedá zneužít k podpisu. Metro alias se stubem
+modulu, `QES_TEST_CERT` flag ani `app.config.ts` se proto nedělají.
+
+**Opraveno — ztráta dat:** `importTestCertificate` importuje jen do **prázdného** vaultu; s uloženým klíčem
+hází `certificate_present`, takže nevratný přepis reálného klíče (`vault.ts:247-253`, `:283-286`) už nejde
+jedním tapem. Smazání zůstává samostatný krok v S3 s vlastní biometrií. Testy:
+`__tests__/vault.test.ts` (import do prázdna + odmítnutí přepisu), texty v S2/S10 a `docs/17` upraveny.
+
 ## 7. Návrh pořadí oprav
 
 | Blok | Issues | Proč první |

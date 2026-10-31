@@ -24,6 +24,8 @@ const ERROR_TEXT: Record<string, string> = {
   biometry_unavailable: 'V telefonu není dostupná biometrie.',
   vault_unavailable: 'Úložiště klíče není dostupné.',
   vault_encrypt_failed: 'Klíč se nepodařilo bezpečně uložit.',
+  certificate_present:
+    'Uložený klíč by testovací certifikát přepsal. Nejdřív ho smažte v Detailu certifikátu.',
 };
 
 function errorText(err: unknown): string {
@@ -206,7 +208,7 @@ export default function ImportScreen() {
 
       <Text style={styles.muted}>
         Testovací certifikát je jen pro staging — nemá důvěryhodný kořen a podpis na produkci
-        neprojde.
+        neprojde. Uloží se jen do prázdné aplikace; existující klíč by přepsal.
       </Text>
       <TextButton
         title={busy === 'test' ? 'Importuji…' : 'Použít testovací certifikát'}

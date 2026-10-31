@@ -4,9 +4,17 @@ import { useState } from 'react';
 import { router } from 'expo-router';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { VaultError } from '../src/lib/crypto/vault';
 import { platformVaultDeps } from '../src/lib/platform';
 import { importTestCertificate } from '../src/lib/testCertificate';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
+
+const TEST_CERT_ERROR: Record<string, string> = {
+  certificate_present:
+    'Uložený klíč by testovací certifikát přepsal. Nejdřív ho smažte v Detailu certifikátu.',
+  biometry_rejected: 'Biometrické ověření bylo zrušeno.',
+  biometry_unavailable: 'V telefonu není dostupná biometrie.',
+};
 
 export default function SetupScreen() {
   const [testCert, setTestCert] = useState<string | null>(null);
@@ -17,7 +25,11 @@ export default function SetupScreen() {
 
       setTestCert(info.subject);
     } catch (err) {
-      setTestCert(`chyba: ${err instanceof Error ? err.message : String(err)}`);
+      setTestCert(
+        err instanceof VaultError
+          ? (TEST_CERT_ERROR[err.code] ?? err.code)
+          : 'Import se nepodařil.',
+      );
     }
   }
 
@@ -50,7 +62,7 @@ export default function SetupScreen() {
 
       <Text style={styles.muted}>
         Testovací certifikát je jen pro staging — nemá důvěryhodný kořen a podpis na produkci
-        neprojde.
+        neprojde. Uloží se jen do prázdné aplikace; existující klíč by přepsal.
       </Text>
       <TextButton title="Použít testovací certifikát" onPress={importTest} />
       {testCert ? <Text style={styles.muted}>Uloženo: {testCert}</Text> : null}

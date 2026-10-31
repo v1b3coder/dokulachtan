@@ -107,7 +107,8 @@ Důsledky, které lze v appce vidět:
 4. **Primární** „Importovat“ — vypnuté, dokud není vybraný soubor.
 5. Chyba těsně nad primární akcí.
 6. Oddělovač + „Nebo“ + tlumené „Testovací certifikát je jen pro staging — nemá důvěryhodný
-   kořen.“ + **terciární** „Použít testovací certifikát“.
+   kořen. Uloží se jen do prázdné aplikace; existující klíč by přepsal.“ + **terciární** „Použít testovací
+   certifikát“ — s uloženým klíčem akce skončí `certificate_present` (mazání je samostatný krok v S3).
 7. Po úspěchu: formulář se schová, zůstane souhrn certifikátu + **primární** „Hotovo“.
 
 ### S3 Detail certifikátu
@@ -151,7 +152,8 @@ Testovací certifikát zde **není** — importuje se jen v S2 za oddělovačem 
 1. Vysvětlení.
 2. **Primární** „Importovat klíč (PKCS#12)“.
 3. **Sekundární** „Nastavit čtečku“ (Android; na iOS se neukazuje).
-4. Oddělovač + **terciární** „Použít testovací certifikát“ s poznámkou „jen staging“.
+4. Oddělovač + **terciární** „Použít testovací certifikát“ s poznámkou „jen staging; uloží se jen do
+   prázdné aplikace, existující klíč by přepsal“ (s uloženým klíčem `certificate_present`).
 5. **Terciární** „Zpět“.
 
 ### S11/S12 Podepsat PDF

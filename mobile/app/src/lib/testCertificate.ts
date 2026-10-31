@@ -1,4 +1,10 @@
-import { importCertificate, type StoredCertificateInfo, type VaultDeps } from './crypto/vault';
+import {
+  hasCertificate,
+  importCertificate,
+  VaultError,
+  type StoredCertificateInfo,
+  type VaultDeps,
+} from './crypto/vault';
 
 // Testovací certifikát uložený v aplikaci (PKCS#12 z test/certs/pki,
 // heslo `test`) — SPEC § 15.3: appka podepisuje testovacím certem.
@@ -196,7 +202,13 @@ export function testQscdP12Bytes(): Uint8Array {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 }
 
-// Import testovacího certifikátu do vaultu (tlačítko v Nastavení / S2 / S10).
+// Import testovacího certifikátu do vaultu (tlačítko v S2 / S10). Jen do prázdného
+// vaultu: přepis je nevratný a reálný klíč by testovací cert na produkci jen
+// znehodnotil (`not_trusted`). Smazání je samostatný krok v S3 s vlastní biometrií.
 export async function importTestCertificate(deps: VaultDeps): Promise<StoredCertificateInfo> {
+  if (await hasCertificate(deps)) {
+    throw new VaultError('certificate_present');
+  }
+
   return importCertificate(deps, testP12Bytes(), TEST_P12_PASSWORD);
 }

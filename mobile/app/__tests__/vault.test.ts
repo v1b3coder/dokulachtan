@@ -9,7 +9,7 @@ import {
   type VaultStorage,
   type VaultStorageOptions,
 } from '../src/lib/crypto/vault';
-import { TEST_P12_BASE64, TEST_P12_PASSWORD } from '../src/lib/testCertificate';
+import { TEST_P12_BASE64, TEST_P12_PASSWORD, importTestCertificate } from '../src/lib/testCertificate';
 
 const KEY_ENTRY = 'cz.dokulachtan.signer.vault.key';
 const DATA_ENTRY = 'cz.dokulachtan.signer.vault.certificate';
@@ -214,5 +214,24 @@ describe('vault', () => {
     expect(await hasCertificate(deps)).toBe(true);
     expect(memory.get(DATA_ENTRY)).toBeUndefined();
     expect(memory.get(KEY_ENTRY)).toBeUndefined();
+  });
+
+  it('imports the test certificate into an empty vault', async () => {
+    const { deps } = makeDeps();
+
+    expect((await importTestCertificate(deps)).subject).toContain('signer-ades');
+    expect(await hasCertificate(deps)).toBe(true);
+  });
+
+  it('refuses to overwrite a stored key with the test certificate', async () => {
+    const { deps, dataMemory } = makeDeps();
+
+    await importCertificate(deps, testP12(), TEST_P12_PASSWORD);
+    const stored = dataMemory.get(DATA_FILE);
+
+    await expect(importTestCertificate(deps)).rejects.toMatchObject({
+      code: 'certificate_present',
+    });
+    expect(dataMemory.get(DATA_FILE)).toBe(stored);
   });
 });
