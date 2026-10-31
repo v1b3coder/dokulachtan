@@ -157,7 +157,7 @@ Pro podepisování platí: každý signer má právě jedno pole `qes` a právě
 | `signature_algorithm` | string | v1 jen `rsa_pkcs1v15` (HexaPDF 1.7 CMS umí jen RSA; ECDSA/RSA-PSS mimo v1) |
 | `level` | string | `none`, `ades`, `qes` (určeno z certifikátu) |
 | `key_location` | string | `phone_keystore`, `card` |
-| `certificate_info` | text (JSON) | subject, issuer, serial, platnost, QCStatements, key type/size |
+| `certificate_info` | text (JSON) | subject, issuer, serial, platnost, QCStatements, key type/size, e-mail ze SAN (první uvedený) |
 | `certificate_chain` | text (JSON) | pole base64 DER certifikátů řetězu |
 | `signed_attrs_der` | binary | DER `SET` podepsaných atributů (co appka podepsala) |
 | `signature` | binary | raw signatura |
@@ -435,7 +435,8 @@ opakované volání se stejným certifikátem je idempotentní (vrátí stejné 
     "level": "ades",
     "qc_statements": ["QcCompliance"],
     "key_type": "rsa",
-    "key_size": 2048
+    "key_size": 2048,
+    "email": "jan@firma.cz"
   }
 }
 ```
@@ -764,9 +765,7 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      (`HexaPDF::Document.new(io: StringIO.new(final_document.download))`); dokument se **NEPŘESTAVUJE**
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
-   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, e-mail, datum) na pozici pole `qes`.
-   E-mail v pečeti je e-mail podepisujícího z DocuSealu, **ne** e-mail z certifikátu: TBS se staví
-   před certifikátem (§ 5.1a), takže certifikát v okamžiku kreslení pečeti ještě není znám.
+   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, datum) na pozici pole `qes`.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože TBS se staví **před**
    certifikátem (§ 5.1a); pole je neviditelné (`Rect: [0, 0, 0, 0]`).
@@ -1329,14 +1328,14 @@ Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO
 ## 13. Audit a dokladování
 
 `QesSession` **MUSÍ** uchovávat pro každý podpis:
-- `certificate_info` (subject, issuer, serial, platnost, QCStatements, key type/size),
+- `certificate_info` (subject, issuer, serial, platnost, QCStatements, key type/size, e-mail ze SAN),
 - `signed_attrs_der`, `signature` (raw), `document_digest`, `signed_pdf_sha256`, `final_pdf_sha256`,
 - `level`, `key_location`, `provider`, `app_metadata` (self-reported platforma a verze appky),
 - časy všech přechodů, `validation_report`, `seal_state`.
 
 Audit trail PDF **MUSÍ** obsahovat stránku QES (§ 7.7) s těmito údaji a s upozorněním, že jde
 o kvalifikovaný/zdokonalený podpis podle zjištěné úrovně. Stránka **MUSÍ** u každého podpisu uvést
-jméno a e-mail podepisujícího (identita, kterou použil DocuSeal) odděleně od předmětu certifikátu.
+e-mail z certifikátu (první uvedený v SAN; cert bez e-mailu řádek vynechá) odděleně od jména submittera.
 
 Hodnoty v `submitter.values[qes_uuid]` **MUSÍ** být `"qes:<session_id>"`, aby bylo možné dohledat
 session z UI a DB. Rozšíření `GET /api/submissions/:id` o `qes` metadata je **mimo v1** (§ 17 #6);

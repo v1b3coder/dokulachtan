@@ -114,7 +114,7 @@ Account
 | `tbs_document` | TBS PDF s podpisovým polem a rezervou (ActiveStorage) |
 | `signed_attrs_der` | DER podepsaných atributů CMS (co appka podepisuje) |
 | `signature` | raw signatura od appky |
-| `certificate_info` | subject, issuer, serial, platnost, QCStatements (AdES/QES) |
+| `certificate_info` | subject, issuer, serial, platnost, QCStatements (AdES/QES), e-mail ze SAN |
 | `certificate_chain` | řetěz certifikátů |
 | `document_digest` | SHA-256 ByteRange (pro kontrolu a audit; spočítá se při přijetí certifikátu) |
 | `signed_pdf_sha256` | SHA-256 `signed_document` (**před** pečetí) |
