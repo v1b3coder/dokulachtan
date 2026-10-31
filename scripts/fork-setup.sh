@@ -39,7 +39,17 @@ else
   git -C "$DIR" checkout --quiet -b "$BRANCH" "$REV"
 fi
 
+# CI (a explicitně FORK_SETUP_REV=1) testuje přesně pin, ne head větve.
+if [ "${FORK_SETUP_REV:-0}" = 1 ]; then
+  git -C "$DIR" checkout --quiet --detach "$REV"
+fi
+
 BASE=$(git -C "$DIR" merge-base HEAD upstream/master 2>/dev/null || echo "$REV")
+
+# Repo-lokální hooky (core.hooksPath), ne globální git config.
+if [ -x .githooks/pre-push ]; then
+  git config core.hooksPath .githooks
+fi
 
 echo
 echo "fork:    $DIR"
