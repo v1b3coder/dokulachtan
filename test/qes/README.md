@@ -1,13 +1,15 @@
 # QES test harness (P0.2)
 
 Ověřený postup, jak spustit RSpec forku bez Postgresu i s ním, a jak ho zrychlit.
-Vše níže je **změřené**, ne odhad (poslední měření 2026-10-27/28).
+Vše níže je **změřené**, ne odhad (poslední měření 2026-10-31, pin `49d3c3f1`).
 
 ## Image
 
 ```bash
-make qes-test-images    # postaví oba image
-make qes-test-assets    # zkopíruje buildnuté assety z produkčního image (gitignored)
+make qes-test-image         # test image (T0/T1, bez Chromia)
+make qes-test-system-image  # test image + Chromium (T2/T3, spec/system)
+make qes-test-images       # oba image
+make qes-test-assets        # zkopíruje buildnuté assety z produkčního image (gitignored)
 ```
 
 | Image | Dockerfile | Obsah |
@@ -22,16 +24,16 @@ Produkční image má `BUNDLE_WITHOUT=[:development, :test]`, proto se dev/test 
 
 | Tier | Cíl | Co to je | Kdy |
 |---|---|---|---|
-| **T0** | `make qes-test-qes` | QES vrstva (422 ex) + JS testy kroku | po každé změně QES vrstvy |
+| **T0** | `make qes-test-qes` | QES vrstva (474 QES + 10 upstream ex) + JS testy kroku | po každé změně QES vrstvy |
 | **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (526 ex) | před commitem forku |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (591 ex) | před commitem forku |
 | **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš |
-| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` (659 ex) | před PR / po rebase |
+| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` (727 ex) | před PR / po rebase |
 | **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš |
-| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 (660 ex) | před vydáním, parita s upstream CI |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 (731 ex) | před vydáním, parita s upstream CI |
 
-Proč tři tiery: **69 % času plné sady jde na upstream specy, které fork nemodifikuje**
-(243 ex / 265,7 s z 384,1 s), a `spec/system/signing_form_spec.rb` sám je 35 % sady.
+Proč tři tiery: **většina plné sady jsou upstream specy, které fork nemodifikuje**
+(253 ex z 727; `spec/system` samo 136 ex), a `spec/system/signing_form_spec.rb` je 48 ex.
 Denní smyčka QES je T0, plná sada patří k PR a rebase.
 
 ## Paralelní běh
@@ -64,22 +66,25 @@ upstreamu (`docs/08`). Shell runner dělá totéž bez změny Gemfile.
 
 ## Změřené výsledky
 
-Naměřeno 2026-10-27 (20 CPU, sdílený stroj; `run_time` z JSON reportéru):
+Naměřeno 2026-10-31 (20 CPU, sdílený stroj; `run_time` z JSON reportéru):
 
 | Běh | DB | Výsledek | Čas |
 |---|---|---|---|
-| `make qes-test-qes` | SQLite | 422 ex, 0 failures | **43 s** (+ JS 0,2 s) |
-| `make qes-test-parallel` | SQLite ×4 | 422 ex, 0 failures | **25 s** |
-| `make qes-test-fast` | SQLite | 526 ex, 0 failures | **81 s** |
-| `make qes-test-parallel-fast` | SQLite ×4 | 526 ex, 0 failures | **43 s** |
-| `make qes-test` | SQLite | 659 ex, 0 failures | **3 min 20 s** |
-| `make qes-test-parallel-full` | SQLite ×4 | 659 ex, 0 failures | **90 s** |
-| `make qes-test-postgres` | Postgres 18 | 660 ex, 0 failures | 3 min 37 s |
-| `make qes-js-test` | — | 33 ex, 0 failures | 0,2 s |
-| `make qes-app-test` | — | 223 ex, 0 failures | 13 s |
+| `make qes-test-qes` | SQLite | 484 ex, 0 failures | **47 s** (+ JS 0,2 s) |
+| `make qes-test-parallel` | SQLite ×4 | 484 ex, 0 failures | **18 s** |
+| `make qes-test-fast` | SQLite | 591 ex, 0 failures | **79 s** |
+| `make qes-test-parallel-fast` | SQLite ×4 | 591 ex, 0 failures | **39 s** |
+| `make qes-test` | SQLite | 727 ex, 0 failures | **3 min 13 s** |
+| `make qes-test-parallel-full` | SQLite ×4 | 727 ex, 0 failures | **81 s** |
+| `make qes-test-postgres` | Postgres 18 | 731 ex, 0 failures | 5 min 0 s |
+| `make qes-js-test` | — | 37 ex, 0 failures | 0,2 s |
+| `make qes-app-test` | — | 258 ex, 0 failures | 16 s |
 
-Před optimalizacemi byl `qes-test-qes` **100 s** pro 404 examples; dnes
-**43 s** sekvenčně a **25 s** paralelně, tedy **4×**.
+Před optimalizacemi byl `qes-test-qes` **100 s** pro 404 examples; dnes **47 s** sekvenčně
+a **18 s** paralelně.
+
+Paralelní runner je lokální optimalizace: 2026-10-31 v něm byl jeden nezopakovaný flake
+(v dalším běhu 484/0); CI proto pouští tiery sekvenčně.
 
 ## Co testy zdržuje a co s tím
 
@@ -116,6 +121,23 @@ jen `t.binary`/`text`/`serialize` + `LockEvent` (`unique: connection.supports_pa
 | `bundle exec rspec` v image | image má `BUNDLE_WITHOUT=development:test` | test image z `test/qes/Dockerfile` |
 | `--out /tmp/rspec.json` | `/tmp` je v kontejneru, ne na hostu → soubor se ztratí | `--out /app/tmp/rspec.json` (mountované) |
 | víc workerů na jedné SQLite | `SQLite3::BusyException: database is locked` | vlastní DB soubor per worker (`qes-parallel-N.sqlite3`) |
+
+## CI
+
+`.github/workflows/qes.yml`:
+
+| Trigger | Co běží |
+|---|---|
+| push `main`, PR | T0 + T1 + app (Jest + typecheck) |
+| PR s labelem `ci/full` | navíc T2 |
+| schedule / `workflow_dispatch` | T2 + T3 + negativní N1–N17 + E2E |
+| release tag (`workflow_call full: true`) | vše výše; `android-release.yml` na tom závisí |
+
+- Fork se v CI checkoutuje **na pin** (`FORK_SETUP_REV=1 ./scripts/fork-setup.sh`), ne na head větve.
+- Reporty se ukládají jako artefakty (14 dní), ne do gitu.
+- E2E běží appku jako Node (`npx tsx scripts/qes-app-e2e.ts`), ne v emulátoru; vyžaduje `npm ci`,
+  `make qes-test-assets` (stránka `/s/:slug` potřebuje `public/packs`) a `qpdf`/`pdfsig`.
+- Negativní a E2E používají DigiCert TSA (síť); RSpec má TSA stubovanou.
 
 ## Mapování na dokumenty
 

@@ -14,7 +14,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | Hooky do DocuSealu (documents, combined, audit, hodnota pole) | hotové (SPEC § 7.7) |
 | Appka (Expo): vault, podpis, automatická volba podepisujícího | hotové pro klíč (SPEC § 9, `mobile/app`); volba čtečky odložena do dodání hardware |
 | Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); appka ji dnes nezapojuje (QES v appce nedosažitelné). `FakeCardSigner` (test QSCD cert) umí A tok jen v e2e skriptu; zapojení odloženo do dodání hardware |
-| TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkční instanci; v CI/testech prázdné |
+| TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkční instanci; RSpec stub (`http://tsa.test`), E2E a negativní scénáře DigiCert free |
 
 ## Konfigurace (ENV)
 
@@ -116,9 +116,9 @@ make qes-test-qes
 ```
 
 Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt` a
-`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures). V CI `QES_TSA_URL` prázdné
-(testy bez TSA); staging i produkční instance DigiCert free, I.CA test TSA jen lokálně. Tajemství jen přes
-`fly secrets` / `.env`, nikdy do repa.
+`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures). RSpec používá stubovanou
+TSA (`QesHelpers.stub_tsa!`, `http://tsa.test`); E2E a negativní scénáře DigiCert free (síť), I.CA test TSA
+jen lokálně. Tajemství jen přes `fly secrets` / `.env`, nikdy do repa.
 
 TSA trust roots: `QES_TSA_TRUST_ROOTS` je **povinné**, kdykoli je `QES_TSA_URL` nastavené —
 bez něj dokončení skončí na `tsa_trust_not_configured`, protože razítko od nedůvěryhodné TSA
@@ -145,8 +145,8 @@ make qes-app-test        # Jest testy appky (vault, P12, signer, API)
 make qes-app-typecheck   # TypeScript kontrola appky
 ```
 
-`make qes-test-images` postaví test image (`test/qes/Dockerfile`, `Dockerfile.system`), runbook
-harnessu je v `test/qes/README.md`.
+`make qes-test-image` postaví test image (`test/qes/Dockerfile`), `make qes-test-system-image` navíc
+Chromium (`test/qes/Dockerfile.system`); runbook harnessu je v `test/qes/README.md`.
 
 ## Jak ověřit podpis nezávislým validátorem
 

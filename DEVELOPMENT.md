@@ -22,7 +22,8 @@ Fork obsahuje **jen kód patche**. Dokumentace, appka, skripty ani deploy konfig
 ```bash
 make venv              # .venv s pyHanko a podman-compose
 make fork-setup        # klon forku + větev dokulachtan (pin z vendor/docuseal.rev)
-make qes-test-images  # test image pro RSpec
+make hooks             # .githooks/pre-push (T0 + app testy + typecheck)
+make qes-test-image    # test image pro RSpec (T0/T1)
 make qes-test-qes      # QES specy na SQLite (rychlá smyčka)
 ```
 
@@ -39,15 +40,15 @@ plná sada patří k PR/release, ne k každému commitu.
 
 | Tier | Příkaz | Co dělá | Kdy | Naměřeno |
 |---|---|---|---|---|
-| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | 422/0 za 43 s |
-| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | 422/0 za **25 s** |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 526/0 za 81 s |
-| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 526/0 za 43 s |
-| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | 659/0 za 3 min 20 s |
-| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | 659/0 za **90 s** |
-| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | 660/0 za 3 min 37 s |
-| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | 33/0 za 0,2 s |
-| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | 223/0 za 13 s |
+| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | 484/0 za 47 s |
+| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | 484/0 za **18 s** |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 591/0 za 79 s |
+| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 591/0 za 39 s |
+| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | 727/0 za 3 min 13 s |
+| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | 727/0 za **81 s** |
+| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | 731/0 za 5 min 0 s |
+| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | 37/0 za 0,2 s |
+| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | 258/0 za 16 s |
 | — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
 | — | `make qes-test-timings` | přeměří časy spec souborů pro paralelní runner | po velké změně skladby speců | — |
 
@@ -57,6 +58,25 @@ Pro `spec/system` navíc `make qes-test-assets` (kopie assetů z produkčního i
 s vlastní SQLite DB. Dělení podle naměřených časů v `test/qes/timings.txt`, soubory nad
 45 s se dělí po examplech (`file:řádek`), aby jeden soubor nedržel podlahu. Detaily:
 [test/qes/README.md](test/qes/README.md).
+
+## Před pushem
+
+`make hooks` nainstaluje `.githooks/pre-push` (repo-lokální `core.hooksPath`). Podle změněných cest pustí:
+
+- `mobile/*` → `make qes-app-test qes-app-typecheck` (~18 s),
+- `vendor/docuseal.rev`, `Makefile`, `test/*`, `scripts/*` → `make qes-test-qes` (~47 s),
+- obojí / nová větev / neznámý diff → vše (~65 s).
+
+Hook zároveň zablokuje push, když je fork špinavý nebo když `vendor/docuseal.rev` nesedí na HEAD forku.
+Přeskočení: `SKIP_QES_HOOK=1 git push`. CI běží stejnou sadu na push/PR.
+
+## CI
+
+- `.github/workflows/qes.yml` — push `main`/PR: T0 + T1 + app; schedule/dispatch: T2 + T3 + negativní + E2E;
+  `workflow_call full: true` (release): vše výše.
+- `.github/workflows/android-release.yml` — tag `v*`; `qes` job pouští kompletní sadu, `build` na něm závisí.
+- Reporty se ukládají jako artefakty (14 dní), ne do gitu.
+- Fork se checkoutuje na pin, ne na head větve.
 
 `make qes-test` a spol. mají `pipefail`, takže červený RSpec už neprojde jako úspěch
 (dřív `rspec … | tee` maskoval exit kód).

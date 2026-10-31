@@ -65,6 +65,9 @@ nasazení a provoz (`deploy-*`, `smtp-*`), historické interop nástroje (`fixtu
 
 Tier podle ceny a rizika — celou sadu na každý commit nepouštěj:
 
+**Před pushem** běží `.githooks/pre-push` (`make hooks`): T0 + app testy + typecheck; pin forku musí
+sedět na `vendor/docuseal.rev`. Přeskočení: `SKIP_QES_HOOK=1 git push`.
+
 - **T0** `qes-test-qes` — po každé změně QES vrstvy (výchozí smyčka).
 - **T1** `qes-test-fast` — před commitem forku (upstream specy bez `spec/system`).
 - **T2** `qes-test` — před PR / po rebase (navíc `spec/system`, obrana proti regresi
