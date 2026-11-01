@@ -24,17 +24,17 @@ Produkční image má `BUNDLE_WITHOUT=[:development, :test]`, proto se dev/test 
 
 Veřejné entrypointy, rozhodovací strom a co se netestuje: [test/README.md](../README.md).
 
-Interní tiery (CI/debug), počty při pinu `0c7d319f`:
+Interní tiery (CI/debug), počty při pinu `c09a2891`:
 
 | Tier | Cíl | Co to je | Examples |
 |---|---|---|---|
-| **T0** | `make test-t0` | QES vrstva + JS testy kroku | 494 + 37 JS |
-| **T0** | `make qes-test-parallel` | totéž, 4 workery (lokální optimalizace) | 494 |
-| **T1** | `make test-t1` | celá sada bez `spec/system` | 601 |
-| **T1** | `make qes-test-parallel-fast` | totéž paralelně | 601 |
-| **T2** | `make test-t2` | celá sada kromě `spec/system/dashboard_spec.rb` | 737 |
-| **T2** | `make qes-test-parallel-full` | totéž paralelně (system image) | 737 |
-| **T3** | `make test-t3` | celá sada na Postgresu 18 | 741 |
+| **T0** | `make test-t0` | QES vrstva + JS testy kroku | 496 + 37 JS |
+| **T0** | `make qes-test-parallel` | totéž, 4 workery (lokální optimalizace) | 496 |
+| **T1** | `make test-t1` | celá sada bez `spec/system` | 603 |
+| **T1** | `make qes-test-parallel-fast` | totéž paralelně | 603 |
+| **T2** | `make test-t2` | celá sada kromě `spec/system/dashboard_spec.rb` | 739 |
+| **T2** | `make qes-test-parallel-full` | totéž paralelně (system image) | 739 |
+| **T3** | `make test-t3` | celá sada na Postgresu 18 | 743 |
 
 T1/T2/T3 pouští upstream DocuSeal specy, ne jen QES. Denní smyčka je F1 (`make test`),
 plná sada patří k PR a release.
@@ -73,13 +73,13 @@ Naměřeno 2026-11-01, pin `0c7d319f` (20 CPU, sdílený stroj; paralelní řád
 
 | Běh | DB | Výsledek | Čas |
 |---|---|---|---|
-| `make qes-test-qes` | SQLite | 494 ex, 0 failures | **57 s** (+ JS 0,2 s) |
+| `make qes-test-qes` | SQLite | 496 ex, 0 failures | **1 min 18 s** (+ JS 0,2 s) |
 | `make qes-test-parallel` | SQLite ×4 | 494 ex, 0 failures | **~18 s** |
-| `make qes-test-fast` | SQLite | 601 ex, 0 failures | **1 min 56 s** |
+| `make qes-test-fast` | SQLite | 603 ex, 0 failures | **2 min 3 s** |
 | `make qes-test-parallel-fast` | SQLite ×4 | 601 ex, 0 failures | **~40 s** |
-| `make qes-test` | SQLite | 737 ex, 0 failures | **4 min 13 s** |
+| `make qes-test` | SQLite | 739 ex, 0 failures | **3 min 10 s** |
 | `make qes-test-parallel-full` | SQLite ×4 | 737 ex, 0 failures | **~85 s** |
-| `make qes-test-postgres` | Postgres 18 | 741 ex, 0 failures | 6 min 27 s |
+| `make qes-test-postgres` | Postgres 18 | 743 ex, 0 failures | 3 min 32 s |
 | `make qes-js-test` | — | 37 ex, 0 failures | 0,2 s |
 | `make qes-app-test` | — | 268 ex, 0 failures | 16 s |
 

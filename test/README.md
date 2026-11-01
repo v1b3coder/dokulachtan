@@ -27,28 +27,28 @@ Přeskočení: `SKIP_QES_HOOK=1 git push`.
 | **F0** | `make test-prepare` | venv, fork, image, assety, `npm ci`, `yarn install`, hooky | síť | 2–5 min cold | po klonu, po změně Dockerfilu |
 | **F1** | `make test` | T0 + JS + app Jest + typecheck | fork, node_modules, test image | ~1,5 min | před každým pushem (hook) |
 | **F2** | `make test-ci` | F1 + T1 | + test image | ~3 min | před PR; stejné jako CI na push/PR |
-| **F3** | `make test-full` | F2 + T2 + T3 + negativní + E2E | + system image, assety, venv, síť DigiCert | ~15 min | před release; stejné jako CI full |
+| **F3** | `make test-full` | F2 + T2 + T3 + negativní + E2E | + system image, assety, venv, síť DigiCert | ~13 min | před release; stejné jako CI full |
 | **F4a** | `make test-staging` | staging E2E ×3 | **živý staging**, Fly, síť | ~5 min | po `make deploy-staging`, nikdy v CI |
 | **F4b** | `make test-android` | APK + emulátor/instrumentace | SDK, KVM | ~15–30 min | po buildu APK, lokálně |
-| **F4c** | `make test-eu-dss` | EU DSS | externí API, PDF opouští stroj | ~1 min | ručně, nikdy v CI |
+| **F4c** | `make test-eu-dss` | EU DSS | externí API, PDF opouští stroj | ~1,5 min | ručně, nikdy v CI |
 | **F4d** | `make test-card` | reálná čtečka | hardware | — | až bude čtečka (dnes stub) |
-| **F5** | `make test-tools` | fixtures, validate, staré negative, APK fingerprint, parallel selftest | lokální nástroje | ~1 min | při změně harnessu/legacy |
+| **F5** | `make test-tools` | fixtures, validate, staré negative, APK fingerprint, parallel selftest | lokální nástroje | ~1,5 min | při změně harnessu/legacy |
 
 `make test-manual` = F4a + F4c, vyžaduje `ALLOW_EXTERNAL=1`.
 `make test-help` vypíše mapování fází na interní targety.
 
 ## Interní tiery (CI a debug)
 
-Počty při pinu `0c7d319f` (T0/T1 actual, T2/T3 actual):
+Počty při pinu `c09a2891` (T0/T1 actual, T2/T3 actual):
 
 | Tier | Cíl | Co to je | Examples | Čas |
 |---|---|---|---|---|
-| **T0** | `make test-t0` | QES vrstva + JS testy | 494 (484 QES + 10 upstream) + 37 JS | ~1 min |
-| **T1** | `make test-t1` | celá sada bez `spec/system` | 601 (484 QES + 117 upstream) | ~2 min |
-| **T2** | `make test-t2` | celá sada se system na SQLite (bez dashboardu) | 737 (484 QES + 253 upstream) | ~4 min |
-| **T3** | `make test-t3` | celá sada na Postgresu 18 (včetně dashboardu) | 741 (484 QES + 257 upstream) | ~6,5 min |
+| **T0** | `make test-t0` | QES vrstva + JS testy | 496 (484 QES + 12 upstream) + 37 JS | ~1,5 min |
+| **T1** | `make test-t1` | celá sada bez `spec/system` | 603 (484 QES + 119 upstream) | ~2 min |
+| **T2** | `make test-t2` | celá sada se system na SQLite (bez dashboardu) | 739 (484 QES + 255 upstream) | ~3,5 min |
+| **T3** | `make test-t3` | celá sada na Postgresu 18 (včetně dashboardu) | 743 (484 QES + 259 upstream) | ~4 min |
 | **app** | `make test-app` | Jest + typecheck | 268 + tsc | ~20 s |
-| **negativní** | `make test-negative` | N1–N17 | 17 scénářů | ~1 min |
+| **negativní** | `make test-negative` | N1–N17 | 17 scénářů | ~1,5 min |
 | **E2E** | `make test-e2e` | 4 běhy + fake card | — | ~2,5 min |
 
 T2/T3 běží se system image (Chromium) a `make qes-test-assets`; T0/T1 bez Chromia.
