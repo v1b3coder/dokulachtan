@@ -16,7 +16,9 @@ qes_db=""
 qes_schema=""
 cleanup() {
   rm -f "$refs"
-  [ -n "$qes_db" ] && rm -f "vendor/docuseal/db/$qes_db" "vendor/docuseal/tmp/$qes_schema"
+  if [ -n "$qes_db" ]; then
+    rm -f "vendor/docuseal/db/$qes_db" "vendor/docuseal/tmp/$qes_schema"
+  fi
 }
 trap cleanup EXIT
 cat > "$refs"
