@@ -197,6 +197,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
 | `pyhanko` → `UNTRUSTED` | chybí root v signing/verification trust store (podle toho, co se ověřuje), nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
 | `pyhanko` → `EXTENDED_WITH_FORM_FILLING` | po podpisu appky přibyla pečeť | očekávané; podpis appky zůstává INTACT |
+| `pyhanko` → `EXTENDED_WITH_OTHER` / `ILLEGAL_MODIFICATIONS` | revize změnila obsah stránky (pečeť nebo hodnoty nakreslené do obsahu) | chyba: pečeť je appearance stream widgetu podpisového pole (SPEC § 7.1, § 13); zkontrolujte `Qes::Stamp.draw` a `Qes::TbsDocument.signature_field` |
 | `429 rate_limited` | příliš pokusů (60/5 min/IP, 10 selhaných tokenů) | počkejte, nebo zvyšte limity v `Qes::RateLimiter` |
 | Pečeť se nepřidala (`seal_state=failed`) | chybí PKCS DocuSealu | nastavte `ESIGN_CERTS_KEY`, nebo `QES_SEAL_PKCS_PATH` (testy) |
 | `InvalidConfigurationError` na SQLite | `DATABASE_URL=sqlite3:…` | použijte `PRIMARY_DATABASE_URL` (viz `test/qes/README.md`) |

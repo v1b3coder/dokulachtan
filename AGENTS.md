@@ -31,7 +31,7 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
 12. **Dev/test na SQLite**, Postgres 18 jen jako parita s upstream CI.
 13. **České defaulty jsou ve forku** (`Qes::Config::DEFAULTS`), ENV je jen override.
 14. **Pečeť nese identitu z certifikátu** (CN + první SAN e-mail), ne submittera; `complete` ověří
-    shodu (`stamp_mismatch`).
+    shodu (`stamp_mismatch`). Pečeť je **appearance stream widgetu** podpisového pole (ne obsah stránky).
 
 ## Nepřekročitelná pravidla
 

@@ -95,8 +95,9 @@ session&.final_document&.attached? ? HexaPDF::Document.new(io: StringIO.new(sess
 
 - `nil` (první QES signer) → dnešní `merged_document` (staví se ze šablony + hodnot).
 - nenil (další QES signer) → otevře se předchozí finální PDF, `fill_submitter_fields`
-  dokreslí hodnoty aktuálního signera (skip `qes` polí), `Qes::Stamp.draw` dokreslí viditelnou
-  pečeť, `pdf.sign` přidá podpisové pole a zapíše **inkrementálně**.
+  dokreslí hodnoty aktuálního signera (skip `qes` polí), `Qes::Stamp.draw` vykreslí viditelnou
+  pečeť do appearance streamu widgetu na místě pole `qes`, `pdf.sign` pole i s widgetem přidá
+  a zapíše **inkrementálně**.
 
 `page_offsets` se počítá z metadat `submission.schema_documents`
 (`pdf.number_of_pages`) v pořadí `template_schema` — bez stahování souborů.
@@ -141,6 +142,7 @@ zůstávají indexy per-attachment (dnešní chování).
 | rezerva `QES_SIGNATURE_RESERVE` (64 kB) na jeden podpis | rezerva je per session, řetězení ji nezvětšuje |
 | `EnsureResultGenerated` vytvoří při retry duplicitní attachment | stávající LockEvent guard; QES větev je idempotentní (bere hotovou session) |
 | chyba validace šablony se dnes zobrazí jako 500 | volitelně doplnit 422 + alert v builderu |
+| pečeť v obsahu stránky = změna obsahu revize → pyHanko `EXTENDED_WITH_OTHER` + `ILLEGAL_MODIFICATIONS` u předchozích podpisů | pečeť je appearance stream widgetu podpisového pole; nová revize je form filling (`EXTENDED_WITH_FORM_FILLING` + `ACCEPTABLE_MODIFICATIONS`), podpisy zůstávají INTACT |
 
 ## 7. Ověření (Definition of Done)
 
@@ -150,6 +152,8 @@ zůstávají indexy per-attachment (dnešní chování).
    - **pečeti DocuSealu** (adbe.pkcs7.detached, vlastní ESIGN cert) `INTACT:UNTRUSTED` —
      nejsou QES, trust roots QES se na ně nevztahují (pyHanko CLI proto skončí `Error: Validation failed`);
    - **DocTS** (ETSI.RFC3161) `INTACT:UNTRUSTED` v test trust listu, v Adobe trusted;
+   - revizi dalšího signera klasifikuje pyHanko jako `EXTENDED_WITH_FORM_FILLING`
+     (`ACCEPTABLE_MODIFICATIONS`), ne `EXTENDED_WITH_OTHER` (`ILLEGAL_MODIFICATIONS`);
    - Pdfium ve forku i `pdfsig` označí všechny signatury `INTACT`.
 3. `pdfsig` / Pdfium — všechny podpisy INTACT (i pečeti).
 4. Manuálně: 3 stakeholders na stagingu, každý podepíše z appky; finální PDF
@@ -162,3 +166,6 @@ zůstávají indexy per-attachment (dnešní chování).
   `spec/lib/qes/chain_spec.rb`; finální PDF má N podpisů appky + N pečetí + N DocTS.
 - Commity a podrobná historie jsou v gitu forku; aktuální stav dokumentuje
   [AGENTS.md](../AGENTS.md#stav) a SPEC § 4.6, § 7.1 a § 7.6.
+- Viditelná pečeť je appearance stream widgetu podpisového pole (SPEC § 7.1, § 13): analýza
+  revizí (pyHanko) ji vidí jako form filling, takže `make qes-e2e-two` a `make qes-staging-e2e`
+  hlásí u prvního podpisu `ACCEPTABLE_MODIFICATIONS` místo `ILLEGAL_MODIFICATIONS`.

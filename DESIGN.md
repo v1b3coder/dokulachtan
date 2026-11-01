@@ -623,7 +623,7 @@ Všechny níže uvedené body jsou rozhodnuté ve SPEC.md (potvrzeno 2026-10-15)
 | 5 | Varianta A: čtečka + PIN/QPIN | **MOI Podpisové SDK**; čtečky ACR 3901 U-S1, bR301 BLE (černá), CT 1100, AirID 2 (+ USB OTG); PIN/QPIN zadává dialog SDK | SPEC § 9.4 |
 | 6 | Desktop varianta A | mimo v1 (lokální agent až později) | SPEC § 17 |
 | 7 | Push notifikace | mimo v1 (deep link z e-mailu) | SPEC § 17 |
-| 8 | Signature appearance | **viditelná pečeť podepisujícího** (jméno, „Digitálně podepsáno“, datum) na pozici pole `qes`; kreslí se do TBS PDF, takže ji podpis kryje a zůstává INTACT. Podpisové pole je neviditelné. | SPEC § 7.1 |
+| 8 | Signature appearance | **viditelná pečeť podepisujícího** (jméno, „Digitálně podepsáno“, datum) na pozici pole `qes` jako **appearance stream widgetu podpisového pole**; kreslí se do TBS PDF, takže ji podpis kryje a zůstává INTACT, a analýza revizí ji vidí jako form filling (`ACCEPTABLE_MODIFICATIONS`). | SPEC § 7.1, § 13 |
 | 9 | Hromadné podepisování | mimo v1 | SPEC § 17 |
 | 10 | Lokalizace a přístupnost | čeština + angličtina, přístupnost dle Expo defaults | SPEC § 21 |
 | 11 | Pečeť DocuSealu u QES | **ano, inkrementálně po podpisu appky** | SPEC § 7.6 |

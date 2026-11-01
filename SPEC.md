@@ -776,16 +776,23 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      (`HexaPDF::Document.new(io: StringIO.new(final_document.download))`); dokument se **NEPŘESTAVUJE**
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
-   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, datum) na pozici pole `qes`.
+   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, e-mail z certifikátu, datum)
+   na pozici pole `qes` jako **appearance stream widgetu** podpisového pole.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože TBS se staví **před**
-   certifikátem (§ 5.1a); pole je neviditelné (`Rect: [0, 0, 0, 0]`).
+   certifikátem (§ 5.1a). Pole má **viditelný widget** s `/Rect` na ploše pole `qes` (stránka dle
+   `page_offsets`), `/AP /N` = form XObject s appearance streamem pečeti a `/F 4` (Print); pole se předává
+   do `HexaPDF::DigitalSignature::Signatures#add`, který tak nevytvoří neviditelný widget `Rect: [0, 0, 0, 0]`.
+   Widget i appearance stream jsou součástí podepsaných bajtů, protože existují už v TBS před podpisem.
 4. Zapíše **inkrementálně** (`HexaPDF::Document#sign` s `external_signing`), takže všechny předchozí revize
    zůstanou nedotčené a TBS PDF je jen nová revize.
 5. Stránky se mapují **globálně** (`page_offsets` dle `submission.schema_documents` a metadat
    `pdf.number_of_pages`), aby se hodnoty a pečeť kreslily na správnou stránku i u dokumentů z více příloh.
-6. Viditelná pečeť podepisujícího je součástí podepsané revize, takže ji podpis kryje a zůstává INTACT;
-   finální PDF tak má na první pohled vidět, že je digitálně podepsané (viz § 16).
+6. Viditelná pečeť podepisujícího je appearance stream widgetu podpisového pole, tedy součástí podepsané
+   revize: podpis ji kryje a zůstává INTACT; finální PDF tak má na první pohled vidět, že je digitálně
+   podepsané (viz § 16). Zároveň jde o **standardní PAdES viditelný podpis**: analýza revizí (pyHanko) vidí
+   nové podpisové pole s appearance streamem jako form filling, ne jako změnu obsahu stránky, takže revizi
+   dalšího signera klasifikuje `ACCEPTABLE_MODIFICATIONS` a podpisy zůstávají INTACT (§ 4.6, § 13).
 
 ### 7.2 CMS placeholder a podepsané atributy
 
@@ -1355,6 +1362,12 @@ Audit trail PDF **MUSÍ** obsahovat stránku QES (§ 7.7) s těmito údaji a s u
 o kvalifikovaný/zdokonalený podpis podle zjištěné úrovně. Stránka **MUSÍ** u každého podpisu uvést
 e-mail z certifikátu (první uvedený v SAN; cert bez e-mailu řádek vynechá) odděleně od jména submittera.
 
+Viditelná pečeť v podepsaném PDF je **appearance stream widgetu** podpisového pole, ne obsah stránky
+(§ 7.1). Pečeť tedy leží v podepsané revizi a ve všech pozdějších revizích zůstává nedotčená; analýza revizí
+(pyHanko) klasifikuje pozdější revizi jako form filling (`EXTENDED_WITH_FORM_FILLING`,
+`ACCEPTABLE_MODIFICATIONS`), takže podpisy zůstávají INTACT. E-mail z certifikátu v pečeti **MUSÍ** odpovídat
+`qes_stamp_identity` z TBS (`stamp_mismatch`, § 5.2).
+
 Hodnoty v `submitter.values[qes_uuid]` **MUSÍ** být `"qes:<session_id>"`, aby bylo možné dohledat
 session z UI a DB. Rozšíření `GET /api/submissions/:id` o `qes` metadata je **mimo v1** (§ 17 #6);
 dohledání je v v1 možné přes `QesSession` v DB a hodnotu pole (kontrolu formátu řeší § 4.4).
@@ -1645,7 +1658,7 @@ Nové soubory forku (vše v `app/lib/qes/` — Rails autoloaduje `app/**`):
 | `app/lib/qes/session_manager.rb` | stavový automat (§ 4.3) | `spec/models/qes_session_spec.rb` |
 | `app/lib/qes/token.rb` | generování a hash tokenu | `spec/lib/qes/token_spec.rb` |
 | `app/lib/qes/tbs_document.rb` | TBS PDF: základ (šablona / finální PDF předchůdce) + podpisové pole | `spec/lib/qes/chain_spec.rb`, `spec/lib/qes/pipeline_spec.rb` |
-| `app/lib/qes/stamp.rb` | viditelná pečeť podepisujícího (§ 7.1) | `spec/lib/qes/chain_spec.rb` |
+| `app/lib/qes/stamp.rb` | viditelná pečeť jako appearance widgetu podpisového pole (§ 7.1) | `spec/lib/qes/stamp_spec.rb` |
 | `app/lib/qes/cms_builder.rb` | CMS placeholder → signed attrs → finální CMS | `spec/lib/qes/pipeline_spec.rb` |
 | `app/lib/qes/placeholder_signed_data_creator.rb` | podtřída `SignedDataCreator` (zachytí signed attrs) | `spec/lib/qes/pipeline_spec.rb` |
 | `app/lib/qes/certificate_info.rb` | QCStatements, level, keyUsage, platnost | `spec/lib/qes/certificate_info_spec.rb` |
