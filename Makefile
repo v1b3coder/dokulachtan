@@ -3,13 +3,32 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
 
-help: ## Vypíše všechny cíle s popisem
-	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) | sort | sed -E 's/:.*## / — /'
+help: ## Vypíše fáze testů a ostatní cíle
+	@echo "Fáze testů:"
+	@grep -hE '^(test|test-ci|test-full|test-manual|test-prepare|test-tools|test-help|test-staging|test-android|test-eu-dss|test-card):.*?## ' $(MAKEFILE_LIST) | sort | sed -E 's/:.*## / — /'
+	@echo
+	@echo "Interní testovací cíle (používat přes fáze):"
+	@grep -hE '^test-(t0|t1|t2|t3|app|negative|e2e):.*?## ' $(MAKEFILE_LIST) | sort | sed -E 's/:.*## / — /'
+	@echo
+	@echo "Ostatní:"
+	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
+		| grep -vE '^(test|qes-|fixtures:|validate:|negative:|verify:|apk-fingerprint-test:|help:)' \
+		| sort | sed -E 's/:.*## / — /'
+
+test-help: ## Vypíše mapování fází na interní targety
+	@echo "F0 test-prepare = venv fork-setup qes-test-images qes-test-assets app-deps fork-deps hooks"
+	@echo "F1 test         = test-t0 test-app"
+	@echo "F2 test-ci      = test-t0 test-t1 test-app"
+	@echo "F3 test-full    = test-ci test-t2 test-t3 test-negative test-e2e"
+	@echo "F4 test-manual  = test-staging test-eu-dss (ALLOW_EXTERNAL=1)"
+	@echo "F4 test-android = APK + emulátor (ALLOW_EMULATOR=1)"
+	@echo "F4 test-card   = reálná čtečka (TODO)"
+	@echo "F5 test-tools   = verify apk-fingerprint-test qes-test-parallel-selftest"
 
 venv: ## Vytvoří .venv (pyHanko + podman-compose, pin z requirements-qes.txt)
 	python3 -m venv .venv
@@ -18,6 +37,28 @@ venv: ## Vytvoří .venv (pyHanko + podman-compose, pin z requirements-qes.txt)
 hooks: ## Nainstaluje git hooky z .githooks (pre-push: T0 + app testy + typecheck)
 	git config core.hooksPath .githooks
 	chmod +x .githooks/pre-push
+
+app-deps: ## Nainstaluje npm závislosti appky (npm ci)
+	cd mobile/app && npm ci
+
+fork-deps: ## Nainstaluje yarn závislosti forku (pro JS testy)
+	@if command -v yarn >/dev/null; then \
+		cd vendor/docuseal && yarn install --frozen-lockfile; \
+	else \
+		cd vendor/docuseal && npx --yes yarn@1.22.22 install --frozen-lockfile; \
+	fi
+
+test-check:
+	@test -d vendor/docuseal/.git || { echo "chybí vendor/docuseal — make test-prepare"; exit 1; }
+
+test-check-js:
+	@test -d vendor/docuseal/node_modules || { echo "chybí vendor/docuseal/node_modules — make test-prepare"; exit 1; }
+
+test-check-app:
+	@test -d mobile/app/node_modules || { echo "chybí mobile/app/node_modules — make test-prepare"; exit 1; }
+
+test-check-python:
+	@test -x .venv/bin/python || { echo "chybí .venv — make test-prepare"; exit 1; }
 
 test-pki: ## Vygeneruje testovací PKI (root, issuing CA, koncové certy)
 	./scripts/make_test_pki.sh
@@ -156,6 +197,78 @@ qes-app-test: ## Jest testy appky (mobile/app): vault, P12, signer, API
 
 qes-app-typecheck: ## TypeScript kontrola appky
 	cd mobile/app && npx tsc --noEmit
+
+# --- Fáze testů (veřejné entrypointy; detail: test/README.md) -----------------
+# F0 příprava, F1 před pushem, F2 CI basic, F3 CI full,
+# F4 post-deploy/manuální, F5 nástroje/legacy.
+
+test-prepare: ## F0: příprava (venv, fork, image, assety, deps, hooky)
+	$(MAKE) venv fork-setup qes-test-images qes-test-assets app-deps fork-deps hooks
+
+test: test-check test-check-js test-check-app ## F1: rychlá smyčka (T0 + JS + app + typecheck)
+	$(MAKE) test-t0 test-app
+
+test-ci: test-check test-check-js test-check-app ## F2: CI basic (T0 + T1 + app + typecheck)
+	$(MAKE) test-t0 test-t1 test-app
+
+test-full: test-check test-check-js test-check-app test-check-python qes-test-assets ## F3: plná sada (T0–T3 + negativní + E2E + app)
+	$(MAKE) venv
+	$(MAKE) test-ci
+	$(MAKE) test-t2 test-t3
+	$(MAKE) test-negative test-e2e
+
+test-manual: ## F4: post-deploy/manuální (staging + EU DSS); vyžaduje ALLOW_EXTERNAL=1
+	@test "$(ALLOW_EXTERNAL)" = 1 || { \
+		echo "F4 pouští testy proti živému stagingu a externímu API."; \
+		echo "Potvrď: ALLOW_EXTERNAL=1 make test-manual"; exit 1; }
+	$(MAKE) venv
+	$(MAKE) test-staging test-eu-dss
+
+test-staging: test-check test-check-python ## F4a: staging E2E proti nasazenému stagingu (Fly)
+	@test "$(ALLOW_EXTERNAL)" = 1 || { echo "F4a vyžaduje ALLOW_EXTERNAL=1"; exit 1; }
+	command -v fly >/dev/null || { echo "chybí fly CLI"; exit 1; }
+	$(MAKE) qes-staging-e2e qes-staging-same-signer qes-staging-e2e-pdf
+
+test-eu-dss: test-check test-check-python ## F4c: EU DSS (PDF opouští stroj)
+	@test "$(ALLOW_EXTERNAL)" = 1 || { echo "F4c vyžaduje ALLOW_EXTERNAL=1"; exit 1; }
+	$(MAKE) qes-eu-dss-verify
+
+test-android: test-check-app ## F4b: APK + emulátor (lokálně; SDK/KVM)
+	@test "$(ALLOW_EMULATOR)" = 1 || { \
+		echo "F4b staví APK a pouští emulátor."; \
+		echo "Potvrď: ALLOW_EMULATOR=1 make test-android"; exit 1; }
+	cd mobile/app && npx expo prebuild --platform android --no-install
+	cd mobile/app/android && ./gradlew assembleDebug
+	@echo "instrumentace zatím není implementovaná — TODO"
+
+test-card: ## F4d: reálná čtečka (TODO, dnes stub)
+	@echo "reálná čtečka není implementovaná (StubCardSigner)"
+
+test-tools: ## F5: nástroje a legacy (fixtures, validate, staré negative)
+	$(MAKE) verify apk-fingerprint-test qes-test-parallel-selftest
+
+# Interní sub-targety pro CI a debug; normálně používej fáze výše.
+test-t0: test-check test-check-js ## T0: QES vrstva + JS (interní)
+	QES_DB="$${QES_DB:-qes-t0.sqlite3}" QES_SCHEMA="$${QES_SCHEMA:-qes-t0.rb}" $(MAKE) qes-test-qes
+
+test-t1: test-check ## T1: celá sada bez system (interní)
+	QES_DB="$${QES_DB:-qes-t1.sqlite3}" QES_SCHEMA="$${QES_SCHEMA:-qes-t1.rb}" $(MAKE) qes-test-fast
+
+test-t2: test-check qes-test-assets ## T2: celá sada se system (interní)
+	QES_DB="$${QES_DB:-qes-t2.sqlite3}" QES_SCHEMA="$${QES_SCHEMA:-qes-t2.rb}" $(MAKE) qes-test
+
+test-t3: test-check qes-test-assets ## T3: Postgres 18 (interní)
+	$(MAKE) qes-test-postgres
+
+test-app: test-check-app ## App Jest + typecheck (interní)
+	$(MAKE) qes-app-test qes-app-typecheck
+
+test-negative: test-check test-check-python qes-test-image qes-test-assets ## N1–N17 (interní)
+	QES_E2E_IMAGE=$(QES_IMAGE) $(MAKE) qes-negative
+
+test-e2e: test-check test-check-app test-check-python qes-test-image qes-test-assets ## E2E: 4 běhy + fake card (interní)
+	QES_E2E_IMAGE=$(QES_IMAGE) $(MAKE) qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e
+	QES_E2E_IMAGE=$(QES_IMAGE) QES_E2E_REPORT=qes-e2e-card-report.txt $(MAKE) qes-e2e-card
 
 # Fly.io: konfigurace jsou v parent repu (deploy/docuseal/), do forku se předávají --config;
 # ve forku tak nezůstává nic, co nepatří k DocuSealu.
