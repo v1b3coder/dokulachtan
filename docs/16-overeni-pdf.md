@@ -528,10 +528,11 @@ PDF opouští stroj; nespouštět v běžném CI.
 7. Store uloží PDF do „Verified documents“ a report do `preferences['qes_verification']`.
 8. Store s tampered/unsigned PDF → `422 not_verifiable`, počet templateů se nezmění.
 9. Bez API tokenu → `401`; rate limit → `429`; šifrované PDF → `422`.
-10. Na stagingu i produkční instanci ověřeno reálným requestem: staging test cert → `valid` + `origin=docuseal`,
-    store → template 30, tampered → `invalid`, unsigned → `unsigned`; produkční instance test cert →
-    `valid_untrusted` (root jen z `QES_VERIFICATION_TRUST_ROOTS`), unsigned → `unsigned`; `/up` 200 na obou.
-11. V appce (APK 1.2.0) na emulátoru ověřeno: Home → „Ověřit PDF“ → staging PDF →
+10. **Historicky** (2026-10-22; dnes se proti produkci netestuje) na stagingu i produkční instanci ověřeno
+    reálným requestem: staging test cert → `valid` + `origin=docuseal`, store → template 30, tampered → `invalid`,
+    unsigned → `unsigned`; produkční instance test cert → `valid_untrusted` (root jen z
+    `QES_VERIFICATION_TRUST_ROOTS`), unsigned → `unsigned`; `/up` 200 na obou.
+11. **Historicky** (2026-10-22; APK 1.2.0) na emulátoru ověřeno: Home → „Ověřit PDF“ → staging PDF →
     žlutý verdikt „Podpis je platný, ale certifikát není důvěryhodný“ (produkční instance, test cert),
     soubor, podpisy a „Uložit do DocuSealu“; sdílení i otevření PDF otevírá S14 s volbou.
 12. Web UI: template s `qes_verification` zobrazí panel s verdiktem a metadaty, náhled PDF

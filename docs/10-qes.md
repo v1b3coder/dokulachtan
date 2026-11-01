@@ -256,7 +256,8 @@ a musí být v `QES_LTV_ALLOWED_HOSTS`). Na produkční instanci jsou CRL hosty 
 `crl2.postsignum.cz`, `crl.postsignum.eu`) i I.CA (`qcrldp1.ica.cz`, `qcrldp2.ica.cz`, `crldp1.ica.cz`,
 `crldp2.ica.cz`) **http**, proto musí být v `QES_LTV_ALLOWED_HOSTS` —
 bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` by skončil na
-`ltv_unavailable` (ověřeno na produkční instanci 2026-10-18). Podpis certem I.CA navíc potřebuje její roots
+`ltv_unavailable` (**historicky** ověřeno na produkční instanci 2026-10-18; dnes se proti produkci netestuje).
+Podpis certem I.CA navíc potřebuje její roots
 v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL PostSignum Qualified CA 4 má
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
 `QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
@@ -286,7 +287,8 @@ QES_LTV_ALLOWED_HOSTS=crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,dok
 QES_PUBLIC_BASE_URL=https://dokulachtan.fly.dev
 ```
 
-**Český verification trust store (2026-10-28):** produkční instance **v52**
+**Český verification trust store — historický snapshot (2026-10-28; dnes se proti produkci netestuje):**
+produkční instance **v52**
 (`deployment-01M61T89AGF8RJPMPQ5F1TSC0Y`), staging **v25**
 (`deployment-01M61RKSP8C594JRPAEKTR3VZT`), obě z forku `cfd36b2c`. Signing
 `QES_TRUST_ROOTS` zůstává PostSignum (prod 6; staging test root + 6 PostSignum = 7),

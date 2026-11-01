@@ -108,9 +108,9 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
 **Fly.io žádnou e-mailovou službu neposkytuje** — je to hosting, ne e-mailový provider. V marketplace
 Extensions žádný e-mailový provider není a Fly sám doporučuje externí službu: jeho odchozí IP adresy nemají
 rDNS, takže je přijímající servery často blokují. **Odchozí SMTP ale blokované není** — z obou machine
-(`dokulachtan` i `dokulachtan-staging`, region fra) ověřeno TCP spojení na Gmail 587, Resend 465, Postmark 587,
-Brevo 587, Mailtrap 2525 i port 25. Odesílá se tedy přes **externí SMTP relay**; e-mailovou infrastrukturu
-nikdo neprovozuje.
+(`dokulachtan` i `dokulachtan-staging`, region fra) bylo **historicky** ověřeno TCP spojení na Gmail 587,
+Resend 465, Postmark 587, Brevo 587, Mailtrap 2525 i port 25; dnes se proti produkci netestuje. Odesílá se
+tedy přes **externí SMTP relay**; e-mailovou infrastrukturu nikdo neprovozuje.
 
 **Nasazeno (2026-10-18):** Brevo free (300 e-mailů/den). Obě prostředí mají stejné přihlašovací údaje
 (`SMTP_USERNAME=<SMTP_USERNAME>` — login **není** e-mail účtu, Brevo u novějších účtů generuje
