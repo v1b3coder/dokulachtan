@@ -41,7 +41,10 @@ Veřejné entrypointy:
 | **F2** | `make test-ci` | před PR: F1 + T1 (stejné jako CI na push/PR) |
 | **F3** | `make test-full` | před release / po bumpu pinu: F2 + T2 + T3 + negativní + E2E |
 | **F4** | `ALLOW_EXTERNAL=1 make test-manual` | staging E2E + EU DSS; po deployi, nikdy v CI |
-| **F4** | `ALLOW_EMULATOR=1 make test-android` | APK + emulátor; lokálně |
+| **F4** | `ALLOW_EMULATOR=1 make test-android` | emulátor + instrumentace; lokálně |
+| **F4** | `make debug-phone` | debug APK na telefon (arm64) |
+| **F4** | `make emulator` | debug APK pro emulátor (x86_64) |
+| **F4** | `make release TAG=v1.3.10` | release APK v CI na tag |
 | **F5** | `make test-tools` | fixtures, validate, legacy |
 
 Interní tiery T0–T3 a počty: [test/README.md](test/README.md).
@@ -59,7 +62,10 @@ Hook pustí F1 s čerstvou DB; přeskočení `SKIP_QES_HOOK=1`.
 
 - `make test-e2e` — F3: fork + podpis kódem appky, dva signeři, přímý podpis PDF, verify, fake čip.
 - `make test-manual` — F4: staging E2E a EU DSS; vyžaduje živý staging a `ALLOW_EXTERNAL=1`.
-- `make test-android` — F4: APK + emulátor; dnes TODO.
+- `make test-android` — F4: emulátor + instrumentace; dnes TODO.
+- `make debug-phone` — F4: debug APK na telefon (arm64).
+- `make emulator` — F4: debug APK pro emulátor (x86_64).
+- `make release TAG=v1.3.10` — F4: release APK se staví v CI na tag.
 - `make test-card` — F4: reálná čtečka; dnes stub.
 
 Podrobnosti a co se netestuje: [test/README.md](test/README.md).
@@ -86,7 +92,7 @@ Podrobnosti a co se netestuje: [test/README.md](test/README.md).
 Konfigurace prostředí je v `deploy/docuseal/`: `fly.toml` = produkční instance, `fly.staging.toml` = staging.
 Produkce = **privátní instance uživatele s produkčním kódem** (dnes Fly app `dokulachtan`), ne centrální
 služba; adresa instance se v každém nasazení mění. Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Hotový APK najdeš
-v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest); testovací build se staví lokálně.
+v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest); debug-phone/emulator build se staví lokálně.
 Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 
 ## Konfigurace
@@ -158,7 +164,7 @@ zůstává v gitu.
   takže testovací prostředí hlásí `UNTRUSTED` (stejně jako dřív); staging to řeší test CRL na
   staging hostu.
 - **APK z Releases** otevírá signing flow přes custom scheme `dokulachtan://` (systémový chooser);
-  Android App Links byly zrušeny (#18.1). Produkce „Dokulachtan“, debug „Dokulachtan (debug)“,
-  testovací APK „Dokulachtan (test)“ — chooser je rozliší. Podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
+  Android App Links byly zrušeny (#18.1). Produkce „Dokulachtan“, debug-phone „Dokulachtan (debug)“,
+  emulator „Dokulachtan (emulator)“ — chooser je rozliší. Podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
 - **iOS build** čeká na Apple Developer účet; appka je cross-platform připravená.
 - **Otevřené nálezy** ze třetí a čtvrté kontroly: [docs/24-triage-issues.md](docs/24-triage-issues.md).

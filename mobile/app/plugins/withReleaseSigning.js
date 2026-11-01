@@ -1,17 +1,12 @@
-// Config plugin: release APK podepisuje release keystorem z CI, lokální buildy
-// podepisuje debug keystore tohoto počítače (`~/.android/debug.keystore`), ne
-// kopie z Expo šablony v projektu. `android/` je generovaný `expo prebuild`,
-// takže přímá úprava build.gradle by se při dalším prebuildu ztratila.
+// Config plugin: release APK podepisuje release keystorem z CI. Lokální buildy
+// mají dva explicitní targety a oba používají debug keystore tohoto počítače:
+// - `make debug-phone` = `.debug` / „Dokulachtan (debug)“, arm64,
+// - `make emulator`    = `.emulator` / „Dokulachtan (emulator)“, x86_64.
+// `release` = release build s CI keystorem, bez suffixu; lokálně se nebuildí
+// (`assembleRelease` bez `ANDROID_KEYSTORE_PATH` selže).
 //
-// CI nastaví ANDROID_KEYSTORE_PATH (dekódovaný secret) a hesla; když proměnná
-// chybí, `release` použije debug config — to je jen pro lokální buildy.
-//
-// Lokální buildy mají vlastní identitu, aby se vešly vedle produkce:
-// - `debug` = `.debug` / „Dokulachtan (debug)“,
-// - `release` bez ANDROID_KEYSTORE_PATH (testovací APK) = `.test` /
-//   „Dokulachtan (test)“,
-// - `release` s ANDROID_KEYSTORE_PATH (produkce) = bez suffixu.
-// Share/open aliasy mají stejný suffix v `share_pdf_label` a `open_pdf_label`.
+// `android/` je generovaný `expo prebuild`, takže přímá úprava build.gradle by se
+// při dalším prebuildu ztratila — proto plugin.
 const { withAppBuildGradle } = require('expo/config-plugins');
 
 const LOCAL_DEBUG_KEYSTORE = 'file(System.getProperty("user.home") + "/.android/debug.keystore")';
@@ -24,7 +19,7 @@ const RELEASE_SIGNING = `        release {
         }
 `;
 
-const DEBUG_IDENTITY = [
+const PHONE_IDENTITY = [
   'applicationIdSuffix ".debug"',
   'versionNameSuffix "-debug"',
   'resValue "string", "app_name", "Dokulachtan (debug)"',
@@ -32,20 +27,27 @@ const DEBUG_IDENTITY = [
   'resValue "string", "open_pdf_label", "Ověřit PDF (debug)"',
 ];
 
-const TEST_IDENTITY = [
-  'applicationIdSuffix ".test"',
-  'versionNameSuffix "-test"',
-  'resValue "string", "app_name", "Dokulachtan (test)"',
-  'resValue "string", "share_pdf_label", "Podepsat PDF (test)"',
-  'resValue "string", "open_pdf_label", "Ověřit PDF (test)"',
+const EMULATOR_IDENTITY = [
+  'applicationIdSuffix ".emulator"',
+  'versionNameSuffix "-emulator"',
+  'resValue "string", "app_name", "Dokulachtan (emulator)"',
+  'resValue "string", "share_pdf_label", "Podepsat PDF (emulator)"',
+  'resValue "string", "open_pdf_label", "Ověřit PDF (emulator)"',
 ];
+
+const RELEASE_KEY_GUARD = `// Release APK se podepisuje jen v CI release keystorem.
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") } && !System.getenv("ANDROID_KEYSTORE_PATH")) {
+    throw new GradleException("Release build vyžaduje ANDROID_KEYSTORE_PATH (CI). Lokálně použij make debug-phone nebo make emulator.")
+}
+
+android {`;
 
 function indent(lines, spaces) {
   return lines.map((line) => `${' '.repeat(spaces)}${line}`).join('\n');
 }
 
 function addReleaseSigning(contents) {
-  if (contents.includes('ANDROID_KEYSTORE_PATH')) {
+  if (contents.includes('signingConfigs.release')) {
     return contents;
   }
 
@@ -63,10 +65,7 @@ function addReleaseSigning(contents) {
     throw new Error('withReleaseSigning: v build.gradle chybí release.signingConfig');
   }
 
-  return contents.replace(
-    releaseBuild,
-    '$1signingConfig System.getenv("ANDROID_KEYSTORE_PATH") ? signingConfigs.release : signingConfigs.debug',
-  );
+  return contents.replace(releaseBuild, '$1signingConfig signingConfigs.release');
 }
 
 function useLocalDebugKeystore(contents) {
@@ -78,7 +77,7 @@ function useLocalDebugKeystore(contents) {
 }
 
 function addDebugIdentity(contents) {
-  if (contents.includes('applicationIdSuffix ".debug"')) {
+  if (contents.includes('applicationIdSuffix ".emulator"')) {
     return contents;
   }
 
@@ -88,24 +87,22 @@ function addDebugIdentity(contents) {
     throw new Error('withReleaseSigning: v build.gradle chybí debug block');
   }
 
-  return contents.replace(debugBlock, `$1${indent(DEBUG_IDENTITY, 12)}\n$2`);
+  const identity = `            if (System.getenv("APP_TARGET") == "emulator") {
+${indent(EMULATOR_IDENTITY, 16)}
+            } else {
+${indent(PHONE_IDENTITY, 16)}
+            }
+`;
+
+  return contents.replace(debugBlock, `$1${identity}\n$2`);
 }
 
-function addTestIdentity(contents) {
-  if (contents.includes('applicationIdSuffix ".test"')) {
+function addReleaseKeyGuard(contents) {
+  if (contents.includes('Release build vyžaduje ANDROID_KEYSTORE_PATH')) {
     return contents;
   }
 
-  const releaseSigning = /(\n)(\s*)(signingConfig System\.getenv\("ANDROID_KEYSTORE_PATH"\) \? signingConfigs\.release : signingConfigs\.debug)/;
-
-  if (!releaseSigning.test(contents)) {
-    throw new Error('withReleaseSigning: v build.gradle chybí buildTypes.release signingConfig');
-  }
-
-  return contents.replace(
-    releaseSigning,
-    `$1            if (!System.getenv("ANDROID_KEYSTORE_PATH")) {\n${indent(TEST_IDENTITY, 16)}\n            }$1$2$3`,
-  );
+  return contents.replace(/^android \{/m, RELEASE_KEY_GUARD);
 }
 
 module.exports = function withReleaseSigning(config) {
@@ -114,7 +111,7 @@ module.exports = function withReleaseSigning(config) {
 
     contents = addReleaseSigning(contents);
     contents = addDebugIdentity(contents);
-    contents = addTestIdentity(contents);
+    contents = addReleaseKeyGuard(contents);
     config.modResults.contents = contents;
 
     return config;

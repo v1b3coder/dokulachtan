@@ -294,8 +294,8 @@ První verze tohoto triage to měla jako P0 a navrhovala denylist debug otisku v
 Druhá verze to označila za wontfix s argumentem, že jde o konfiguraci distributora appky.
 **Výsledek:** `assetlinks.json` je z forku **úplně odstraněn** — Android jde přes custom scheme
 `dokulachtan://sign` a systémový chooser; ve které aplikaci se signing flow otevře, rozhoduje uživatel.
-Chooser je rozliší podle jména: produkce „Dokulachtan“, debug „Dokulachtan (debug)“, testovací
-APK „Dokulachtan (test)“ (applicationId `.debug` / `.test`, viz [docs/10](10-qes.md#apk-pro-testování)).
+Chooser je rozliší podle jména: produkce „Dokulachtan“, debug-phone „Dokulachtan (debug)“, emulator
+„Dokulachtan (emulator)“ (applicationId `.debug` / `.emulator`, viz [docs/10](10-qes.md#apk-pro-testování)).
 
 Proč to není jen konfigurace:
 
@@ -318,7 +318,7 @@ Co zůstává: iOS Universal Links (AASA, `QES_IOS_TEAM_ID`) — na iOS chooser 
 
 **Navazující (2026-10-30):** veřejná download stránka `dokulachtan-download` servírovala APK
 s produkčním `applicationId` a veřejným debug podpisem (šablona `debug.keystore`), takže kdokoli mohl
-dodat update. Stránka i Fly app byly zrušeny; testovací APK se staví lokálně a předává přímo.
+dodat update. Stránka i Fly app byly zrušeny; debug-phone/emulator APK se staví lokálně a předává přímo.
 
 - **#23.1 Lexikální detekce šifrovaného PDF v appce** (`preparedDocument.ts:49-65`) — jen UX, server kontroluje parserem
   (`pdf_source.rb`). Nebudeme parsovat xref v JS.

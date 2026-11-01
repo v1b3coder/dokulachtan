@@ -4,7 +4,8 @@ name: Android APK release
 # Běží na GitHubu i na Gitea Actions (Gitea čte .github/workflows a je
 # kompatibilní se syntaxí GitHub Actions); release krok se podle hostu rozhodne
 # mezi `gh` (GitHub) a REST API Gitea, protože `gh` s Giteou neumí mluvit.
-# Podpis: release keystore z CI secrets; lokální buildy používají debug keystore.
+# Podpis: release keystore z CI secrets; lokální buildy jsou debug-phone/emulator,
+# release se lokálně nebuildí (assembleRelease bez ANDROID_KEYSTORE_PATH selže).
 # Gate: `qes` job pouští kompletní QES sadu (T0–T3, negativní, E2E, app);
 # build na něm závisí, takže APK bez zelených testů nevznikne.
 # Keystore se generuje mimo repo (deploy/android-release/, gitignored).

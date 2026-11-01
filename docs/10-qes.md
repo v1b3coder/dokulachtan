@@ -271,7 +271,7 @@ v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL Post
 # DigiCert TSA, require_ltv=true. Staging přepisuje test root, require_ltv, test CRL a allowlist.
 QES_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/postsignum.pem
 QES_VERIFICATION_TRUST_ROOTS=/app/config/qes/root.crt,/app/config/qes/czech.pem
-#   root.crt = testovací root (testovací APK); postsignum.pem = reálné PostSignum certy pro podpis;
+#   root.crt = testovací root (debug-phone/emulator); postsignum.pem = reálné PostSignum certy pro podpis;
 #   czech.pem = vydávající CA pro ověření (anchory; PostSignum, I.CA, eIdentity, NCA, KB), ne rooty
 QES_PUBLIC_BASE_URL=https://dokulachtan-staging.fly.dev
 QES_REQUIRE_LTV=false
@@ -302,45 +302,44 @@ slouží k vyzkoušení toku z appky (nebo ji smažte).
 
 ### APK pro testování
 
-Testovací build appky (testovací certifikát v appce) se staví lokálně a předává se přímo
-(soubor, vlastní pre-release); veřejná download stránka byla zrušena 2026-10-30
-(`deploy/apk/` i Fly app `dokulachtan-download`), protože servírovala APK s produkčním
-`applicationId` a veřejným debug podpisem.
+Lokální buildy mají tři explicitní targety; agent volí target, ne ABI. Veřejná download
+stránka byla zrušena 2026-10-30 (`deploy/apk/` i Fly app `dokulachtan-download`), protože
+servírovala APK s produkčním `applicationId` a veřejným debug podpisem.
 
 - Identity buildů (`mobile/app/plugins/withReleaseSigning.js`):
-  - produkce (release keystore z CI) = `cz.dokulachtan.signer` / „Dokulachtan“,
-  - debug (`expo run:android`) = `cz.dokulachtan.signer.debug` / „Dokulachtan (debug)“,
-  - testovací APK (release bez `ANDROID_KEYSTORE_PATH`) = `cz.dokulachtan.signer.test` / „Dokulachtan (test)“.
+  - `make debug-phone` = `cz.dokulachtan.signer.debug` / „Dokulachtan (debug)“, debug build, arm64,
+  - `make emulator` = `cz.dokulachtan.signer.emulator` / „Dokulachtan (emulator)“, debug build, x86_64,
+  - `make release` = `cz.dokulachtan.signer` / „Dokulachtan“, release build, arm64, jen CI.
   Všechny tři se instalují vedle sebe; data (vault, TOFU, Server URL, API token) jsou oddělená.
-  Lokální buildy podepisuje debug keystore **tohoto počítače** (`~/.android/debug.keystore`),
-  ne kopie z Expo šablony v projektu.
-- Build pro telefon: `cd mobile/app && npx expo prebuild --platform android && cd android &&
-  ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a` (bez `ANDROID_KEYSTORE_PATH` = debug keystore
-  tohoto počítače pro lokální testovací APK; release v CI viz `deploy/android-release/README.md`).
-  Testovací APK se nevyvěšuje veřejně; podpis je vázaný na počítač, kde vznikl.
-  `mobile/app/plugins/withApkSize.js` při prebuildu nastaví komprimované `.so` (`expo.useLegacyPackaging`),
-  `shrinkResources` a výchozí ABI `x86_64` pro emulátor; release build bez `arm64-v8a` spadne
-  s chybou, aby se nevydal APK, který na telefon nejde nainstalovat.
-- Debug build: `cd mobile/app && npm run android` (= `expo run:android --app-id cz.dokulachtan.signer.debug`;
-  bez `--app-id` by Expo CLI otevřel produkční appku, protože čte `defaultConfig.applicationId`).
+  `debug-phone` a `emulator` podepisuje debug keystore **tohoto počítače** (`~/.android/debug.keystore`),
+  ne kopie z Expo šablony v projektu. `release` podepisuje jen CI release keystore.
+- `make debug-phone` = `assembleDebug -PreactNativeArchitectures=arm64-v8a` + `adb install` (telefon).
+- `make emulator` = `assembleDebug -PreactNativeArchitectures=x86_64` + `adb install` (emulátor).
+- `make release TAG=v1.3.10` jen vypíše CI příkaz; APK se staví v CI na tag.
+- `assembleRelease` lokálně bez `ANDROID_KEYSTORE_PATH` selže s hláškou, že release je jen CI.
+  `mobile/app/plugins/withApkSize.js` při prebuildu nastaví komprimované `.so`
+  (`expo.useLegacyPackaging`), `shrinkResources` a výchozí ABI `arm64-v8a` pro debug-phone;
+  emulator si vynutí `x86_64`, release jen `arm64-v8a` (bez arm64 release spadne).
+- Debug build: `make debug-phone` (= `assembleDebug -PreactNativeArchitectures=arm64-v8a`).
+  `npm run android` používá `expo run:android --app-id cz.dokulachtan.signer.debug`; bez `--app-id`
+  by Expo CLI otevřel produkční appku, protože čte `defaultConfig.applicationId`.
   `mobile/app/plugins/withReleaseLikeDebug.js` z něj dělá **release-like build**: JS bundle je
   vložený v APK, `debuggable false` a `useDevSupport = false`, takže žádný Metro, DevTools, LogBox
   ani CDP inspector — ten by z běžící appky přečetl klíč při podpisu. Hot reload v debug buildu nefunguje,
-  po změně JS je potřeba build znovu; signatura debug klíče se změnila, takže už nainstalovaný
-  `cz.dokulachtan.signer.debug` je potřeba odinstalovat (a znovu importovat certifikát).
-- Velikost APK: univerzální build se 4 ABI a nekomprimovanými `.so` má ~92 MB; release jen arm64
-  s deflate a `shrinkResources` ~14 MB (emulátor/testy jedou na x86_64 debug buildu).
+  po změně JS je potřeba build znovu.
+- Velikost APK: univerzální build se 4 ABI a nekomprimovanými `.so` má ~92 MB; debug-phone (arm64)
+  a emulator (x86_64) jsou menší; release jen arm64 s deflate a `shrinkResources` ~14 MB.
 - GitHub Actions: `.github/workflows/android-release.yml` — push tagu `v*` sestaví APK a vytvoří release
   s přiloženým APK (verze z tagu se zapíše do `app.json`); podpis ověří proti
   `ANDROID_RELEASE_CERT_SHA256` a když nesedí, release nevytvoří.
 - Android App Links (assetlinks.json) **zrušeny** (#18.1): odkaz jde přes custom scheme a systémový
   chooser, takže `QES_ANDROID_CERT_SHA256` už není potřeba a `/qes/sign` v prohlížeči funguje
-  jako web fallback s QR a tlačítkem. Testovací build má applicationId `.test` a label
-  „Dokulachtan (test)“; debug build „Dokulachtan (debug)“; chooser je rozliší.
+  jako web fallback s QR a tlačítkem. Debug-phone má applicationId `.debug` a label
+  „Dokulachtan (debug)“, emulator `.emulator` a „Dokulachtan (emulator)“; chooser je rozliší.
 - Deep link ověřen na emulátoru: `adb shell am start -a android.intent.action.VIEW -d "dokulachtan://sign?token=…&server=https%3A%2F%2Fdokulachtan-staging.fly.dev"`
-  → chooser (produkce + testovací APK + debug). Pro debug build přímo:
-  `adb shell am start -a android.intent.action.VIEW -n cz.dokulachtan.signer.debug/cz.dokulachtan.signer.MainActivity -d "…"`
-  → appka otevře S4 s názvem dokumentu, podepisujícím, úrovní a otiskem z reálného stagingu.
+  → chooser (produkce + emulator + debug-phone). Pro debug-phone přímo:
+  `adb shell am start -a android.intent.action.VIEW -n cz.dokulachtan.signer.debug/cz.dokulachtan.signer.MainActivity -d "…"`;
+  pro emulator `-n cz.dokulachtan.signer.emulator/cz.dokulachtan.signer.MainActivity`.
 - **TOFU (trust on first use):** podpisový odkaz nese origin serveru (HTTPS host nebo `server`
   u custom scheme). Při prvním odkazu z neznámého serveru appka token neodešle a zobrazí
   „Neznámý server“ s originem; po potvrzení se origin uloží do `dataStorage` a další odkazy

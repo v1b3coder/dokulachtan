@@ -6,7 +6,7 @@
 // (SEND) nebo vlastní OpenPdfModule (VIEW). Plugin je idempotentní.
 //
 // Labely jsou string resources, aby je šel build type přepsat: produkce
-// „Podepsat PDF“ / „Ověřit PDF“, debug a testovací APK mají suffix.
+// „Podepsat PDF“ / „Ověřit PDF“, debug-phone a emulator mají suffix.
 const { withAndroidManifest, withStringsXml, AndroidConfig } = require('expo/config-plugins');
 
 const SHARE_ALIAS = '.SharePdfAlias';

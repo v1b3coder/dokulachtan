@@ -3,10 +3,14 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
+# ADB pro install z `make debug-phone` / `make emulator`; pro konkrétní zařízení použij ADB="adb -s …".
+ADB ?= adb
+# Sériové číslo emulátoru pro `make emulator` (výchozí první emulátor).
+EMULATOR_SERIAL ?= emulator-5554
 
 help: ## Vypíše fáze testů a ostatní cíle
 	@echo "Fáze testů:"
@@ -26,7 +30,10 @@ test-help: ## Vypíše mapování fází na interní targety
 	@echo "F2 test-ci      = test-t0 test-t1 test-app"
 	@echo "F3 test-full    = test-ci test-t2 test-t3 test-negative test-e2e"
 	@echo "F4 test-manual  = test-staging test-eu-dss (ALLOW_EXTERNAL=1)"
-	@echo "F4 test-android = APK + emulátor (ALLOW_EMULATOR=1)"
+	@echo "F4 test-android = emulátor + instrumentace (ALLOW_EMULATOR=1)"
+	@echo "F4 debug-phone = debug APK na telefon (arm64)"
+	@echo "F4 emulator    = debug APK pro emulátor (x86_64)"
+	@echo "F4 release     = release APK v CI na tag (TAG=v1.3.10)"
 	@echo "F4 test-card   = reálná čtečka (TODO)"
 	@echo "F5 test-tools   = verify apk-fingerprint-test qes-test-parallel-selftest"
 
@@ -233,13 +240,29 @@ test-eu-dss: test-check test-check-python ## F4c: EU DSS (PDF opouští stroj)
 	@test "$(ALLOW_EXTERNAL)" = 1 || { echo "F4c vyžaduje ALLOW_EXTERNAL=1"; exit 1; }
 	$(MAKE) qes-eu-dss-verify
 
-test-android: test-check-app ## F4b: APK + emulátor (lokálně; SDK/KVM)
+test-android: test-check-app ## F4b: emulátor + instrumentace (lokálně; SDK/KVM)
 	@test "$(ALLOW_EMULATOR)" = 1 || { \
 		echo "F4b staví APK a pouští emulátor."; \
 		echo "Potvrď: ALLOW_EMULATOR=1 make test-android"; exit 1; }
-	cd mobile/app && npx expo prebuild --platform android --no-install
-	cd mobile/app/android && ./gradlew assembleDebug
+	cd mobile/app && APP_TARGET=emulator npx expo prebuild --platform android --clean --no-install
+	cd mobile/app/android && APP_TARGET=emulator ./gradlew assembleDebug -PreactNativeArchitectures=x86_64
 	@echo "instrumentace zatím není implementovaná — TODO"
+
+debug-phone: ## Debug APK na telefon (arm64, lokální klíč)
+	cd mobile/app && APP_TARGET=phone npx expo prebuild --platform android --clean --no-install
+	cd mobile/app/android && APP_TARGET=phone ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a
+	$(ADB) install -r mobile/app/android/app/build/outputs/apk/debug/app-debug.apk
+
+emulator: ## Debug APK pro emulátor (x86_64, lokální klíč)
+	cd mobile/app && APP_TARGET=emulator npx expo prebuild --platform android --clean --no-install
+	cd mobile/app/android && APP_TARGET=emulator ./gradlew assembleDebug -PreactNativeArchitectures=x86_64
+	$(ADB) -s $(EMULATOR_SERIAL) install -r mobile/app/android/app/build/outputs/apk/debug/app-debug.apk
+
+release: ## Release APK se staví v CI na tag (TAG=v1.3.10)
+	@test -n "$(TAG)" || { echo "Použij make release TAG=v1.3.10"; exit 1; }
+	@echo "Release APK se staví v CI:"
+	@echo "  git tag $(TAG) && git push origin $(TAG) && git push github $(TAG)"
+	@exit 1
 
 test-card: ## F4d: reálná čtečka (TODO, dnes stub)
 	@echo "reálná čtečka není implementovaná (StubCardSigner)"
