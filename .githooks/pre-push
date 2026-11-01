@@ -61,12 +61,12 @@ if [ "$need_qes" = 1 ]; then
     exit 1; }
   qes_db="qes-hook-$$.sqlite3"
   qes_schema="qes-hook-$$.rb"
-  echo "pre-push: T0 (QES + JS, čerstvá DB)…" >&2
-  QES_DB="$qes_db" QES_SCHEMA="$qes_schema" make qes-test-qes
+  echo "pre-push: F1 (T0 + app + typecheck, čerstvá DB)…" >&2
+  QES_DB="$qes_db" QES_SCHEMA="$qes_schema" make test-t0
 fi
 
 if [ "$need_app" = 1 ]; then
   [ -d mobile/app/node_modules ] || { echo "pre-push: chybí mobile/app/node_modules — cd mobile/app && npm ci" >&2; exit 1; }
-  echo "pre-push: app testy + typecheck…" >&2
-  make qes-app-test qes-app-typecheck
+  echo "pre-push: F1 (app + typecheck)…" >&2
+  make test-app
 fi
