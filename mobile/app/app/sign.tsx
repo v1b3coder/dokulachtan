@@ -332,9 +332,18 @@ export default function SignScreen() {
   }, [pendingOrigin, trusting, loadSession]);
 
   // Certifikát zobrazíme už před odemčením klíče (info je v trezoru nešifrované).
+  // Trezor z předchozí verze nemá veřejný cert (`certificatePem`), takže by
+  // podpis stejně skončil `certificate_missing`; nabídneme rovnou import.
   useEffect(() => {
     certificateSummary(platformVaultDeps())
-      .then(setCertificate)
+      .then((info) => {
+        if (info && !info.certificatePem) {
+          setCertificate(null);
+          setError('certificate_missing');
+          return;
+        }
+        setCertificate(info);
+      })
       .catch(() => setCertificate(null));
   }, []);
 
