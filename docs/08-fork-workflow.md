@@ -32,7 +32,7 @@ Kdo otevře fork repo, najde jen DocuSeal + QES vrstvu; kontext je v tomto repu.
 
 Historie je rozdělená na **logické bloky (feature commity)**, ne na jednotlivé doteky: každý blok
 drží jednu featuru včetně jejích doteků upstreamu a testů. Po squashi (2026-10-23) je to
-**10 commitů** na base commitu.
+**desítky commitů** na base commitu; přesný počet `git -C vendor/docuseal rev-list --count upstream/master..HEAD`.
 
 | # | Commit | Co přináší |
 |---|---|---|

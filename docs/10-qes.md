@@ -1,7 +1,7 @@
 # 10 — QES runbook (ENV, TSA, trust roots, troubleshooting)
 
 Provozní příručka QES vrstvy forku. Vzniká v P0.6, doplňuje SPEC § 11 a § 15.
-Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
+Vše níže je **ověřené** (poslední kontrola 2026-10-29), ne odhad.
 
 ## Co je hotové
 
@@ -28,7 +28,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
-| `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
+| `QES_PUBLIC_BASE_URL` | — (fallback `request.base_url`) | veřejná URL instance pro odkazy a AASA |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
 | `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: vydávající CA českých kvalifikovaných certů pro ověření cizích PDF (PEM, čárkou oddělené; anchory, ne rooty) |
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepište |
@@ -40,6 +40,8 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-28), ne odhad.
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
 | `QES_SEAL_PKCS_PATH` + `QES_SEAL_PKCS_PASSWORD` | — | jen pro testy (PKCS#12 pečeti); jinak `Accounts.load_signing_pkcs` |
+| `QES_PDF_MAX_BYTES` | `26214400` | max. velikost PDF pro přímý podpis [B] |
+| `QES_COMPLETED_SESSION_TTL` | `86400` | platnost dokončeného tokenu [s] (24 h) |
 
 Defaulty jsou pro český deployment (PostSignum CRL hosty a signing roots, české kvalifikační CA pro ověření, DigiCert TSA). ENV je override:
 staging přepisuje verification trust roots, `QES_REQUIRE_LTV`, test CRL a allowlist; jiná CA přepíše signing trust roots.

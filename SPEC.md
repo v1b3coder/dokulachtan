@@ -1293,7 +1293,7 @@ v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
 | `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
-| `QES_PUBLIC_BASE_URL` | `APP_URL` | host pro universal links |
+| `QES_PUBLIC_BASE_URL` | — (fallback `request.base_url`) | veřejná URL instance pro odkazy a AASA |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM); jiná CA přepíše |
 | `QES_VERIFICATION_TRUST_ROOTS` | `config/qes/czech.pem` | verification trust store: české kvalifikované CA pro ověření cizích PDF (PEM) |
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepíše |
@@ -1313,8 +1313,8 @@ Plánování expiračního jobu: fork nemá `sidekiq-cron` a nové závislosti j
 přes `LockEvent` (§ 7.8).
 
 Pro testy a staging: `QES_TRUST_ROOTS=test/certs/pki/root.crt` (AdES/QES fixtures) a
-`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (verification fixtures); produkční instance I.CA rooty;
-`QES_TSA_URL` prázdné v CI (testy bez TSA), FreeTSA/I.CA jen lokálně/produkční instance.
+`QES_VERIFICATION_TRUST_ROOTS=test/certs/pki/root.crt` (verification fixtures); produkční instance I.CA vydávající CA (anchory);
+RSpec stubuje TSA (`QesHelpers.stub_tsa!`), E2E a negativní scénáře DigiCert free, I.CA jen lokálně/produkční instance.
 
 Appka (Expo) má vlastní konfiguraci: `EXPO_PUBLIC_API_URL` (server URL), `EXPO_PUBLIC_QES_FAKE_CARD`
 (dev mód pro variantu A bez hardwaru). Tajemství jen přes `fly secrets` / `.env`; **NESMÍ** být v repu.
@@ -1374,7 +1374,7 @@ Třídy přehledu **MUSÍ** být v CSS balíčku `form` (content glob `tailwind.
 ## 14. Integrační body do DocuSealu
 
 Stav forku při měření (2026-10-28, `vendor/docuseal`, větev `dokulachtan`, base `8f8f69f0`) —
-**21 modifikovaných upstream souborů**, +199/−33 řádků. Čísla jsou měřená
+**21 modifikovaných upstream souborů**, +201/−34 řádků. Čísla jsou měřená
 `git diff upstream/master...HEAD --numstat`; všechny nové soubory jsou mimo upstream
 (`app/lib/qes/**`, controllery, views, i18n, migrace).
 
@@ -1389,7 +1389,7 @@ Stav forku při měření (2026-10-28, `vendor/docuseal`, větev `dokulachtan`, 
 | 7 | `app/javascript/template_builder/field_context_menu.vue` | volba AdES/QES | 9/1 |
 | 8 | `app/controllers/api/submitters_controller.rb` | lock + boolean + hook | 8/2 |
 | 9 | `app/javascript/template_builder/field_type.vue` | ikona + název typu `qes` | 8/4 |
-| 10 | `lib/submitters/submit_values.rb` | hooky + `prepend` | 6/2 |
+| 10 | `lib/submitters/submit_values.rb` | hooky + `prepend` | 8/2 |
 | 11 | `app/views/submissions/show.html.erb` | přehled podpisu v kartě | 4/0 |
 | 12 | `app/views/submissions/_value.html.erb` | přeskočit `qes` pole (`return`) | 4/0 |
 | 13 | `lib/submissions/generate_combined_attachment.rb` | early-return hook + `template.schema` fallback | 3/1 |
@@ -1436,14 +1436,14 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 |---|---|---|
 | Model | `spec/models/qes_session_spec.rb` | přechody stavů, expirace, token digest (drží se do retence), 1 aktivní session |
 | Certifikát | `spec/lib/qes/certificate_info_spec.rb` | QCStatements → level (AdES/QES/none), expirace, keyUsage |
-| CMS | `spec/lib/qes/cms_builder_spec.rb` | `signed_attrs_der` je byte-identical při opakovaném `prepare`; `message-digest` = SHA-256 ByteRange; placeholder délka |
-| Embed | `spec/lib/qes/embed_spec.rb` | vložený CMS je platná PAdES-B-B (fixtures), ByteRange pokrývá celý dokument |
+| CMS | `spec/lib/qes/pipeline_spec.rb` | `signed_attrs_der` je byte-identical při opakovaném `prepare`; `message-digest` = SHA-256 ByteRange; placeholder délka |
+| Embed | `spec/lib/qes/pipeline_spec.rb` | vložený CMS je platná PAdES-B-B (fixtures), ByteRange pokrývá celý dokument |
 | LTV | `spec/lib/qes/ltv_spec.rb` | CRL v DSS s VRI; offline validace trusted |
 | Validace | `spec/lib/qes/validator_spec.rb` | INTACT/UNTRUSTED, tamper → `intact=false`, chybějící pokrytí → fail |
-| Úroveň | `spec/lib/qes/level_spec.rb` | AdES vs QES vs none; `qes` bez QcSSCD → reject |
+| Úroveň | `spec/lib/qes/certificate_info_spec.rb` | AdES vs QES vs none; `qes` bez QcSSCD → reject |
 | API | `spec/requests/qes_sessions_spec.rb` | token jednorázový, TTL, `410`, rate limit, autorizace `/s/:slug` |
-| Hook | `spec/lib/submissions/generate_result_attachments_spec.rb` | QES submission → `documents` = podepsané PDF, nevykresluje `qes` |
-| Audit | `spec/lib/submissions/generate_audit_trail_spec.rb` | QES stránka obsahuje cert/čas/hash/level/validaci |
+| Hook | `spec/lib/qes/result_attachments_spec.rb` + `spec/lib/qes/upstream_contract_spec.rb` | QES submission → `documents` = podepsané PDF, nevykresluje `qes` |
+| Audit | `spec/lib/qes/upstream_contract_spec.rb` + `spec/lib/qes/audit_page_spec.rb` | QES stránka obsahuje cert/čas/hash/level/validaci |
 | Hodnota pole | `spec/lib/qes/value_validator_spec.rb` | podvržená hodnota `qes` → `ValidationError`; platná `qes:<id>` s `completed` session projde |
 | Šablona | `spec/models/template_spec.rb` | `qes` pole + kreslený podpis → `qes_all_signers_required`; paralelní `order` → `qes_parallel_signers_not_allowed`; chybějící pořadí → `qes_signing_order_required` |
 | Doteky upstreamu | `spec/lib/qes/upstream_contract_spec.rb` | signatury/metody/struct upstreamu, na které fork nasedá (rebases je nesmí tiše rozbít) |
@@ -1453,7 +1453,7 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 | Pořadí | `spec/models/submission_spec.rb` | `submitters_order: random` u QES šablony → vynuceno `preserved` |
 | Well-known | `spec/requests/qes_well_known_spec.rb` | AASA `Content-Type: application/json`; `assetlinks.json` → 404 (App Links zrušeny) |
 
-### 15.2 E2E — `make qes-e2e` (nahradil `scripts/e2e_api.py`)
+### 15.2 E2E — `make qes-e2e` (`scripts/qes_e2e.py`)
 
 1. Nahraje šablonu s polem `qes` (přes `rails runner`).
 2. Vytvoří submission přes API.
@@ -1745,7 +1745,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 1. `submitters_order: random` u QES šablony → po vytvoření je `preserved`.
 2. bez QES polí zůstává `random`.
 
-**`spec/lib/qes/embed_spec.rb` / `validator_spec.rb`**
+**`spec/lib/qes/pipeline_spec.rb`** (embed i validace)
 1. vložený CMS (fixtures) → pyHanko `INTACT:TRUSTED`, `pdfsig` valid.
 2. tamper po vložení → `intact=false`.
 3. podpis nepokrývá celý dokument → `incomplete_coverage`.
@@ -1792,20 +1792,20 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 4. `qes` pole + 2 signeři s `submitters_order: preserved` → uložení projde.
 5. `qes` pole + 1 podepisující → uložení projde.
 
-**`spec/requests/well_known_spec.rb`**
+**`spec/requests/qes_well_known_spec.rb`**
 1. AASA → 200, `Content-Type: application/json`, platný JSON.
 2. `/.well-known/assetlinks.json` → 404 (App Links zrušeny, #18.1).
 
-**`spec/lib/submissions/generate_result_attachments_spec.rb`**
+**`spec/lib/qes/result_attachments_spec.rb`**
 1. QES submission → `documents` = podepsané PDF (ne generované).
 2. `qes` pole se nevykresluje (žádný text v PDF).
 3. non-QES submission → chování beze změny (regresní test).
 
-**`spec/lib/submissions/generate_combined_attachment_spec.rb`**
+**`spec/lib/qes/upstream_contract_spec.rb`** (combined)
 1. QES → combined = kopie podepsaného PDF (+ pečeť), bez importu stránek.
 2. non-QES → beze změny.
 
-**`spec/lib/submissions/generate_audit_trail_spec.rb`**
+**`spec/lib/qes/upstream_contract_spec.rb`** + `audit_page_spec.rb` (audit)
 1. audit obsahuje QES stránku s cert/čas/hash/level/validací.
 2. non-QES → beze změny.
 
@@ -1905,9 +1905,8 @@ simulací). Reálný test dělat až po dohodě s uživatelem; jinak použít `E
 | `qes.app.error_qscd_certificate` | Tento certifikát patří čipu, v telefonu ho použít nelze. |
 | `qes.app.about_moi_sdk` | Tato aplikace využívá softwarový produkt Podpisové SDK, který pro Ministerstvo vnitra ČR, v rámci projektu CDBP, realizovaného STÁTNÍ TISKÁRNOU CENIN, státním podnikem, vyvinula společnost MONET+, a.s. Softwarový produkt Podpisové SDK může být užíván pouze v souladu s licenčními podmínkami, pod kterými je šířen. |
 
-Lokalizace: v1 čeština (`cs`) je kanonická sada klíčů výše; angličtina (`en`) se vede v
-`mobile/app/src/i18n/en.ts` se **stejnými klíči** (P4.11); ostatní jazyky DocuSealu se pro QES texty
-použijí anglicky (fallback).
+Lokalizace: v1 je jen čeština (`cs`) natvrdo v appce; anglická sada klíčů (`en`) **není zavedená**
+(P4.12 nehotové); ostatní jazyky DocuSealu se pro QES texty použijí anglicky (fallback).
 
 ---
 
@@ -1927,10 +1926,10 @@ ne centrální služba; adresa instance se v každém nasazení mění.
 | Timeouty | `POST /complete` max 15 s (Puma default 30 s); TSA/OCSP v jobu, ne v requestu |
 | Prohlížeče | Chrome/Edge/Safari/Firefox (poslední 2 verze); QR + WebShare API jen jako progressive enhancement |
 | Expo | SDK 58 (dev build pro A), `minSdkVersion 24`; MOI AAR vyžaduje `compileSdk 35+` (SDK 58 staví s `compileSdk 37`) |
-| Android | 8.0+ (API 26) pro BLE čtečky; **v1 = Android** (App Links ověřené); iOS až F2 (AASA + `QES_IOS_TEAM_ID` je příprava, § 6.6) |
+| Android | 7.0+ (API 24) appka; 8.0+ (API 26) pro BLE čtečky; **v1 = Android** (odkazy přes custom scheme, App Links zrušeny #18.1); iOS až F2 (AASA + `QES_IOS_TEAM_ID` je příprava, § 6.6) |
 | Rebase | po každém rebase upstreamu spustit `make qes-test` + `make qes-e2e`; hooky jsou malé (§ 7.7) |
 | Produkční instance | dnes varianta A (SQLite + volume + SMTP + zálohy snapshotem); volitelně Postgres + S3 + vlastní doména (universal links) pro větší nasazení (§ 11) |
-| Test harness | `make qes-test` = **SQLite** (parita se stagingem) + test image s Ruby 4.0.5 a `libpdfium.so`; `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada). `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3` (POZOR: `DATABASE_URL=sqlite3:…` neprojde — `database.yml` `production:` sekce je pro sqlite URL prázdná), `SCHEMA=tmp/qes-test-schema.rb` chrání `db/schema.rb` (gem default `dump_schema_after_migration = true`, DocuSeal ho vypíná jen v `production.rb:127`); na SQLite nelze `db:schema:load` (Postgres dump s `btree_gin`/`tsvector`/`using: :gin`), jen `db:migrate`. Změřeno 2026-10-27: SQLite 646/1 (známý upstream flake), Postgres 650/0 — `test/qes/README.md` |
+| Test harness | `make qes-test` = **SQLite** (parita se stagingem) + test image s Ruby 4.0.5 a `libpdfium.so`; `make qes-test-postgres` = Postgres 18 (parita s upstream CI, celá sada). `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3` (POZOR: `DATABASE_URL=sqlite3:…` neprojde — `database.yml` `production:` sekce je pro sqlite URL prázdná), `SCHEMA=tmp/qes-test-schema.rb` chrání `db/schema.rb` (gem default `dump_schema_after_migration = true`, DocuSeal ho vypíná jen v `production.rb:127`); na SQLite nelze `db:schema:load` (Postgres dump s `btree_gin`/`tsvector`/`using: :gin`), jen `db:migrate`. Změřené počty a časy: `test/qes/README.md` |
 | SQLite v testech | **Primární** (obě privátní instance = SQLite; § 22 vyžaduje DB-agnostický kód): 3 Postgres-specific migrace mají `return unless adapter_name == 'PostgreSQL'`, `LockEvent` používá `unique: connection.supports_partial_index?` → idempotence funguje i na SQLite. Jediný spec závislý na Postgresu: `spec/system/dashboard_spec.rb:53` (fulltext) → vyloučit `--exclude-pattern`, ověřit v `qes-test-postgres` |
 | Assety v testech | `make qes-test-assets` zkopíruje `public/packs` z produkčního image → `public/packs-test` (pro `spec/system`); `chromium` jen v system image, `libpdfium.so` v obou (pro `VerifyPdfSignature`) |
 | Plánování jobů | bez `sidekiq-cron`: samo-plánující smyčka `perform_in` + atomický cache lock `unless_exist` (§ 7.8) |

@@ -38,17 +38,17 @@ Testy jsou rozdělené do tierů podle ceny a rizika; runbook a naměřené čas
 [test/qes/README.md](test/qes/README.md). Výchozí smyčka při vývoji QES je **T0**,
 plná sada patří k PR/release, ne k každému commitu.
 
-| Tier | Příkaz | Co dělá | Kdy | Naměřeno |
+| Tier | Příkaz | Co dělá | Kdy | Stav |
 |---|---|---|---|---|
-| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | 484/0 za 47 s |
-| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | 484/0 za **18 s** |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | 591/0 za 79 s |
-| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | 591/0 za 39 s |
-| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | 727/0 za 3 min 13 s |
-| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | 727/0 za **81 s** |
-| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | 731/0 za 5 min 0 s |
-| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | 37/0 za 0,2 s |
-| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | 258/0 za 16 s |
+| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | zelené |
+| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | zelené |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | zelené |
+| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | zelené |
+| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | zelené |
+| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | zelené |
+| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | zelené |
+| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | zelené |
+| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | zelené |
 | — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
 | — | `make qes-test-timings` | přeměří časy spec souborů pro paralelní runner | po velké změně skladby speců | — |
 

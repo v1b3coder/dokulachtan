@@ -90,7 +90,7 @@ pod zámkem (jiné pole v `awaiting_signature` → 409, ne nová revize), prošl
 Migrace `20261029000001` přidává částečný unikátní index na `qes_sessions (submission_id)` pro aktivní stavy
 a před ním uklidí existující duplicity (ponechá nejnovější). Testy: `spec/lib/qes/session_concurrency_spec.rb`
 (souběh před zámkem, prošlá session, první revize), `spec/models/qes_session_spec.rb` (index) a
-`spec/requests/qes_form_sessions_spec.rb` (`show` pro expired i failed). Ověřeno T0 469/0, T1 577/0, T2 712/0, T3 716/0.
+`spec/requests/qes_form_sessions_spec.rb` (`show` pro expired i failed). Ověřeno na T0–T3 (zelené).
 
 ## 3. P1 — reálné, opravit v dalším bloku
 
@@ -113,7 +113,7 @@ Důsledek: API nemůže změnit úroveň podpisu rozběhnuté submission ani př
 
 Testy: `spec/requests/qes_requirements_spec.rb` (4 nové — změna levelu u rozběhnuté submission včetně
 dokončení s AdES session, snapshot při vytvoření, `level` z API při vytvoření, změna šablony po vytvoření).
-Ovřeno T0 469/0 (SQLite); bez opravy 3 ze 4 testů červené.
+Ovřeno na T0 (SQLite); bez opravy 3 ze 4 testů červené.
 
 ### #4 API `required: false` u QES pole se přepíše na `true` (regrese `d845ba42`)
 
@@ -145,7 +145,7 @@ Druhý případ: `trusted_ranges` neprázdné a žádný podpis přijatý → `b
 záznam (`boundary.max_by`), jinak poslední ověřený podpis (`verified.max_by`, drží R1). Tím se `modified`
 počítá i pro PDF, kde je přijaté jen DocTS. Testy: `spec/lib/qes/verify_parity_spec.rb` (3 nové —
 nedůvěryhodný podpis + DocTS + revize, nedůvěryhodný podpis za DocTS, jen DocTS + revize; kontrola
-bez revize zůstává `modified: false`). Ověřeno T0 454/0 (SQLite).
+bez revize zůstává `modified: false`). Ověřeno na T0 (SQLite).
 
 Druhá část nálezu přes `Qes::Validator` sestrojit nejde — `accepted?` přijme každý range, který je
 v `trusted_ranges`; dosažitelná je jen varianta `trusted_ranges = [range DocTS]`, což je první případ.
@@ -169,7 +169,7 @@ a podpis je „důvěryhodný" — obchází validaci řetězce.
 přesnou shodu `cert.to_der == signer.to_der` s certem účtu a dál drží `signing_leaf?` (K1);
 `lib/verify_pdf_signature.rb` zůstává beze změny. Test: `spec/lib/qes/verify_parity_spec.rb`
 (nový list se stejným klíčem jako cert účtu → `trusted: false`; přesný cert zůstává `trusted: true`),
-helper `QesHelpers#reissued_leaf`. Ověřeno: cílené lib specy 83/0, T0 460/0 (SQLite).
+helper `QesHelpers#reissued_leaf`. Ověřeno: cílené lib specy a T0 (SQLite).
 
 **Závažnost snížena na P2:** zasažena je jen webová/API verifikace PDF (`/verify`, `/api/tools/verify`),
 ne podpisový tok (`Qes::Validator` ověřuje řetěz), ne appka (S14/S15 čte `Qes::Validator`) a ne uložený report
@@ -254,7 +254,7 @@ podpisu“ (docs/16 D15). Testy: `pdfShare.test.ts` (chybějící otisk, přepsa
   Důsledek feature gate je destruktivní a je popsaný v `docs/10-qes.md`: s vypnutým QES se použije
   upstream generátor, takže regenerované PDF u dokončeného podpisu ztratí QES revizi (uložený
   `final_document` zůstává). Testy: `template_spec`, `submission_spec`, `expire_sessions_job_spec`,
-  `qes_disabled_spec` (4×), `qes_template_errors_spec`; bez guardů 8/8 červených, s guardy T0 447/1
+  `qes_disabled_spec` (4×), `qes_template_errors_spec`; bez guardů 8/8 červených, s guardy T0 zelené
   (1 flaky `qes_session_documents_spec` na hranici sekundy v `expires_at`).
 - **#23.3** `ceremony.ts:115` — `unlockCertificate` před `POST certificate`; podpis až po validaci, takže dopad je jen
   zbytečně dlouhá doba s odemčeným klíčem. **Částečně opraveno (2026-10-29):** `POST certificate` má strop

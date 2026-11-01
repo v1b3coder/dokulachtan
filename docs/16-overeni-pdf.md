@@ -497,7 +497,7 @@ pro přidanou stránku.
 5. nepodepsané PDF → `verdict: "unsigned"`;
 6. report `test/out/qes-verify-e2e-report.txt`.
 
-`make qes-staging-verify-e2e` (volitelně): stejný krok proti stagingu po `qes-pdf-staging-e2e`
+Ověření proti stagingu (volitelně, dnes bez Make cíle): stejný krok ručně po `make qes-staging-e2e-pdf`
 (finální PDF se ověří před úklidem tokenu); report `test/out/qes-verify-staging-report.txt`.
 
 `make qes-eu-dss-verify` (volitelně, externí API): pošle `test/out/qes-final.pdf`,
@@ -520,9 +520,9 @@ PDF opouští stroj; nespouštět v běžném CI.
 ### 7.4 Akceptační kritéria
 
 1. `make qes-test-qes` zelené (nové specy součástí).
-2. `make qes-test-postgres` zelené (660/0); `make qes-test` 659/0.
+2. `make qes-test-postgres` a `make qes-test` zelené.
 3. `make qes-verify-e2e` zelené (valid/docuseal, store, tampered invalid, unsigned).
-4. `make qes-app-test` a `make qes-app-typecheck` zelené (223/0 + tsc).
+4. `make qes-app-test` a `make qes-app-typecheck` zelené (Jest + tsc).
 5. Na emulátoru projde ověření v appce i ze share sheetu („Dokulachtan“ → „Ověřit PDF“).
 6. Verify po sobě nezanechá PDF v ActiveStorage ani nový template.
 7. Store uloží PDF do „Verified documents“ a report do `preferences['qes_verification']`.

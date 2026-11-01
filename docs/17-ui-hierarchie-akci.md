@@ -2,7 +2,7 @@
 
 **Datum:** 2026-10-22
 **Stav:** realizováno 2026-10-22 (D1–D5 potvrzeny uživatelem); nálezy N1–N19 jsou opravené, pravidla níže platí dál
-**Rozsah:** všech 8 obrazovek appky (`mobile/app/app/*.tsx`), které obsahují tlačítka
+**Rozsah:** obrazovky appky (`mobile/app/app/*.tsx`), které obsahují tlačítka
 
 ## 1. Příčina
 
@@ -272,7 +272,7 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
   silné volby u share PDF, primární „Ověřit jiné PDF“, uložení sekundární), S8 (sdílené tlačítko).
 - Chyby se zobrazují těsně nad akcí, kterou opravují (S11/S12); „Zrušit“/„Zavřít“ jsou terciární.
 - Aktualizováno SPEC § 9.1, DESIGN § 5.1 a docs/16 (S1, S15).
-- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (223/0).
+- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (Jest).
 
 ## 9. Realizace (2026-10-25)
 
@@ -285,7 +285,7 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
   takže tlačítka po návratu ze sheetu zůstávají použitelná (opravuje N18 pro S4).
 - Po uložení se nabídne „**Otevřít**“ (systémový prohlížeč PDF) a „**Uložit jinam…**“ (SAF picker);
   vybranou složku si appka zapamatuje a příště do ní ukládá přímo (výchozí zůstává Downloads).
-- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (223/0), ručně na emulátoru
+- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (Jest), ručně na emulátoru
   (uložení do `Download/Dokulachtan/`, uložení do Documents + zapamatování, otevření v Drive PDF Viewer,
   share sheet, druhé sdílení i uložení po back).
 

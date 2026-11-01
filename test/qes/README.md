@@ -24,16 +24,16 @@ Produkční image má `BUNDLE_WITHOUT=[:development, :test]`, proto se dev/test 
 
 | Tier | Cíl | Co to je | Kdy |
 |---|---|---|---|
-| **T0** | `make qes-test-qes` | QES vrstva (474 QES + 10 upstream ex) + JS testy kroku | po každé změně QES vrstvy |
+| **T0** | `make qes-test-qes` | QES vrstva + JS testy kroku | po každé změně QES vrstvy |
 | **T0** | `make qes-test-parallel` | totéž, 4 workery | když potřebuješ T0 rychleji |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (591 ex) | před commitem forku |
+| **T1** | `make qes-test-fast` | celá sada bez `spec/system` | před commitem forku |
 | **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš |
-| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` (727 ex) | před PR / po rebase |
+| **T2** | `make qes-test` | celá sada kromě `spec/system/dashboard_spec.rb` | před PR / po rebase |
 | **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš |
-| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 (731 ex) | před vydáním, parita s upstream CI |
+| **T3** | `make qes-test-postgres` | celá sada na Postgresu 18 | před vydáním, parita s upstream CI |
 
-Proč tři tiery: **většina plné sady jsou upstream specy, které fork nemodifikuje**
-(253 ex z 727; `spec/system` samo 136 ex), a `spec/system/signing_form_spec.rb` je 48 ex.
+Proč tři tiery: **většina plné sady jsou upstream specy, které fork nemodifikuje**;
+`spec/system/signing_form_spec.rb` je nejdražší jednotlivý soubor.
 Denní smyčka QES je T0, plná sada patří k PR a rebase.
 
 ## Paralelní běh
@@ -80,11 +80,10 @@ Naměřeno 2026-10-31 (20 CPU, sdílený stroj; `run_time` z JSON reportéru):
 | `make qes-js-test` | — | 37 ex, 0 failures | 0,2 s |
 | `make qes-app-test` | — | 258 ex, 0 failures | 16 s |
 
-Před optimalizacemi byl `qes-test-qes` **100 s** pro 404 examples; dnes **47 s** sekvenčně
-a **18 s** paralelně.
+**Historicky** byl `qes-test-qes` 100 s pro 404 examples; naměřené hodnoty po optimalizacích
+jsou v tabulce výše.
 
-Paralelní runner je lokální optimalizace: 2026-10-31 v něm byl jeden nezopakovaný flake
-(v dalším běhu 484/0); CI proto pouští tiery sekvenčně.
+Paralelní runner je lokální optimalizace; CI pouští tiery sekvenčně (`.github/workflows/qes.yml`).
 
 ## Co testy zdržuje a co s tím
 

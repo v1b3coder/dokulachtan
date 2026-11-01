@@ -64,7 +64,8 @@ na jednom místě.
 3. Klepni na „Podepsat“ a potvrď otiskem prstu nebo PINem.
 4. Hotovo — dokument je podepsaný a uložený, firma vidí stav.
 
-Tohle je standardní podpisový workflow DocuSealu. Bez pole `qes` v šabloně se podpisový odkaz vůbec nevytvoří.
+Tohle je standardní podpisový workflow DocuSealu. Bez pole `qes` v šabloně appka podepsat certifikátem
+nemůže — odkaz povede na běžný podpis DocuSealu (kreslený/OTP).
 
 **Přímý podpis PDF**
 
@@ -116,7 +117,7 @@ Odkaz posílá upravený DocuSeal; v šabloně musí být pole „Podpis certifi
 ## Stav
 
 - **Hotové:** podpis certifikátem v DocuSealu (AdES), Android appka, přímý podpis PDF,
-  ověření PDF, vícenásobné podpisy, v praxi se používá.
+  ověření PDF, vícenásobné podpisy, připraveno k použití (první reálný produkční podpis zatím chybí).
 - **Zbývá:** QES s čipem eObčanky (reálná čtečka) a kvalifikované časové razítko.
 - Detail a stav: [AGENTS.md](AGENTS.md#stav).
 

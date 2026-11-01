@@ -16,7 +16,7 @@ PostSignum CA, `QES_REQUIRE_LTV=false`). Jsou to **dvě privátní instance uži
 software), ne centrální služba; `https://dokulachtan.fly.dev/` je jen adresa produkční instance, ne adresa
 produktu. Konfigurace jsou v parent repu:
 `deploy/docuseal/fly.toml` = produkční instance, `fly.staging.toml` = staging (do forku se předávají přes
-`--config`). Aktuální release a ověření jsou v [AGENTS.md](../AGENTS.md#deployment).
+`--config`). Aktuální release a ověření jsou v [docs/10-qes.md](10-qes.md#prostředí-flyio).
 
 ## TL;DR
 
@@ -58,7 +58,7 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
 
 ## Stav nasazení
 
-> Aktuální release, konfigurace a ověření jsou v [AGENTS.md](../AGENTS.md#deployment);
+> Aktuální release, konfigurace a ověření jsou v [docs/10-qes.md](10-qes.md#prostředí-flyio);
 > tato sekce popisuje jen architekturu prostředí.
 
 **Produkce — instance `dokulachtan`** (<https://dokulachtan.fly.dev/> — adresa této instance):

@@ -3,7 +3,7 @@
 Status: **implementováno** (2026-10-17, doplněno o DocTS 2026-10-22) — fáze 1–4 hotové,
 `make qes-e2e-two` zelené (6 signatur: 2× appka + 2× pečeť + 2× DocTS). Původní návrh je níže
 ponechán jako rozhodovací záznam; aktuální pravidla jsou v SPEC § 4.6 a § 7.1.
-Navazuje na DESIGN.md § 3.1, SPEC.md § 4.1 a § 7, AGENTS.md rozhodnutí #11.
+Navazuje na DESIGN.md § 3.1, SPEC.md § 4.1 a § 7, AGENTS.md rozhodnutí #7.
 
 **Oprava (2026-10-17):** stejná osoba může podepsat víc polí téhož dokumentu. `chained_base` proto
 nejdřív bere **vlastní** poslední dokončenou session podepisujícího a teprve pak session předchozího
@@ -119,7 +119,7 @@ zůstávají indexy per-attachment (dnešní chování).
   § 7.7 (řádky), § 15 (testy).
 - DESIGN § 3.1 a § 4 (workflow více signerů).
 - PLAN nová fáze P7 s výše uvedenými kroky.
-- AGENTS.md rozhodnutí #11 nahradit; runbook `docs/10-qes.md`.
+- AGENTS.md rozhodnutí #7 nahradit; runbook `docs/10-qes.md`.
 
 ## 5. Co se nemění
 

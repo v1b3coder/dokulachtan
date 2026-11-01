@@ -75,7 +75,7 @@ DocuSeal — jedna aplikace, jedna evidence, jeden e-mail. **Nestavíme druhý s
 ## 7. Co už máme ověřené
 
 - Umíme přečíst cizí podepsaný dokument a říct: je v pořádku / byl změněn / certifikát
-  vypršel / byl zneplatněn.
+  vypršel / revokace se u ověření PDF v v1 nekontroluje.
 - Umíme vyrobit podpis, který obstojí před ostatními nástroji (pdfsig, pyHanko, DSS/ETSI).
 - Umíme poznat, jestli je pero v certifikovaném trezoru (QES), nebo ne (AdES) — takže
   nebudeme AdES vydávat za QES.

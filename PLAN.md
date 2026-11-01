@@ -36,7 +36,7 @@ opustil zařízení.
 
 | Fáze | Stav | Důkaz |
 |---|---|---|
-| P0 | **hotová** | `make qes-test` (659/0), `make qes-test-postgres` (660/0), runbook `test/qes/README.md` |
+| P0 | **hotová** | `make qes-test` a `make qes-test-postgres` zelené, runbook `test/qes/README.md` |
 | P1 | **hotová** | `spec/models/qes_session_spec.rb` (5), `spec/lib/qes/token_spec.rb` (3), `Qes::SessionManager` |
 | P2 | **hotová** | `spec/lib/qes/pipeline_spec.rb` (9): TBS, signed attrs, CMS, LTV, validace, pečeť |
 | P3 | **hotová** | `make qes-e2e` zelené: `qes-signed.pdf` = `INTACT:TRUSTED,UNTOUCHED`, `qes-final.pdf` = 3 signatury |
@@ -44,7 +44,7 @@ opustil zařízení.
 | P5 | **stub** (`StubCardSigner` + `FakeCardSigner`); MOI SDK / reálná čtečka mimo rozsah | `src/lib/cardSigner.ts` |
 | P6 | **hotová** — `qes-e2e`, `qes-e2e-two`, `qes-negative`, `qes-staging-e2e` | `test/out/qes-negative-report.txt`, `test/out/qes-staging-e2e-report.txt` |
 | P7 | **hotová** — pořadí, řetězení TBS, validace všech signatur; `make qes-e2e-two` zelené (6 signatur) | `test/out/qes-e2e-two-report.txt` |
-| P8 | **hotová** (nativní tok, přepsáno 2026-10-18) — přímý podpis PDF: šablona s polem `qes` + submission; sdílení PDF ze share sheetu (Android, „Podepsat PDF“); `make qes-test-qes` 422/0, `make qes-e2e-pdf` (3 signatury, pečeť v místě klepnutí), `make qes-negative` N1–N17, ověřeno i na emulátoru | `test/out/qes-pdf-e2e-report.txt`, `test/out/qes-negative-report.txt` |
+| P8 | **hotová** (nativní tok, přepsáno 2026-10-18) — přímý podpis PDF: šablona s polem `qes` + submission; sdílení PDF ze share sheetu (Android, „Podepsat PDF“); `make qes-test-qes` zelené, `make qes-e2e-pdf` (3 signatury, pečeť v místě klepnutí), `make qes-negative` N1–N17, ověřeno i na emulátoru | `test/out/qes-pdf-e2e-report.txt`, `test/out/qes-negative-report.txt` |
 
 
 ---
@@ -104,7 +104,7 @@ Cíl: `QesSession` + přechody + token, bez kryptografie. Testy first.
 - [ ] 1.3 Stavový automat `Qes::SessionManager` (SPEC § 4.3): `prepare!`, `open!`, `attach_certificate!`,
       `sign!`, `embed!`, `validate!`, `complete!`, `fail!`, `cancel!`, `expire!`; každý zapíše čas + stav;
       zakázané přechody vyhodí `Qes::InvalidTransition`
-      → verify: `spec/lib/qes/session_manager_spec.rb` — všechny přechody + zakázané přechody
+      → verify: `spec/models/qes_session_spec.rb` + `spec/lib/qes/session_concurrency_spec.rb` — všechny přechody + zakázané přechody
 - [ ] 1.4 Token: `Qes::Token.generate` (43 znaků), `Qes::Token.digest` (sha256), `Qes::Token.find(token)`,
       TTL z `QesSession.expires_at`; `used_token?` dle stavu
       → verify: `spec/lib/qes/token_spec.rb` — digest, expirace, jednorázovost
@@ -137,17 +137,17 @@ s fixtures z `test/certs/`. Nové moduly v `app/lib/qes/`, testy v `spec/lib/qes
       pole `Sig1` na pozici `qes` pole, rezerva `QES_SIGNATURE_RESERVE`, `external_signing` vrací placeholder CMS
       → verify: `spec/lib/qes/tbs_document_spec.rb` — PDF má `Sig1`, `/ByteRange` pokrývá vše, `/Contents` má rezervu
 - [ ] 2.3 `Qes::PlaceholderSignedDataCreator` (SPEC § 7.2): zachytí `signed_attrs_der`, vrátí placeholder
-      → verify: `spec/lib/qes/cms_builder_spec.rb` — `signed_attrs_der` je DER `SET`, deterministický při stejném `signing_time`
+      → verify: `spec/lib/qes/pipeline_spec.rb` — `signed_attrs_der` je DER `SET`, deterministický při stejném `signing_time`
 - [ ] 2.4 `Qes::CmsBuilder.prepare` (SPEC § 7.2): `create(data, type: :pades, certificate:, certificates:, signing_time:, digest_algorithm:)`;
       `Qes::PlaceholderSignedDataCreator` přepíše i `create_signed_attrs` a **vynutí `signing-time`**
       (HexaPDF 1.7 ho u `:pades` nepřidá)
       → verify: `openssl cms -cmsout -print` nad CMS: atributy včetně `signingTime` + `message-digest` = SHA-256 ByteRange
 - [ ] 2.5 `Qes::CmsBuilder.complete` (SPEC § 7.3): `external_signing` vrátí raw signaturu z appky,
       ověří byte-identical `signed_attrs_der`, TSA token jako unsigned attr
-      → verify: `spec/lib/qes/cms_builder_spec.rb` — nová `signed_attrs_der` se rovná uložené; s TSA (FreeTSA) je token přítomen
+      → verify: `spec/lib/qes/pipeline_spec.rb` — nová `signed_attrs_der` se rovná uložené; s TSA (FreeTSA) je token přítomen
 - [ ] 2.6 `Qes::Embed.embed(tbs_bytes, cms_der)` (SPEC § 7.3): `HexaPDF::DigitalSignature::Signing.embed_signature`,
       výstup = PDF, který pyHanko označí `INTACT:TRUSTED` (s test rootem) a `pdfsig` „Total document signed“
-      → verify: `spec/lib/qes/embed_spec.rb` + `pyhanko` nad fixture; `qpdf --check` bez chyb
+      → verify: `spec/lib/qes/pipeline_spec.rb` + `pyhanko` nad fixture; `qpdf --check` bez chyb
 - [ ] 2.7 `Qes::Ltv.add_revocation_values` (SPEC § 7.4): OCSP z AIA (fallback CRL z CRLDistributionPoints),
       `id-aa-ets-revocationValues` do CMS, chybějící intermediates do `certificates`
       → verify: `spec/lib/qes/ltv_spec.rb`; offline `pyhanko validate` (bez `--fetch`) → `trusted=True`
@@ -158,7 +158,7 @@ s fixtures z `test/certs/`. Nové moduly v `app/lib/qes/`, testy v `spec/lib/qes
 - [ ] 2.10 `Qes::Providers::MobileApp` + `Qes::Providers::Mock` (SPEC § 16): implementace **dvoukrokového**
       rozhraní (`prepare` → `data_to_sign(certificate)` → `build_cms(signature)` → `embed` → `validate`);
       skeleton `app/lib/qes/provider.rb` přepsat (odstranit `Pkcs11`/`P12` a `level`/`key_location` z providera)
-      → verify: `spec/lib/qes/providers_spec.rb` — celý řetěz s mock providerem bez sítě
+      → verify: `spec/lib/qes/pipeline_spec.rb` (mock provider) — celý řetěz bez sítě
 
 **⏸️ Checkpoint 2**: celý kryptografický řetěz funguje v testech bez serveru (unit) i s fixturemi.
 Spustit `make qes-test`. Pokud cokoli padá, **nestartovat fázi 3**.
@@ -184,12 +184,12 @@ Cíl: browser ↔ server ↔ appka přes HTTP; finální PDF v DocuSealu.
       → verify: `spec/requests/qes_app_spec.rb` — 200, QR odkaz, žádný `data_to_sign`
 - [ ] 3.6 `Qes::ResultAttachments.call` (SPEC § 7.7) + `has_many :qes_sessions` na `Submitter` +
       hook v `generate_result_attachments.rb`
-      → verify: `spec/lib/submissions/generate_result_attachments_spec.rb` — QES submission → `documents` = podepsané PDF
+      → verify: `spec/lib/qes/result_attachments_spec.rb` + `spec/lib/qes/upstream_contract_spec.rb` — QES submission → `documents` = podepsané PDF
 - [ ] 3.7 Hook v `generate_combined_attachment.rb` `call` (SPEC § 7.7) — pro QES vrátit kopii `final_document`
       **bez** `sign_pdf` (jinak vznikne třetí signatura); auditní stránka zůstává v `audit_trail`
-      → verify: `spec/lib/submissions/generate_combined_attachment_spec.rb` — combined neimportuje stránky a má 2 signatury
+      → verify: `spec/lib/qes/upstream_contract_spec.rb` — combined neimportuje stránky a má 2 signatury
 - [ ] 3.8 `Qes::AuditPage.append` + hook v `generate_audit_trail.rb` (SPEC § 13)
-      → verify: `spec/lib/submissions/generate_audit_trail_spec.rb` — audit obsahuje QES stránku
+      → verify: `spec/lib/qes/upstream_contract_spec.rb` + `spec/lib/qes/audit_page_spec.rb` — audit obsahuje QES stránku
 - [ ] 3.9 Přeskočit `qes` pole ve `fill_submitter_fields` (ř. 215) a v `_value.html.erb` (ř. 9 — **`return`**,
       ne `next`: partial se kompiluje do `def`)
       → verify: render PDF nemá text `qes:`; `_value` partial nespadne
@@ -210,7 +210,7 @@ Cíl: browser ↔ server ↔ appka přes HTTP; finální PDF v DocuSealu.
       → verify: `spec/models/template_spec.rb` — `qes` pole + >1 podepisující → chyba
       (v P7.1 nahrazeno validací `qes_signing_order` — vícenásobní signeři)
 - [ ] 3.15 `Submitter#with_signature_fields?`: přidat `qes` do `signature_field_types` (e-maily/UI)
-      → verify: `spec/models/submitter_spec.rb` — šablona jen s `qes` → `with_signature_fields?` je `true`
+      → verify: `spec/lib/qes/upstream_contract_spec.rb` — šablona jen s `qes` → `with_signature_fields?` je `true`
 
 **⏸️ Checkpoint 3**: `make qes-e2e` (server + simulovaná appka v Pythonu) — finální PDF má
 platný podpis a pečeť, audit má QES stránku. Toto je **hlavní důkaz řetězu**.
@@ -253,7 +253,7 @@ Cíl: reálná appka podepíše dokument klíčem z PKCS#12 v telefonu.
 - [ ] 4.12 Anglické texty (`mobile/app/src/i18n/en.ts`) se stejnými klíči jako příloha D (SPEC § 21)
       → verify: aplikace v `en` zobrazí všechny obrazovky bez chybějícího klíče
 
-**⏸️ Checkpoint 4**: `make qes-e2e-app` — Python simulace nahrazena reálnou appkou na emulátoru:
+**⏸️ Checkpoint 4**: `make qes-e2e` — Python simulace nahrazena reálnou appkou na emulátoru:
 submission → deep link → podpis v appce → finální PDF validované pyHanko + pdfsig. Podpis proběhne
 **bez zadání hesla** (jen biometrie) a appka zvolí podepisujícího dle § 9.8.
 
@@ -346,12 +346,12 @@ Cíl: dokument podepsaný **všemi** stakeholdery, každý vlastním certifikát
       se 6 signaturami: 2× appka + 2× pečeť + 2× DocTS; `pyhanko validate` bez `--fetch` trusted)
       → verify: `test/out/qes-e2e-two-report.txt`
 - [x] 7.6 Dokumentace: DESIGN § 3.1/§ 4/§ 7.4/§ 12, SPEC § 4.1/§ 4.6/§ 7.1/§ 7.6/§ 7.7/§ 15,
-      PLAN P7, AGENTS.md #11, `docs/10-qes.md`
+      PLAN P7, AGENTS.md #7, `docs/10-qes.md`
       → verify: `docs/13` a DESIGN/SPEC bez rozporu
 - [x] 7.7 Oprava řetězení pro stejného podepisujícího (stejná osoba, víc polí): `chained_base`
       nejdřív použije vlastní poslední dokončenou session, teprve pak předchozího submittera;
       test „lets the same submitter sign twice with the same certificate“ (2× podpis + 2× pečeť, 4 INTACT)
-      → verify: `spec/lib/qes/chain_spec.rb` zelené, `make qes-test-qes` (422/0),
+      → verify: `spec/lib/qes/chain_spec.rb` zelené, `make qes-test-qes` zelené,
       `make qes-staging-same-signer` (staging, 6 signatur INTACT)
 - [x] 7.8 Oprava zobrazení: pole s `qes:<id>` zobrazuje přehled podpisu (`submissions/_value.html.erb`,
       `qes_summary.vue` + `summary_html` z `GET /s/:slug/qes_sessions/:id`)
@@ -359,7 +359,7 @@ Cíl: dokument podepsaný **všemi** stakeholdery, každý vlastním certifikát
 - [x] 7.9 Oprava formátování a textů: `compact` varianta přehledu (podbarvení, `overflow-hidden`)
       pro pole v dokumentu, glob `app/views/submissions` v `tailwind.form.config.js` (třídy v CSS balíčku
       `form`), `qes_step.vue` skládá `Podepsáno ({level})` a `Odkaz vyprší za {minutes} min` sám
-      → verify: `make qes-test-qes` (422/0), webpack build, prohlížeč na stagingu (žádné `{{level}}`,
+      → verify: `make qes-test-qes` zelené, webpack build, prohlížeč na stagingu (žádné `{{level}}`,
       oba přehledy formátované)
 
 **⏸️ Checkpoint 7**: `make qes-e2e-two` zelené, finální PDF má 6 signatur (2× appka + 2× pečeť + 2× DocTS),
