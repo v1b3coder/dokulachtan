@@ -114,7 +114,7 @@ z TSL a ověřit počet:
 ```bash
 openssl crl2pkcs7 -nocrl -certfile config/qes/czech.pem \
   | openssl pkcs7 -print_certs -noout | grep -c '^subject'   # 15
-make qes-test-qes
+make test-t0
 ```
 
 Testovací trust root: `QES_TRUST_ROOTS=test/certs/pki/root.crt` a
@@ -133,22 +133,20 @@ QES_TSA_TRUST_ROOTS=/app/config/qes/digicert-tsa.pem   # DigiCert free (AATL), o
 
 ## Jak spustit harness
 
+Fáze, rozhodovací strom a co se netestuje: [test/README.md](../test/README.md).
+
 ```bash
-make qes-test           # RSpec na SQLite (jako staging), celá sada → test/out/qes-test-report.txt
-make qes-test-qes        # jen QES vrstva (rychlá smyčka)
-make qes-test-postgres   # paritní běh celé sady na Postgresu 18
-make qes-e2e             # fork + podpis KÓDEM APPKY (varianta B) → validované PDF
-make qes-e2e-two         # fork + 2 signeři jednoho dokumentu → 6 signatur (2× appka + 2× pečeť + 2× DocTS)
-make qes-negative        # negativní scénáře N1–N17 (SPEC § 15.2)
-make qes-staging-e2e     # staging + 2 signeři přes `fly ssh console` (QES_STAGING_SIGNERS=2)
-make qes-staging-same-signer  # staging: stejný podepisující 2 pole → 6 signatur INTACT
-make qes-e2e-card        # fork + podpis fake čipem (varianta A, test QSCD cert) → validované PDF
-make qes-app-test        # Jest testy appky (vault, P12, signer, API)
-make qes-app-typecheck   # TypeScript kontrola appky
+make test                          # F1: T0 + app + typecheck (rychlá smyčka)
+make test-ci                       # F2: T0 + T1 + app
+make test-full                     # F3: T0–T3 + negativní + E2E + app
+ALLOW_EXTERNAL=1 make test-manual   # F4: staging E2E + EU DSS
+ALLOW_EMULATOR=1 make test-android  # F4: APK + emulátor
+make test-tools                    # F5: fixtures, validate, legacy
 ```
 
-`make qes-test-image` postaví test image (`test/qes/Dockerfile`), `make qes-test-system-image` navíc
-Chromium (`test/qes/Dockerfile.system`); runbook harnessu je v `test/qes/README.md`.
+Interní tiery: `make test-t0` … `make test-t3`, `make test-app`, `make test-negative`,
+`make test-e2e`. `make test-prepare` postaví image, assety a venv. Runbook harnessu je
+v `test/qes/README.md`.
 
 ## Jak ověřit podpis nezávislým validátorem
 
@@ -165,7 +163,7 @@ pdfsig "test/out/qes-signed.pdf"     # "Signature is Valid." + "Total document s
 qpdf --check "test/out/qes-final.pdf" # bez chyb
 ```
 
-Očekávané výsledky (`make qes-e2e`, `make qes-e2e-card`, `make qes-e2e-pdf`):
+Očekávané výsledky (`make test-e2e`):
 
 - `qes-signed.pdf` → `Signature1:…:INTACT:TRUSTED,UNTOUCHED` (pokrývá celý dokument),
 - `qes-final.pdf` → tři signatury; podpis appky `INTACT:TRUSTED,EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS`,
@@ -264,7 +262,7 @@ v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL Post
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
 `QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
 
-**Negativní scénáře:** `make qes-negative` (N1–N17) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
+**Negativní scénáře:** `make test-negative` (N1–N17) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
 
 ```bash
 # staging (deploy/docuseal/fly.staging.toml, APP=dokulachtan-staging)

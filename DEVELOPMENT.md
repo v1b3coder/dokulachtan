@@ -20,82 +20,51 @@ Fork obsahuje **jen kód patche**. Dokumentace, appka, skripty ani deploy konfig
 ## Rychlý start
 
 ```bash
-make venv              # .venv s pyHanko a podman-compose
-make fork-setup        # klon forku + větev dokulachtan (pin z vendor/docuseal.rev)
-make hooks             # .githooks/pre-push (T0 + app testy + typecheck)
-make qes-test-image    # test image pro RSpec (T0/T1)
-make qes-test-qes      # QES specy na SQLite (rychlá smyčka)
+make test-prepare      # venv, fork, image, assety, deps, hooky
+make test              # F1: T0 + app + typecheck (rychlá smyčka)
 ```
 
 Volitelně `cp .env.example .env.local` pro lokální hodnoty (interní Gitea místo GitHubu,
 `TEST_PKI_DIR`). `.env.local` je gitignored.
 
-Pro `spec/system` navíc `make qes-test-assets` (kopie assetů z produkčního image).
+Assety pro `spec/system` řeší `make test-t2` (F3); F0 je připraví přes `make test-prepare`.
 
-## Testovací smyčka
+## Testy
 
-Testy jsou rozdělené do tierů podle ceny a rizika; runbook a naměřené časy:
-[test/qes/README.md](test/qes/README.md). Výchozí smyčka při vývoji QES je **T0**,
-plná sada patří k PR/release, ne k každému commitu.
+Fáze, rozhodovací strom a mapování na interní targety: [test/README.md](test/README.md).
+Veřejné entrypointy:
 
-| Tier | Příkaz | Co dělá | Kdy | Stav |
-|---|---|---|---|---|
-| **T0** | `make qes-test-qes` | QES specy na SQLite + JS testy kroku | po každé změně QES vrstvy (nejrychlejší signál) | zelené |
-| **T0** | `make qes-test-parallel` | totéž paralelně (4 workery) | když potřebuješ T0 rychleji | zelené |
-| **T1** | `make qes-test-fast` | celá sada bez `spec/system` (bez Chromia) | před commitem forku | zelené |
-| **T1** | `make qes-test-parallel-fast` | totéž paralelně | před commitem, když spěcháš | zelené |
-| **T2** | `make qes-test` | celá RSpec sada na SQLite kromě dashboard specu | před PR / po rebase | zelené |
-| **T2** | `make qes-test-parallel-full` | totéž paralelně (potřebuje system image) | před PR, když spěcháš | zelené |
-| **T3** | `make qes-test-postgres` | celá RSpec sada na Postgresu 18 | před vydáním, parita s upstream CI | zelené |
-| — | `make qes-js-test` | node testy logiky QES kroku | po změně `qes_step_logic.mjs` | zelené |
-| — | `make qes-app-test` | Jest testy appky (vault, P12, signer, API) | po změně appky | zelené |
-| — | `make qes-app-typecheck` | TypeScript kontrola appky | před commitem appky | — |
-| — | `make qes-test-timings` | přeměří časy spec souborů pro paralelní runner | po velké změně skladby speců | — |
+| Fáze | Příkaz | Kdy |
+|---|---|---|
+| **F0** | `make test-prepare` | po klonu / po změně Dockerfilu |
+| **F1** | `make test` | před každým pushem (hook): T0 + JS + app + typecheck |
+| **F2** | `make test-ci` | před PR: F1 + T1 (stejné jako CI na push/PR) |
+| **F3** | `make test-full` | před release / po bumpu pinu: F2 + T2 + T3 + negativní + E2E |
+| **F4** | `ALLOW_EXTERNAL=1 make test-manual` | staging E2E + EU DSS; po deployi, nikdy v CI |
+| **F4** | `ALLOW_EMULATOR=1 make test-android` | APK + emulátor; lokálně |
+| **F5** | `make test-tools` | fixtures, validate, legacy |
 
-Pro `spec/system` navíc `make qes-test-assets` (kopie assetů z produkčního image).
-
-`make qes-test-parallel*` = N kontejnerů (`QES_PARALLEL_WORKERS`, default 4), každý
-s vlastní SQLite DB. Dělení podle naměřených časů v `test/qes/timings.txt`, soubory nad
-45 s se dělí po examplech (`file:řádek`), aby jeden soubor nedržel podlahu. Detaily:
-[test/qes/README.md](test/qes/README.md).
-
-## Před pushem
-
-`make hooks` nainstaluje `.githooks/pre-push` (repo-lokální `core.hooksPath`). Podle změněných cest pustí:
-
-- `mobile/*` → `make qes-app-test qes-app-typecheck` (~18 s),
-- `vendor/docuseal.rev`, `Makefile`, `test/*`, `scripts/*` → `make qes-test-qes` (~47 s, čerstvá DB),
-- obojí / nová větev / neznámý diff → vše (~65 s).
-
-Hook zároveň zablokuje push, když je fork špinavý nebo když `vendor/docuseal.rev` nesedí na HEAD forku.
-Přeskočení: `SKIP_QES_HOOK=1 git push`. CI běží stejnou sadu na push/PR.
+Interní tiery T0–T3 a počty: [test/README.md](test/README.md).
+Hook pustí F1 s čerstvou DB; přeskočení `SKIP_QES_HOOK=1`.
 
 ## CI
 
-- `.github/workflows/qes.yml` — push `main`/PR: T0 + T1 + app; schedule/dispatch: T2 + T3 + negativní + E2E;
-  `workflow_call full: true` (release): vše výše.
-- `.github/workflows/android-release.yml` — tag `v*`; `qes` job pouští kompletní sadu, `build` na něm závisí.
+- `.github/workflows/qes.yml` — push `main`/PR: F2; schedule/dispatch: F3;
+  `workflow_call full: true` (release): F3.
+- `.github/workflows/android-release.yml` — tag `v*`; `qes` job pouští F3, `build` na něm závisí.
 - Reporty se ukládají jako artefakty (14 dní), ne do gitu.
 - Fork se checkoutuje na pin, ne na head větve.
 
-`make qes-test` a spol. mají `pipefail`, takže červený RSpec už neprojde jako úspěch
-(dřív `rspec … | tee` maskoval exit kód).
+## E2E a manuální testy
 
-## E2E
+- `make test-e2e` — F3: fork + podpis kódem appky, dva signeři, přímý podpis PDF, verify, fake čip.
+- `make test-manual` — F4: staging E2E a EU DSS; vyžaduje živý staging a `ALLOW_EXTERNAL=1`.
+- `make test-android` — F4: APK + emulátor; dnes TODO.
+- `make test-card` — F4: reálná čtečka; dnes stub.
 
-| Příkaz | Co dělá |
-|---|---|
-| `make qes-e2e` | fork + podpis **kódem appky** → validované PDF |
-| `make qes-e2e-two` | dva signeři → 6 signatur (2× appka + 2× pečeť + 2× DocTS) |
-| `make qes-e2e-pdf` | přímý podpis PDF: upload, náhled, umístění pečeti, podpis |
-| `make qes-verify-e2e` | ověření PDF: valid, uložení, tampered, unsigned |
-| `make qes-negative` | negativní scénáře N1–N17 |
-| `make qes-e2e-card` | varianta A s fake čipem (test QSCD cert) |
-| `make qes-eu-dss-verify` | volitelně: kontrola PDF přes EU DSS API (PDF opouští stroj) |
+Podrobnosti a co se netestuje: [test/README.md](test/README.md).
 
-Reporty jdou do `test/out/`. E2E potřebuje `.venv` a klon forku z `make fork-setup`.
-
-## Staging
+## Staging (F4a)
 
 | Příkaz | Co dělá |
 |---|---|

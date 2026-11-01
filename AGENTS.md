@@ -63,21 +63,20 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
 ## Příkazy a testy
 
 **Nevypisuj si příkazy odsud — přečti si `Makefile`.** Každý cíl má `##` popis, `make help`
-vypíše všechny. Oblasti: příprava (`venv`, `fork-setup`), RSpec tiery (`qes-test*`), JS a appka
+vypíše všechny. Oblasti: příprava (`venv`, `fork-setup`), fáze testů (`test*`), interní tiery (`qes-test*`), JS a appka
 (`qes-js-test`, `qes-app-*`), E2E (`qes-e2e*`, `qes-negative`), staging (`qes-staging-*`),
 nasazení a provoz (`deploy-*`, `smtp-*`), historické interop nástroje (`fixtures`, `validate`, `negative`).
 
-Tier podle ceny a rizika — celou sadu na každý commit nepouštěj:
+**Fáze testů** (detail a rozhodovací strom: [test/README.md](test/README.md)):
 
-**Před pushem** běží `.githooks/pre-push` (`make hooks`): T0 + app testy + typecheck; pin forku musí
-sedět na `vendor/docuseal.rev`. Přeskočení: `SKIP_QES_HOOK=1 git push`.
+- **F0** `make test-prepare` — po klonu / změně Dockerfilu.
+- **F1** `make test` — před pushem (T0 + JS + app + typecheck); hook `.githooks/pre-push`.
+- **F2** `make test-ci` — před PR (F1 + T1).
+- **F3** `make test-full` — před release / po bumpu pinu (F2 + T2 + T3 + negativní + E2E).
+- **F4** `make test-manual` / `make test-android` — staging, EU DSS, emulátor; nikdy v CI.
+- **F5** `make test-tools` — fixtures, validate, legacy.
 
-- **T0** `qes-test-qes` — po každé změně QES vrstvy (výchozí smyčka).
-- **T1** `qes-test-fast` — před commitem forku (upstream specy bez `spec/system`).
-- **T2** `qes-test` — před PR / po rebase (navíc `spec/system`, obrana proti regresi
-  `generate_result_attachments`, `generate_combined_attachment`, `generate_audit_trail`).
-- **T3** `qes-test-postgres` — před vydáním (parita s upstream CI).
-- `qes-test-parallel*` = totéž paralelně. Naměřené časy a runbook: [test/qes/README.md](test/qes/README.md).
+Pin forku musí sedět na `vendor/docuseal.rev`; hook to blokuje. Přeskočení: `SKIP_QES_HOOK=1 git push`.
 
 ## Kde co hledat
 
