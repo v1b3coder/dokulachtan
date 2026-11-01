@@ -28,7 +28,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from qes_e2e import count_signatures, log, report, signature_lines, validate_pdf  # noqa: E402
+from qes_e2e import (  # noqa: E402
+    assert_acceptable_modifications, count_signatures, log, report, signature_lines, validate_pdf,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "test" / "out"
@@ -167,6 +169,8 @@ def main() -> int:
     log(f"- pyHanko: {len(lines)} signatur, všechny INTACT: {bool(lines) and all('INTACT' in line for line in lines)}")
     if not lines or not all("INTACT" in line for line in lines):
         raise SystemExit("Některá signatura není INTACT")
+    assert_acceptable_modifications(final.name, lines)
+    log("- pyHanko: revize dalšího signera ACCEPTABLE_MODIFICATIONS (žádné ILLEGAL_MODIFICATIONS)")
 
     verify = subprocess.run(["openssl", "verify", "-CAfile", str(trust), str(PKI / "signer-ades.crt")],
                             capture_output=True, text=True)

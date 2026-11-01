@@ -1495,13 +1495,17 @@ a obřad pro každého zvlášť v pořadí. Kritéria navíc:
 - `combined_document` = revize 2,
 - pokus o `POST /s/:slug/qes_sessions` pro signera 2 před dokončením signera 1 → `409 awaiting_previous_signer`,
 - `pyhanko validate` bez `--fetch` označí podpisy appky jako `INTACT:TRUSTED`; pečeti DocuSealu
-  jako `INTACT:UNTRUSTED` (vlastní ESIGN cert, trust roots QES se na ně nevztahují).
+  jako `INTACT:UNTRUSTED` (vlastní ESIGN cert, trust roots QES se na ně nevztahují),
+- `pyhanko` klasifikuje revizi dalšího signera jako `EXTENDED_WITH_FORM_FILLING`
+  (`ACCEPTABLE_MODIFICATIONS`) a **žádný** podpis není `ILLEGAL_MODIFICATIONS`
+  (`scripts/qes_e2e.py`: `assert_acceptable_modifications`).
 
 **Stejný podepisující, víc polí `qes` (v1.5):** pokryto RSpec testem `chain_spec.rb`
 („lets the same submitter sign twice with the same certificate“) — druhý TBS navazuje na první finální PDF
 téhož podepisujícího, 6 signatur `INTACT`, `documents` = poslední revize. E2E skript `qes_e2e.py`
 tento scénář neověřuje (bootstrap dělá jedno pole na submittera); na stagingu ho ověřuje
-`make qes-staging-same-signer` (`scripts/qes_staging_same_signer_check.py`, 6 signatur `INTACT`).
+`make qes-staging-same-signer` (`scripts/qes_staging_same_signer_check.py`, 6 signatur `INTACT`);
+oba E2E skripty navíc assertují `ACCEPTABLE_MODIFICATIONS` (`ILLEGAL_MODIFICATIONS` = chyba).
 Texty kroku `QesStep` (`Podepsáno ({level})`, `Odkaz vyprší za {minutes} min`) **MUSÍ** skládat sám
 `qes_step.vue` (`doneText`/`expiresInText`), protože kořenový `t` v `form.vue` neinterpoluje.
 
@@ -1526,7 +1530,8 @@ Negativní scénáře (rozšíření `scripts/negative_tests.py`):
 provede bootstrap, obřad a dokončení na <https://dokulachtan-staging.fly.dev> přes `fly ssh console`
 a podepíše KÓDEM APPKY; finální PDF se stáhne a validuje. Kritéria: 6 signatur
 (2× appka + 2× pečeť + 2× DocTS), všechny INTACT, `documents` signera 1 = 3, signera 2 = 6;
-`openssl verify` test certu proti test trust rootu = OK. **Staging:** test CRL je na
+`openssl verify` test certu proti test trust rootu = OK. Navíc `assert_acceptable_modifications`
+(`ILLEGAL_MODIFICATIONS` = chyba, první podpis = `ACCEPTABLE_MODIFICATIONS`). **Staging:** test CRL je na
 `https://dokulachtan-staging.fly.dev/qes-test/root.crl` (`QES_TEST_CRL_PATH`), takže LTV data
 jsou dostupná; pečeť DocuSealu zůstává `UNTRUSTED` (test trust list neobsahuje její cert).
 

@@ -16,7 +16,9 @@ from qes_staging_e2e import (  # noqa: E402
     BASE, FLY_APP, OUT, PKI, browser_create_session, download, fly_runner,
     run_app_ceremony, wait_for_staging,
 )
-from qes_e2e import count_signatures, log, signature_lines, validate_pdf  # noqa: E402
+from qes_e2e import (  # noqa: E402
+    assert_acceptable_modifications, count_signatures, log, signature_lines, validate_pdf,
+)
 
 PDF_BASE64 = re.search(
     r"PDF_BASE64 = '([^']+)'",
@@ -130,6 +132,8 @@ def main() -> int:
         raise SystemExit(f"Finální PDF má {count} signatur, očekáváno 6")
     if not lines or not all("INTACT" in line for line in lines):
         raise SystemExit("Některá signatura není INTACT")
+    assert_acceptable_modifications(final.name, lines)
+    log("- pyHanko: revize dalšího signera ACCEPTABLE_MODIFICATIONS (žádné ILLEGAL_MODIFICATIONS)")
 
     import qes_e2e
 

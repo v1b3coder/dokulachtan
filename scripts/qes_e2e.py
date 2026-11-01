@@ -193,6 +193,21 @@ def count_signatures(path: Path) -> int:
         return len(PdfFileReader(handle).embedded_signatures)
 
 
+def assert_acceptable_modifications(name: str, lines: list[str]) -> None:
+    """SPEC § 13: pečeť je appearance widgetu, takže revize dalšího signera je form filling.
+
+    První podpis musí být `EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS`
+    a žádný podpis nesmí být `ILLEGAL_MODIFICATIONS` (obsah stránky se nemění).
+    """
+    illegal = [line for line in lines if "ILLEGAL_MODIFICATIONS" in line]
+    if illegal:
+        raise SystemExit(f"{name}: revize není ACCEPTABLE_MODIFICATIONS: {illegal[0]}")
+
+    first = lines[0] if lines else ""
+    if "EXTENDED_WITH_FORM_FILLING" not in first or "ACCEPTABLE_MODIFICATIONS" not in first:
+        raise SystemExit(f"{name}: první podpis není EXTENDED_WITH_FORM_FILLING,ACCEPTABLE_MODIFICATIONS")
+
+
 def validate_pdf(path: Path, trust: Path) -> str:
     pyhanko = str(ROOT / ".venv" / "bin" / "pyhanko")
     lines = [f"\n# Soubor: {path.name} ({path.stat().st_size} B)"]
@@ -337,6 +352,8 @@ def main() -> int:
         log(f"\n## Počet signatur v qes-final.pdf: {count} (očekáváno {3 * len(signers)})")
         if count != 3 * len(signers):
             raise SystemExit(f"qes-final.pdf má {count} signatur, očekáváno {3 * len(signers)}")
+        assert_acceptable_modifications(final_path.name, signature_lines(final_path, trust))
+        log("- pyHanko: revize dalšího signera ACCEPTABLE_MODIFICATIONS (žádné ILLEGAL_MODIFICATIONS)")
         for index, done in enumerate(completed, start=1):
             for document in done.get("documents", []):
                 path = OUT / document["filename"]

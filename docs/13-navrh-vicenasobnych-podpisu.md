@@ -167,5 +167,6 @@ zůstávají indexy per-attachment (dnešní chování).
 - Commity a podrobná historie jsou v gitu forku; aktuální stav dokumentuje
   [AGENTS.md](../AGENTS.md#stav) a SPEC § 4.6, § 7.1 a § 7.6.
 - Viditelná pečeť je appearance stream widgetu podpisového pole (SPEC § 7.1, § 13): analýza
-  revizí (pyHanko) ji vidí jako form filling, takže `make qes-e2e-two` a `make qes-staging-e2e`
-  hlásí u prvního podpisu `ACCEPTABLE_MODIFICATIONS` místo `ILLEGAL_MODIFICATIONS`.
+  revizí (pyHanko) ji vidí jako form filling, takže `make qes-e2e-two`, `make qes-staging-e2e`
+  i `make qes-staging-same-signer` assertují `ACCEPTABLE_MODIFICATIONS` (`ILLEGAL_MODIFICATIONS`
+  = chyba) přes `assert_acceptable_modifications` v `scripts/qes_e2e.py`.
