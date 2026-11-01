@@ -1,7 +1,7 @@
 // API přímého podpisu PDF (docs/15 § 5): appka nahrává PDF přes DocuSeal API
 // a používá standardní tok — šablona s polem `qes`, submission a běžný obřad.
 // API token je v SecureStore (nastavení), nikdy se neloguje.
-import { secureFetch } from './http';
+import { HEAVY_TIMEOUT_MS, HttpTimeoutError, secureFetch, withTimeout, WRITE_TIMEOUT_MS } from './http';
 import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 import type { QesLevel } from './types';
 
@@ -207,7 +207,7 @@ export class PdfApi {
       form.append('level_required', params.levelRequired);
     }
 
-    return this.request<PdfDocument>('POST', '/api/qes/documents', form);
+    return this.request<PdfDocument>('POST', '/api/qes/documents', form, HEAVY_TIMEOUT_MS);
   }
 
   // Ověření PDF (docs/16): server vrátí report, PDF se neukládá.
@@ -301,7 +301,7 @@ export class PdfApi {
 
     form.append('file', await this.toBlob(file));
 
-    return this.request<T>('POST', path, form);
+    return this.request<T>('POST', path, form, HEAVY_TIMEOUT_MS);
   }
 
   private async toBlob(file: PdfUpload): Promise<Blob> {
@@ -330,26 +330,43 @@ export class PdfApi {
     return { 'X-Auth-Token': this.apiToken, Accept: 'application/json', 'X-QES-Protocol': '1' };
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    timeoutMs = WRITE_TIMEOUT_MS,
+  ): Promise<T> {
     const form = body instanceof FormData;
     // Tělo se posílá jen tam, kam patří (GET/HEAD nesmí mít tělo).
     const encoded = form ? body : body === undefined ? undefined : JSON.stringify(body);
-    const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
-      method,
-      redirect: 'error',
-      headers: form ? this.headers() : { ...this.headers(), 'Content-Type': 'application/json' },
-      body: encoded,
-    });
 
-    assertResponseOrigin(response, this.serverUrl);
+    try {
+      return await withTimeout(async (signal) => {
+        const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
+          method,
+          redirect: 'error',
+          headers: form ? this.headers() : { ...this.headers(), 'Content-Type': 'application/json' },
+          body: encoded,
+          signal,
+        });
 
-    if (!response.ok) {
-      await throwError(response);
+        assertResponseOrigin(response, this.serverUrl);
+
+        if (!response.ok) {
+          await throwError(response);
+        }
+
+        const text = await response.text();
+
+        try {
+          return (text.length > 0 ? JSON.parse(text) : {}) as T;
+        } catch {
+          throw new PdfApiError(response.status, 'invalid_response');
+        }
+      }, timeoutMs);
+    } catch (error) {
+      throw error instanceof HttpTimeoutError ? new PdfApiError(408, 'timeout') : error;
     }
-
-    const text = await response.text();
-
-    return (text.length > 0 ? JSON.parse(text) : {}) as T;
   }
 }
 

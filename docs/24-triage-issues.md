@@ -26,7 +26,7 @@ jsou označené jako mimo rozsah.
 | 19 | LTV bez revokace mezilehlé CA | opraveno (CRL pro každý ne-kořenový cert; DSS z ověřeného řetězu) | P1 |
 | 21 | „Ověření finálního PDF“ neověřuje podpis | potvrzeno (část), zbytek works as designed | P3 |
 | 22 | URL finálního PDF se neověřuje | neplatí (stahování jen v přímém podpisu) | — |
-| 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–5 opraveno | P2 |
+| 23 | Drobnosti R3-10/11/13 | 1–2 mimo rozsah, 3–6 opraveno | P2 |
 
 **Wontfix v kódu:** #22, #23.1.
 
@@ -258,7 +258,7 @@ podpisu“ (docs/16 D15). Testy: `pdfShare.test.ts` (chybějící otisk, přepsa
   (1 flaky `qes_session_documents_spec` na hranici sekundy v `expires_at`).
 - **#23.3** `ceremony.ts:115` — `unlockCertificate` před `POST certificate`; podpis až po validaci, takže dopad je jen
   zbytečně dlouhá doba s odemčeným klíčem. **Částečně opraveno (2026-10-29):** `POST certificate` má strop
-  60 s (`CERTIFICATE_TIMEOUT_MS` v `api.ts`), takže okno neřídí server, a po podpisu se `privateKeyPem` zahodí
+  60 s (`WRITE_TIMEOUT_MS` v `http.ts`), takže okno neřídí server, a po podpisu se `privateKeyPem` zahodí
   (`ceremony.ts`, SPEC § 9.3 bod 8). Pořadí zůstává podle SPEC § 9.3 (biometrie → `POST certificate`); čtení certu
   bez odemčení by vyžadovalo jiný formát vaultu a změnu SPEC/DESIGN, proto se nedělá. Testy: `api.test.ts`
   (timeout → `408 timeout`), `ceremony.test.ts` (klíč je po podpisu prázdný).
@@ -271,6 +271,18 @@ podpisu“ (docs/16 D15). Testy: `pdfShare.test.ts` (chybějící otisk, přepsa
   takže server nedostane `postAbort('user_cancelled')`. **Opraveno (2026-10-29):** tlačítko volá `cancelReview`;
   web mapuje `user_cancelled` na `qes_error_user_cancelled` (`qes_step_logic.mjs`, `qes_i18n.js`). Testy:
   `signScreen.test.ts` (abort před načtením dokumentu), `qes_step_logic.test.mjs` (mapování kódu).
+- **#23.6** `api.ts`, `pdfApi.ts`, `pdfShare.ts`, `sign.tsx` — strop měl jen `POST certificate`; ostatní volání
+  visela bez limitu (`getSession`, `getDocument`, `postComplete`, `completeSubmission`, `postAbort`, celé `PdfApi`
+  včetně 25MB uploadu, stažení finálního PDF, poll v `ceremony.ts`), takže initial load mohl točit spinner
+  navěky (jediná akce „Zavřít") a tlačítka zůstala zamčená. **Opraveno (2026-11-01):** jedno primitivum
+  `withTimeout` v `http.ts` (timer drží i čtení těla) se čtyřmi stropy — `READ_TIMEOUT_MS` 15 s,
+  `DOCUMENT_TIMEOUT_MS` 30 s, `WRITE_TIMEOUT_MS` 60 s, `HEAVY_TIMEOUT_MS` 120 s; `downloadPdf` dostal `signal`.
+  Automatický retry **záměrně není** (manuální tlačítko): `sign.tsx` má „Zkusit znovu" u initial loadu i u obřadu
+  (volá `startReview` → `prepareCeremony`, takže se stav znovu načte a podpis se neopakuje naslepo), poll v
+  `ceremony.ts` vydrží krátký výpadek sítě a 4xx ukončí hned. Kódy `timeout`, `server_error`, `invalid_response`
+  mají text v `ERROR_TEXT`. Testy: `api.test.ts` (stropy, čtení těla, žádné retry), `ceremony.test.ts` (poll výpadek
+  i 4xx), `signScreen.test.ts` (retry u initial loadu i obřadu), `pdfApi.test.ts` (upload), `pdfShare.test.ts`
+  (signal u downloadu).
 
 ## 5. Mimo rozsah (wontfix)
 
@@ -359,9 +371,9 @@ jedním tapem. Smazání zůstává samostatný krok v S3 s vlastní biometrií.
 | F4 | #16, #4 | snapshot polí a `required`; jeden hook, dva testy |
 | F5 | #18.2 | hotovo: `scripts/apk_fingerprint.sh` + test v CI |
 | F6 | #11, #12 | hranice změn a account fallback; dva testy v `verify_parity_spec.rb` |
-| F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `lts_spec.rb`/`crl_scope_spec.rb` |
+| F7 | #19 | LTV řetěz a DSS; pozor na LTV scénáře v `ltv_spec.rb`/`crl_scope_spec.rb` |
 | F8 | #17, #21 | appka: review, ověření finálního PDF; E2E na emulátoru |
-| F9 | #8, #9, #10, #23.3–5 | hotovo: drobnosti a dokumentace; bez migrací |
+| F9 | #8, #9, #10, #23.3–6 | hotovo: drobnosti a dokumentace; bez migrací |
 
 Po každém bloku: `make qes-test-qes` (T0) + `make qes-app-test`/`make qes-app-typecheck` u appky,
 před PR `make qes-test` a `make qes-e2e*`; SPEC § 16 doplnit u #14, #16.

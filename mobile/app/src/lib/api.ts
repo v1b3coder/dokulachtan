@@ -1,5 +1,13 @@
 // Klient QES API (SPEC § 5): token je jen v paměti, nikdy se neukládá.
-import { secureFetch } from './http';
+import {
+  DOCUMENT_TIMEOUT_MS,
+  HEAVY_TIMEOUT_MS,
+  HttpTimeoutError,
+  READ_TIMEOUT_MS,
+  secureFetch,
+  withTimeout,
+  WRITE_TIMEOUT_MS,
+} from './http';
 import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 
 import type {
@@ -39,40 +47,62 @@ export class QesApi implements SessionSource {
   }
 
   async getSession(): Promise<QesSessionPayload> {
-    return this.request<QesSessionPayload>('GET', `/qes/sessions/${encodeURIComponent(this.token)}`);
+    return this.request<QesSessionPayload>(
+      'GET',
+      `/qes/sessions/${encodeURIComponent(this.token)}`,
+      undefined,
+      READ_TIMEOUT_MS,
+    );
   }
 
   async getDocument(): Promise<Uint8Array> {
-    const response = await this.fetchImpl(
-      `${this.serverUrl}/qes/sessions/${encodeURIComponent(this.token)}/document`,
-      { method: 'GET', redirect: 'error', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
-    );
-    assertResponseOrigin(response, this.serverUrl);
-    assertProtocolVersion(response);
-    if (!response.ok) {
-      const payload = await readErrorPayload(response);
-      throw new QesApiError(response.status, payload.error ?? 'server_error');
+    // Strop kryje i čtení těla: stalling po hlavičkách by jinak visel dál.
+    try {
+      return await withTimeout(async (signal) => {
+        const response = await this.fetchImpl(
+          `${this.serverUrl}/qes/sessions/${encodeURIComponent(this.token)}/document`,
+          {
+            method: 'GET',
+            redirect: 'error',
+            headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' },
+            signal,
+          },
+        );
+        assertResponseOrigin(response, this.serverUrl);
+        assertProtocolVersion(response);
+        if (!response.ok) {
+          const payload = await readErrorPayload(response);
+          throw new QesApiError(response.status, payload.error ?? 'server_error');
+        }
+        if (response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
+          throw new QesApiError(422, 'document_mismatch');
+        }
+
+        return new Uint8Array(await response.arrayBuffer());
+      }, DOCUMENT_TIMEOUT_MS);
+    } catch (error) {
+      throw error instanceof HttpTimeoutError ? new QesApiError(408, 'timeout') : error;
     }
-    if (response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
-      throw new QesApiError(422, 'document_mismatch');
-    }
-    return new Uint8Array(await response.arrayBuffer());
   }
 
   async postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload> {
+    // Běží s odemčeným klíčem (SPEC § 9.3), takže request nesmí viset bez
+    // stropu, když server neodpovídá (#23.3).
     return this.request<QesCertificatePayload>(
       'POST',
       `/qes/sessions/${encodeURIComponent(this.token)}/certificate`,
       body,
-      CERTIFICATE_TIMEOUT_MS,
+      WRITE_TIMEOUT_MS,
     );
   }
 
   async postComplete(signatureBase64: string): Promise<QesCompleteResponse> {
+    // Server dělá CRL + TSA + DSS + pečeť + DocTS; strop je proto vyšší.
     return this.request<QesCompleteResponse>(
       'POST',
       `/qes/sessions/${encodeURIComponent(this.token)}/complete`,
       { signature: signatureBase64 },
+      HEAVY_TIMEOUT_MS,
     );
   }
 
@@ -87,43 +117,43 @@ export class QesApi implements SessionSource {
       'POST',
       `/qes/sessions/${encodeURIComponent(this.token)}/abort`,
       { code, message },
+      READ_TIMEOUT_MS,
     );
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, timeoutMs?: number): Promise<T> {
-    // `POST certificate` běží s odemčeným klíčem (SPEC § 9.3), takže request
-    // nesmí viset bez stropu, když server neodpovídá (#23.3).
-    const controller = timeoutMs === undefined ? undefined : new AbortController();
-    const timer = controller === undefined ? undefined : setTimeout(() => controller.abort(), timeoutMs);
-
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    timeoutMs = WRITE_TIMEOUT_MS,
+  ): Promise<T> {
     try {
-      const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
-        method,
-        redirect: 'error',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'X-QES-Protocol': '1',
-        },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        ...(controller === undefined ? {} : { signal: controller.signal }),
-      });
+      return await withTimeout(async (signal) => {
+        const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
+          method,
+          redirect: 'error',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-QES-Protocol': '1',
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal,
+        });
 
-      assertResponseOrigin(response, this.serverUrl);
-      assertProtocolVersion(response);
+        assertResponseOrigin(response, this.serverUrl);
+        assertProtocolVersion(response);
 
-      const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
+        const payload = await readJsonPayload<T & { error?: string; message?: string }>(response);
 
-      if (!response.ok) {
-        throw new QesApiError(response.status, payload.error ?? 'server_error', payload.message);
-      }
+        if (!response.ok) {
+          throw new QesApiError(response.status, payload.error ?? 'server_error', payload.message);
+        }
 
-      return payload;
+        return payload;
+      }, timeoutMs);
     } catch (error) {
-      if (controller?.signal.aborted) throw new QesApiError(408, 'timeout');
-      throw error;
-    } finally {
-      if (timer !== undefined) clearTimeout(timer);
+      throw error instanceof HttpTimeoutError ? new QesApiError(408, 'timeout') : error;
     }
   }
 }
@@ -131,7 +161,6 @@ export class QesApi implements SessionSource {
 // Chybová odpověď může být HTML (404/500 stránka), ne jen JSON; `response.json()`
 // by jinak shodilo celý obřad na „Unexpected character: <“.
 const PROTOCOL_VERSION = '1';
-const CERTIFICATE_TIMEOUT_MS = 60_000;
 
 function assertProtocolVersion(response: Response): void {
   const version = response.headers.get('X-QES-Protocol');

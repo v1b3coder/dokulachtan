@@ -43,6 +43,9 @@ const ERROR_TEXT: Record<string, string> = {
   form_not_active: 'Dokument už není aktivní. Požádejte odesílatele o nový.',
   unknown_token: 'Neplatný odkaz. Vyžádejte nový.',
   network: 'Chyba připojení. Zkuste to znovu.',
+  timeout: 'Operace trvala příliš dlouho. Zkuste to znovu.',
+  server_error: 'Chyba serveru. Zkuste to znovu.',
+  invalid_response: 'Server vrátil nečitelnou odpověď. Zkuste to znovu.',
   certificate_missing: 'Certifikát chybí nebo vypršel. Importujte nový.',
   certificate_expired: 'Platnost certifikátu vypršela. Importujte nový.',
   biometry_rejected: 'Podpis se neprovede bez biometrie.',
@@ -80,7 +83,7 @@ const ERROR_TEXT: Record<string, string> = {
   signing_context_mismatch: 'Podpisové atributy se změnily. Začněte znovu.',
   stamp_mismatch: 'Pečeť neodpovídá certifikátu podpisu. Vyžádejte nový odkaz.',
   completion_failed: 'Dokončení dokumentu se nepodařilo. Zkuste to znovu.',
-  server_pending: 'Server stále dokončuje podpis. Zkuste to znovu.',
+  server_pending: 'Server ještě dokončuje podpis, nebo se stav nepodařilo zjistit. Zkontrolujte to znovu.',
   unsupported_protocol: 'Server používá novější verzi protokolu. Aktualizujte aplikaci.',
   wrong_state: 'Požadavek už není platný. Vyžádejte nový odkaz.',
   invalid_pdf: 'Soubor není platné PDF.',
@@ -165,6 +168,8 @@ export default function SignScreen() {
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
   const [trusting, setTrusting] = useState(false);
   const [loadingDocument, setLoadingDocument] = useState(false);
+  // Opakování initial loadu po chybě sítě (bez něj zbývalo jen „Zavřít“).
+  const [attempt, setAttempt] = useState(0);
   const [openingPdf, setOpeningPdf] = useState(false);
   const signingLock = useRef(false);
   const generation = useRef(0);
@@ -193,6 +198,10 @@ export default function SignScreen() {
     || error === 'level_mismatch' || error === 'not_qualified' || error === 'unsupported_key'
     || error === 'invalid_certificate';
   const pending = error === 'server_pending';
+  // Opakování po výpadku sítě: `startReview` znovu načte stav (`prepareCeremony`),
+  // takže se nepodepisuje znovu naslepo nad už hotovým PDF.
+  const retryable = error === 'network' || error === 'timeout'
+    || error === 'server_error' || error === 'invalid_response';
   const [serverUrl, setServerUrl] = useState<string | null>(null);
 
   // Klient pro stažení finálního PDF (docs/15 § 5) — jen přímý podpis PDF.
@@ -308,7 +317,7 @@ export default function SignScreen() {
     })();
 
     return () => { generation.current += 1; };
-  }, [token, server, isPdfFlow, loadSession]);
+  }, [token, server, isPdfFlow, loadSession, attempt]);
 
   const confirmTrust = useCallback(async () => {
     if (!pendingOrigin || trusting) return;
@@ -450,7 +459,8 @@ export default function SignScreen() {
     preparedCeremony.current = null;
     await ceremony?.finalize().catch(() => {});
     if (token && serverUrl) {
-      await qesApi(serverUrl).postAbort('user_cancelled').catch(() => {});
+      // Zrušení nesmí držet tlačítko: výsledek už nikoho nezajímá (#23.5).
+      qesApi(serverUrl).postAbort('user_cancelled').catch(() => {});
     }
     setReviewPdf(null);
     setReviewDigest(null);
@@ -786,6 +796,12 @@ export default function SignScreen() {
                   onPress={checkCompletion}
                   disabled={busy}
                 />
+              ) : retryable ? (
+                <PrimaryButton
+                  title={loadingDocument ? 'Načítám dokument…' : 'Zkusit znovu'}
+                  onPress={startReview}
+                  disabled={loadingDocument}
+                />
               ) : terminal ? (
                 <PrimaryButton title="Zavřít" onPress={leaveSignScreen} />
               ) : needsSetup ? (
@@ -818,6 +834,12 @@ export default function SignScreen() {
           <Text style={styles.title}>Podpis</Text>
           <Text style={styles.error}>{ERROR_TEXT[error ?? 'unknown_token'] ?? error}</Text>
           {errorDetail ? <Text style={styles.detail}>{errorDetail}</Text> : null}
+          {!terminal ? (
+            <PrimaryButton
+              title="Zkusit znovu"
+              onPress={() => { setError(null); setAttempt((value) => value + 1); }}
+            />
+          ) : null}
           <TextButton title="Zavřít" onPress={leaveSignScreen} />
         </>
       )}

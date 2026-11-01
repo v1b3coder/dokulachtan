@@ -141,7 +141,7 @@ describe('pdfShare', () => {
     expect(downloadFileAsync).toHaveBeenCalledWith(
       'https://server/file/x.pdf',
       expect.any(File),
-      { idempotent: true },
+      expect.objectContaining({ idempotent: true, signal: expect.anything() }),
     );
   });
 

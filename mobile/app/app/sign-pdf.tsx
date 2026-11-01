@@ -56,6 +56,8 @@ const ERROR_TEXT: Record<string, string> = {
   rate_limited: 'Příliš mnoho požadavků. Zkuste to později.',
   server_error: 'Chyba serveru. Zkuste to znovu.',
   network: 'Chyba připojení. Zkuste to znovu.',
+  timeout: 'Operace trvala příliš dlouho. Zkuste to znovu.',
+  invalid_response: 'Server vrátil nečitelnou odpověď. Zkuste to znovu.',
   source_mismatch: 'Server přijal jiný soubor, než jste vybrali. Zkuste to znovu.',
   already_completed: 'Dokument už je podepsaný. Otevřete ho v DocuSealu.',
   signature_in_progress: 'Podpis už probíhá v jiném okně. Dokončete ho, nebo zkuste znovu.',

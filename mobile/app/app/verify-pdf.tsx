@@ -57,6 +57,8 @@ const ERROR_TEXT: Record<string, string> = {
   eu_dss_unavailable: 'Externí ověření není dostupné. Zkuste to později nebo ověřte v DocuSealu.',
   eu_dss_error: 'Externí služba odmítla PDF. Zkuste ověřit v DocuSealu.',
   network: 'Chyba připojení. Zkuste to znovu.',
+  timeout: 'Operace trvala příliš dlouho. Zkuste to znovu.',
+  invalid_response: 'Server vrátil nečitelnou odpověď. Zkuste to znovu.',
 };
 
 export default function VerifyPdfScreen() {

@@ -555,7 +555,13 @@ App                                   Server
 | 422 | `not_trusted` | certifikát nevede řetězem k trust rootu | „Použijte kvalifikovaný certifikát (I.CA/PostSignum)" |
 | 422 | `revoked` | certifikát je v CRL revokovaný | „Certifikát byl revokován" |
 | 429 | `rate_limited` | příliš pokusů | zpožděný retry |
-| 500 | `server_error` | chyba serveru | retry s backoffem |
+| 500 | `server_error` | chyba serveru | ruční retry |
+
+Stropy na straně appky (`mobile/app/src/lib/http.ts`): `READ_TIMEOUT_MS` 15 s (GET metadata),
+`DOCUMENT_TIMEOUT_MS` 30 s (GET `/document`), `WRITE_TIMEOUT_MS` 60 s (`POST certificate`,
+`complete_submission`), `HEAVY_TIMEOUT_MS` 120 s (`POST complete`, 25MB upload, stažení PDF). Po vypršení
+appka zobrazí `timeout` a **opakuje jen na pokyn uživatele**; ztracenou odpověď `POST /complete`
+neopakuje podpisem, ale znovu načte stav (§ 7.10).
 
 Interní `failure_code` (zapisují se do `QesSession` a objevují se v pollingu § 6.2):
 
@@ -1704,7 +1710,7 @@ Konkrétní případy (každý test MUSÍ nejdřív selhat — TDD):
 4. expirovaný cert → `certificate_expired`; RSA 2048 / ECDSA P-256.
 5. `qc_statements` obsahuje přesné OID v pořadí z certifikátu.
 
-**`spec/lib/qes/cms_builder_spec.rb`**
+**`spec/lib/qes/pipeline_spec.rb`**
 1. `prepare` vrátí `signed_attrs_der` typu DER `SET` s `content-type`, `message-digest`,
    `signingCertificateV2` a **vynuceným** `signing-time` (HexaPDF 1.7 ho u `:pades` nepřidá — § 7.2 bod 2).
 2. `message-digest` = SHA-256 dat pokrytých `/ByteRange`.

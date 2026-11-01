@@ -93,6 +93,34 @@ async function signOnScreen(screen: ReturnType<typeof create>) {
 }
 afterEach(() => { jest.restoreAllMocks(); jest.clearAllMocks(); });
 
+it('offers retry when the initial session load times out', async () => {
+  jest.spyOn(QesApi.prototype, 'getSession')
+    .mockRejectedValueOnce(new QesApiError(408, 'timeout'));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+
+  expect(JSON.stringify(screen.toJSON())).toContain('Operace trvala příliš dlouho');
+  await act(async () => { screen.root.findByProps({ title: 'Zkusit znovu' }).props.onPress(); });
+  await act(async () => {});
+
+  expect(screen.root.findByProps({ title: 'Zobrazit dokument' })).toBeTruthy();
+  await act(async () => screen.unmount());
+});
+
+it('offers retry after a network error during the ceremony', async () => {
+  jest.mocked(signCeremony).mockRejectedValueOnce(new QesApiError(408, 'timeout'));
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  await signOnScreen(screen);
+
+  expect(JSON.stringify(screen.toJSON())).toContain('Operace trvala příliš dlouho');
+  await act(async () => { screen.root.findByProps({ title: 'Zkusit znovu' }).props.onPress(); });
+  await act(async () => {});
+
+  expect(prepareCeremony).toHaveBeenCalledTimes(2);
+  await act(async () => screen.unmount());
+});
+
 it('aborts the session when the user cancels before loading the document', async () => {
   const abort = jest.spyOn(QesApi.prototype, 'postAbort').mockResolvedValue({ state: 'cancelled' });
   let screen: ReturnType<typeof create>;

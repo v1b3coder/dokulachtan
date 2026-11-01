@@ -13,6 +13,7 @@ import {
 import { Platform } from 'react-native';
 
 import { certificateMatchesLevel, selectSigner, type SignerConfiguration } from './signer';
+import { QesApiError } from './api';
 import { signSignedAttrs, toBase64, type HashAlgorithm } from './crypto/softwareSigner';
 import { certificateSummary, unlockCertificate, type VaultDeps } from './crypto/vault';
 import { CardSignerError, createCardSigner, type CardSigner } from './cardSigner';
@@ -22,6 +23,7 @@ import type {
   QesCompleteResponse,
   QesEmbeddedPayload,
   QesLevel,
+  QesSessionPayload,
   SessionSource,
 } from './types';
 
@@ -208,7 +210,12 @@ export async function signCeremony(
   ceremony: PreparedCeremony,
 ): Promise<CeremonyResult> {
   const signature = await ceremony.sign();
+
+  // Ztracená odpověď se neopakuje podpisem: `startReview` znovu načte stav
+  // (`prepareCeremony` → `completed`, nebo nový pokus o podpis), takže u ECDSA
+  // nevznikne druhý podpis nad už podepsaným PDF (SPEC § 7.10).
   const response: QesCompleteResponse = await api.postComplete(toBase64(signature));
+
   const completed = response.state === 'embedded'
     ? await pollCompletion(api, response)
     : response;
@@ -232,7 +239,17 @@ async function pollCompletion(
   while (response.state === 'embedded') {
     if (Date.now() - started > POLL_TIMEOUT_MS) throw new CeremonyError('server_pending');
     await sleep(response.poll_after_ms ?? POLL_INTERVAL_MS);
-    const session = await api.getSession();
+
+    let session: QesSessionPayload;
+    try {
+      session = await api.getSession();
+    } catch (error) {
+      // Krátký výpadek sítě nesmí shodit obřad — podpis už je na serveru.
+      // Definitivní 4xx (expired/used/wrong_state) se hlásí hned.
+      if (error instanceof QesApiError && error.status < 500 && error.status !== 408) throw error;
+      continue;
+    }
+
     if (session.state === 'completed') return session;
     if (session.state === 'failed' || session.state === 'expired') {
       throw new CeremonyError(session.state);

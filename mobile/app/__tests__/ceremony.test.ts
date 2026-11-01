@@ -6,6 +6,7 @@ import {
   type PreparedCeremony,
 } from '../src/lib/ceremony';
 import { certificateSummary, unlockCertificate, type VaultDeps } from '../src/lib/crypto/vault';
+import { QesApiError } from '../src/lib/api';
 import { parseP12 } from '../src/lib/crypto/p12';
 import { TEST_P12_BASE64, TEST_P12_PASSWORD } from '../src/lib/testCertificate';
 import { preparedPdf, signedAttrs } from './helpers/preparedPdf';
@@ -173,6 +174,35 @@ it('polls an embedded completion until the session is completed', async () => {
 
   expect(result.completed.state).toBe('completed');
   expect(api.getSession).toHaveBeenCalledTimes(3);
+});
+
+it('keeps polling through a network blip instead of failing the ceremony', async () => {
+  const { deps, api, prepared: payload } = setup();
+  const ceremony = await prepared(deps);
+  api.postComplete.mockResolvedValueOnce({ state: 'embedded', poll_after_ms: 1 });
+  api.getSession
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValueOnce({
+      state: 'completed', level: 'ades', document_digest: payload.document_digest, session_id: 1, submitter_id: 42,
+      signed_pdf_sha256: 'hash',
+    });
+
+  const result = await signCeremony(api, ceremony);
+
+  expect(result.completed.state).toBe('completed');
+  // 1× prepare + 1× výpadek + 1× úspěch
+  expect(api.getSession).toHaveBeenCalledTimes(3);
+});
+
+it('stops polling on a definitive 4xx instead of retrying', async () => {
+  const { deps, api } = setup();
+  const ceremony = await prepared(deps);
+  api.postComplete.mockResolvedValueOnce({ state: 'embedded', poll_after_ms: 1 });
+  api.getSession.mockRejectedValueOnce(new QesApiError(410, 'expired_token'));
+
+  await expect(signCeremony(api, ceremony)).rejects.toMatchObject({ code: 'expired_token' });
+  // 1× prepare + 1× poll, žádné další opakování
+  expect(api.getSession).toHaveBeenCalledTimes(2);
 });
 
 it('returns the reviewed digest even when the server reports another one', async () => {

@@ -237,6 +237,43 @@ describe('PdfApi', () => {
     }
   });
 
+  it('times out a 25MB upload and does not repeat it', async () => {
+    jest.useFakeTimers();
+    let calls = 0;
+    const api = new PdfApi('https://server', 'secret', {
+      fetchImpl: ((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        calls += 1;
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      })) as typeof fetch,
+    });
+
+    try {
+      const pending = api.createDocument({
+        name: 'contract.pdf', type: 'application/pdf', bytes: new Uint8Array([1, 2, 3]),
+      });
+      const assertion = expect(pending).rejects.toMatchObject({ status: 408, code: 'timeout' });
+
+      await jest.advanceTimersByTimeAsync(120_000);
+      await assertion;
+      // Upload vytváří šablonu, takže se nikdy neopakuje automaticky.
+      expect(calls).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('maps a non-JSON body to invalid_response', async () => {
+    const response = new Response('<html>', { status: 200 });
+
+    Object.defineProperty(response, 'url', { value: 'https://server/api/user', configurable: true });
+
+    const api = new PdfApi('https://server', 'secret', {
+      fetchImpl: (async () => response) as typeof fetch,
+    });
+
+    await expect(api.user()).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
   it('maps a tap inside the preview image to normalized coordinates', () => {
     const box = { x0: 20, y0: 10, width: 200, height: 400 };
 

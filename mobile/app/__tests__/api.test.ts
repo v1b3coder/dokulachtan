@@ -205,3 +205,57 @@ it('times out the certificate request instead of holding the unlocked key', asyn
     jest.useRealTimers();
   }
 });
+
+it.each([
+  ['session', (api: QesApi) => api.getSession(), 15_000],
+  ['document', (api: QesApi) => api.getDocument(), 30_000],
+  ['completion', (api: QesApi) => api.postComplete('AAA='), 120_000],
+])('times out the %s request and leaves the retry on the user', async (_name, call, budget) => {
+  jest.useFakeTimers();
+  let calls = 0;
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: ((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      calls += 1;
+      init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+    })) as typeof fetch,
+  });
+
+  try {
+    const pending = call(api);
+    jest.advanceTimersByTime(budget);
+
+    await expect(pending).rejects.toMatchObject({ status: 408, code: 'timeout' });
+    // Žádné automatické opakování: uživatel to zkusí znovu tlačítkem.
+    expect(calls).toBe(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('times out the document body read, not just its headers', async () => {
+  jest.useFakeTimers();
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server',
+    fetchImpl: ((_url: RequestInfo | URL, init?: RequestInit) => Promise.resolve({
+      ok: true,
+      status: 200,
+      url: 'https://server/qes/sessions/tok/document',
+      headers: new Headers({ 'Content-Type': 'application/pdf', 'X-QES-Protocol': '1' }),
+      arrayBuffer: () => new Promise<ArrayBuffer>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted.')));
+      }),
+    } as unknown as Response)) as typeof fetch,
+  });
+
+  try {
+    const pending = api.getDocument();
+    const assertion = expect(pending).rejects.toMatchObject({ status: 408, code: 'timeout' });
+
+    // Nechá doběhnout hlavičky, aby se začalo číst tělo, a pak vyprší strop.
+    await jest.advanceTimersByTimeAsync(30_000);
+    await assertion;
+  } finally {
+    jest.useRealTimers();
+  }
+});

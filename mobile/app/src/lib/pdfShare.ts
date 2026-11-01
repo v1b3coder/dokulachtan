@@ -17,6 +17,7 @@ import {
   saveToDownloads,
   sharePdf as nativeSharePdf,
 } from '../../modules/dokulachtan-share';
+import { HEAVY_TIMEOUT_MS } from './http';
 import { documentDigest, sha256Hex } from './preparedDocument';
 
 export type PdfActionErrorCode =
@@ -26,6 +27,7 @@ export type PdfActionErrorCode =
   | 'sharing_unavailable'
   | 'open_failed'
   | 'no_pdf_viewer'
+  | 'timeout'
   | 'verification_failed';
 
 export class PdfActionError extends Error {
@@ -104,14 +106,26 @@ export async function rememberSaveFolder(
 }
 
 export async function downloadPdf(url: string, fileName: string): Promise<File> {
+  // Finální PDF s DSS/CRL se stahuje nativně; strop platí i pro samotný přenos.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEAVY_TIMEOUT_MS);
+
   try {
-    const file = await File.downloadFileAsync(url, new File(Paths.cache, fileName), { idempotent: true });
+    const file = await File.downloadFileAsync(url, new File(Paths.cache, fileName), {
+      idempotent: true,
+      signal: controller.signal,
+    });
 
     // `downloadFileAsync` je v typování deklarované nad třídou z `ExpoFileSystem.types`,
     // ale vrací stejnou instanci `File` jako export z `expo-file-system`.
     return file as unknown as File;
   } catch (err) {
-    throw new PdfActionError('download_failed', err instanceof Error ? err.message : undefined);
+    throw new PdfActionError(
+      controller.signal.aborted ? 'timeout' : 'download_failed',
+      err instanceof Error ? err.message : undefined,
+    );
+  } finally {
+    clearTimeout(timer);
   }
 }
 

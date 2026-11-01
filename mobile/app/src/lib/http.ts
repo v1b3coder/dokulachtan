@@ -29,3 +29,44 @@ export const secureFetch = ((input: RequestInfo | URL, init: RequestInit = {}) =
 
   return implementation(input, { ...init, redirect: 'error' });
 }) as typeof fetch;
+
+// Strop pro jednu operaci (hlavičky i tělo): bez něj visí UI navěky — spinner
+// u initial loadu, zamčené tlačítko u podpisu. Automatický retry záměrně není,
+// uživatel opakuje ručně.
+export const READ_TIMEOUT_MS = 15_000; // GET metadata (session, submitter)
+export const DOCUMENT_TIMEOUT_MS = 30_000; // GET /document (TBS PDF)
+export const WRITE_TIMEOUT_MS = 60_000; // POST certificate / complete_submission
+export const HEAVY_TIMEOUT_MS = 120_000; // POST complete, 25MB upload, download PDF
+
+export class HttpTimeoutError extends Error {
+  readonly code = 'timeout';
+
+  constructor() {
+    super('timeout');
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  // `expo/fetch` i undici odmítnou pending čtení s AbortError; některé
+  // implementace dají jen `Error('The operation was aborted.')`.
+  return error instanceof Error
+    && (error.name === 'AbortError' || /abort/i.test(error.message));
+}
+
+export async function withTimeout<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await run(controller.signal);
+  } catch (error) {
+    // Timer mohl vypršet mezi hlavičkami a tělem: signál je pak už abortovaný,
+    // ale čtení těla to nemusí poznat (implementace bez `signal`).
+    throw controller.signal.aborted || isAbortError(error) ? new HttpTimeoutError() : error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
