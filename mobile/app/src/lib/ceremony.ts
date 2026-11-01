@@ -127,7 +127,9 @@ export async function prepareCeremony(
 
   const info = await certificateSummary(deps.vault);
 
-  if (!info) {
+  // Starý trezor bez veřejného certu (před zavedením `certificatePem`) nejde
+  // použít: cert se posílá před odemčením klíče. Řeší se re-importem.
+  if (!info?.certificatePem) {
     throw new CeremonyError('certificate_missing');
   }
 

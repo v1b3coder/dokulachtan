@@ -78,6 +78,7 @@ const ERROR_TEXT: Record<string, string> = {
   document_set_changed: 'Sada dokumentů se změnila. Začněte znovu.',
   values_changed: 'Pole dokumentu se změnila. Začněte znovu.',
   signing_context_mismatch: 'Podpisové atributy se změnily. Začněte znovu.',
+  stamp_mismatch: 'Pečeť neodpovídá certifikátu podpisu. Vyžádejte nový odkaz.',
   completion_failed: 'Dokončení dokumentu se nepodařilo. Zkuste to znovu.',
   server_pending: 'Server stále dokončuje podpis. Zkuste to znovu.',
   unsupported_protocol: 'Server používá novější verzi protokolu. Aktualizujte aplikaci.',
