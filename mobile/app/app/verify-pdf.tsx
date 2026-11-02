@@ -384,7 +384,7 @@ export default function VerifyPdfScreen() {
             </View>
           ) : null}
 
-          <TextButton title="Zavřít" onPress={() => router.replace('/')} />
+          <TextButton title="Zavřít" onPress={() => router.dismissTo('/')} />
         </>
       ) : (
         <>
@@ -472,7 +472,7 @@ export default function VerifyPdfScreen() {
 
           {busy ? <ActivityIndicator /> : null}
 
-          <TextButton title="Zavřít" onPress={() => router.replace('/')} />
+          <TextButton title="Zavřít" onPress={() => router.dismissTo('/')} />
         </>
       )}
     </ScrollView>

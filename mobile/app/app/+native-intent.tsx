@@ -32,3 +32,19 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
 
   return `${route}${query ? `?${query}` : ''}`;
 }
+
+// Cesta pro router z příchozího odkazu. Vrací `null` pro cizí HTTPS
+// odkazy, které nejsou QES (ty appka nemá otevírat).
+export function deepLinkPath(path: string): string | null {
+  const rewritten = redirectSystemPath({ path, initial: false });
+
+  if (!rewritten.startsWith('/') && !/^dokulachtan:\/\//i.test(rewritten)) {
+    return null;
+  }
+
+  const withoutScheme = rewritten.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const [rawPath, query = ''] = withoutScheme.split('?');
+  const pathname = `/${rawPath.replace(/^\/+/, '')}`;
+
+  return query ? `${pathname}?${query}` : pathname;
+}

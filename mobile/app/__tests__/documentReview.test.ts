@@ -9,10 +9,10 @@ const { create, act } = require('react-test-renderer');
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ token: 'tok' }),
   useFocusEffect: () => {},
-  router: { replace: jest.fn(), back: jest.fn(), canGoBack: () => false },
+  router: { replace: jest.fn(), dismissTo: jest.fn(), back: jest.fn(), canGoBack: () => false },
 }));
 jest.mock('../src/lib/platform', () => ({
-  platformVaultDeps: () => ({ storage: {} }),
+  platformVaultDeps: () => ({ storage: {}, dataStorage: {} }),
   appVersion: () => '1.3.9',
 }));
 jest.mock('../src/lib/pdfShare', () => ({

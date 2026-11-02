@@ -129,13 +129,9 @@ function validationText(report: QesValidationReport): string {
 }
 
 function leaveSignScreen(): void {
-  if (typeof router.canGoBack === 'function' && router.canGoBack()) {
-    router.back();
-
-    return;
-  }
-
-  router.replace('/');
+  // `back()` by vracel na předchozí obrazovku ve stacku (např. umístění pečeti);
+  // `dismissTo` zavře celý podpisový tok a vrátí se na existující Home.
+  router.dismissTo('/');
 }
 
 export default function SignScreen() {
@@ -290,15 +286,23 @@ export default function SignScreen() {
     setPendingOrigin(null);
     setTrusting(false);
     setError(null);
+    setErrorDetail(null);
     setReviewPdf(null);
     setReviewDigest(null);
     setReviewOpened(false);
+    setSaved(null);
+    setNotice(null);
+    setActionError(null);
+    setActionDetail(null);
+    setBusy(false);
+    setOpeningPdf(false);
+    setLoadingDocument(false);
 
     (async () => {
       try {
         const resolved: WorkflowOrigin = isPdfFlow
           ? { origin: await resolveSigningOrigin(platformVaultDeps().storage, server), trusted: true }
-          : await resolveWorkflowOrigin(platformVaultDeps().storage, server);
+          : await resolveWorkflowOrigin(platformVaultDeps().dataStorage, server);
 
         if (currentGeneration !== generation.current) return;
 
@@ -402,6 +406,7 @@ export default function SignScreen() {
   const startReview = useCallback(async () => {
     if (!token || !serverUrl || loadingDocument) return;
 
+    const currentGeneration = generation.current;
     setLoadingDocument(true);
     setError(null);
     setErrorDetail(null);
@@ -423,6 +428,14 @@ export default function SignScreen() {
         session?.level_required ?? 'ades',
       );
 
+      if (currentGeneration !== generation.current) {
+        if (preparation.kind === 'prepared') {
+          await preparation.ceremony.finalize().catch(() => {});
+        }
+
+        return;
+      }
+
       if (preparation.kind === 'completed') {
         setDone({
           level: preparation.completed.level,
@@ -442,6 +455,7 @@ export default function SignScreen() {
       setReviewDigest(preparation.ceremony.prepared.digest);
       await openReview(preparation.ceremony.document);
     } catch (err) {
+      if (currentGeneration !== generation.current) return;
       if (err instanceof QesApiError || err instanceof SigningOriginError
         || err instanceof CeremonyError || err instanceof VaultError) {
         setError(err.code);
@@ -450,7 +464,7 @@ export default function SignScreen() {
       }
       setErrorDetail(err instanceof Error ? err.message : null);
     } finally {
-      setLoadingDocument(false);
+      if (currentGeneration === generation.current) setLoadingDocument(false);
     }
   }, [token, serverUrl, loadingDocument, qesApi, openReview, session?.level_required, isPdfFlow]);
 
@@ -542,12 +556,15 @@ export default function SignScreen() {
   const checkCompletion = useCallback(async () => {
     if (!token || !serverUrl) return;
 
+    const currentGeneration = generation.current;
     setBusy(true);
     setError(null);
     setErrorDetail(null);
 
     try {
       const payload = await qesApi(serverUrl).getSession();
+
+      if (currentGeneration !== generation.current) return;
 
       if (payload.state === 'completed') {
         const verified = reviewDigest ? payload.document_digest === reviewDigest : null;
@@ -567,10 +584,11 @@ export default function SignScreen() {
         setError('server_pending');
       }
     } catch (err) {
+      if (currentGeneration !== generation.current) return;
       setError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
       setErrorDetail(err instanceof Error ? err.message : null);
     } finally {
-      setBusy(false);
+      if (currentGeneration === generation.current) setBusy(false);
     }
   }, [token, serverUrl, qesApi, reviewDigest, isPdfFlow, finishSubmission]);
 

@@ -146,7 +146,7 @@ export default function ImportScreen() {
           </Text>
         </View>
 
-        <PrimaryButton title="Hotovo" onPress={() => router.replace('/')} />
+        <PrimaryButton title="Hotovo" onPress={() => router.dismissTo('/')} />
       </ScrollView>
     );
   }

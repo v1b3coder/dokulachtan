@@ -8,13 +8,16 @@ import { preparedPdf } from './helpers/preparedPdf';
 import SignScreen from '../app/sign';
 
 let mockParams: Record<string, string> = { token: 'tok', flow: 'pdf' };
+const mockStorage = {};
+const mockDataStorage = {};
 const { create, act } = require('react-test-renderer');
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockParams,
-  useFocusEffect: () => {}, router: { replace: jest.fn() },
+  useFocusEffect: () => {},
+  router: { replace: jest.fn(), dismissTo: jest.fn(), back: jest.fn(), canGoBack: () => false },
 }));
 jest.mock('../src/lib/platform', () => ({
-  platformVaultDeps: () => ({ storage: {}, dataStorage: {} }),
+  platformVaultDeps: () => ({ storage: mockStorage, dataStorage: mockDataStorage }),
   appVersion: () => '1.3.9',
 }));
 jest.mock('../src/lib/pdfShare', () => ({
@@ -45,6 +48,13 @@ jest.mock('../src/lib/crypto/vault', () => ({
   ...jest.requireActual('../src/lib/crypto/vault'),
   hasCertificate: jest.fn().mockResolvedValue(true),
 }));
+
+function mockRouter() {
+  return jest.requireMock('expo-router').router as {
+    dismissTo: jest.Mock;
+    replace: jest.Mock;
+  };
+}
 
 const fixture = preparedPdf('sha256');
 const preparedDocument = {
@@ -304,9 +314,38 @@ it('asks for TOFU before sending a workflow token to an unknown server', async (
     await screen.root.findByProps({ title: 'Důvěřovat a pokračovat' }).props.onPress();
   });
 
-  expect(trustServer).toHaveBeenCalledWith(expect.anything(), 'https://new.test');
+  expect(trustServer).toHaveBeenCalledWith(mockDataStorage, 'https://new.test');
   expect(QesApi.prototype.getSession).toHaveBeenCalledTimes(1);
   expect(screen.root.findByProps({ title: 'Zobrazit dokument' })).toBeTruthy();
+  await act(async () => screen.unmount());
+});
+
+it('reads the trusted server list from data storage', async () => {
+  mockParams = { token: 'tok', server: 'https://new.test' };
+  jest.mocked(resolveWorkflowOrigin).mockResolvedValue({
+    origin: 'https://new.test', trusted: true,
+  });
+  jest.mocked(QesApi.prototype.getSession).mockResolvedValue({
+    state: 'app_opened', session_id: 1, submitter_id: 42, provider: 'app', document_name: 'Contract', signer_name: 'Signer',
+    hash_algorithm: 'sha256', level_required: 'ades', requires_certificate: true, server_url: 'https://new.test', expires_at: null,
+  });
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+
+  expect(resolveWorkflowOrigin).toHaveBeenCalledWith(mockDataStorage, 'https://new.test');
+  await act(async () => screen.unmount());
+});
+
+it('leaves the signing flow to the existing home screen', async () => {
+  jest.mocked(QesApi.prototype.getSession).mockResolvedValue({
+    state: 'completed', session_id: 1, submitter_id: 42, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash',
+  });
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+
+  await act(async () => { await screen.root.findByProps({ title: 'Zavřít' }).props.onPress(); });
+
+  expect(mockRouter().dismissTo).toHaveBeenCalledWith('/');
   await act(async () => screen.unmount());
 });
 

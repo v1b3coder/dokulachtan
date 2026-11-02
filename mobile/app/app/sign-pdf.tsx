@@ -441,7 +441,7 @@ export default function SignPdfScreen() {
             onPress={upload}
             disabled={busy || !file || !settings}
           />
-          <TextButton title="Zrušit" onPress={() => router.replace('/')} />
+          <TextButton title="Zrušit" onPress={() => router.dismissTo('/')} />
         </>
       ) : (
         <>
@@ -537,7 +537,7 @@ export default function SignPdfScreen() {
               setPosition(null);
             }}
           />
-          <TextButton title="Zrušit" onPress={() => router.replace('/')} />
+          <TextButton title="Zrušit" onPress={() => router.dismissTo('/')} />
         </>
       )}
     </ScrollView>

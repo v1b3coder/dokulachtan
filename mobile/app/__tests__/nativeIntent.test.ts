@@ -1,4 +1,4 @@
-import { redirectSystemPath } from '../app/+native-intent';
+import { deepLinkPath, redirectSystemPath } from '../app/+native-intent';
 
 function server(path: string): string | null {
   const query = path.split('?')[1] ?? '';
@@ -65,5 +65,22 @@ describe('redirectSystemPath', () => {
         initial: true,
       }),
     ).toBe('/sign-pdf');
+  });
+});
+
+describe('deepLinkPath', () => {
+  it('převede custom scheme i Universal Link na routu appky', () => {
+    expect(deepLinkPath('dokulachtan://sign?token=abc&server=https%3A%2F%2Fhost')).toBe(
+      '/sign?token=abc&server=https%3A%2F%2Fhost',
+    );
+    expect(deepLinkPath('https://host/qes/sign?token=abc')).toBe(
+      '/sign?token=abc&server=https%3A%2F%2Fhost',
+    );
+    expect(deepLinkPath('dokulachtan://sign-pdf?share=file%3A%2F%2F%2Fdata%2Fx')).toBe('/sign-pdf');
+    expect(deepLinkPath('dokulachtan://verify-pdf')).toBe('/verify-pdf');
+  });
+
+  it('odmítne cizí HTTPS odkaz, který není QES', () => {
+    expect(deepLinkPath('https://host/s/abc')).toBeNull();
   });
 });

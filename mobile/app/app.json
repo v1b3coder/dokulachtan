@@ -47,6 +47,7 @@
         }
       ],
       "./plugins/withSharePdfTarget.js",
+      "./plugins/withLatestIntent.js",
       "./plugins/withReleaseSigning.js",
       "./plugins/withReleaseLikeDebug.js",
       "./plugins/withApkSize.js",

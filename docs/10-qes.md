@@ -340,6 +340,11 @@ servírovala APK s produkčním `applicationId` a veřejným debug podpisem.
   → chooser (produkce + emulator + debug-phone). Pro debug-phone přímo:
   `adb shell am start -a android.intent.action.VIEW -n cz.dokulachtan.signer.debug/cz.dokulachtan.signer.MainActivity -d "…"`;
   pro emulator `-n cz.dokulachtan.signer.emulator/cz.dokulachtan.signer.MainActivity`.
+- **Teplý odkaz a návrat:** intent, který dorazí během startu, předává `MainActivity.onNewIntent`
+  do `setIntent` (config plugin `withLatestIntent`), takže `getInitialURL` nevrátí starý odkaz;
+  appka drží poslední URL, dokud není router připravený. „Zavřít“/„Zrušit“ jde přes
+  `router.dismissTo('/')`, ne `replace('/')` — jinak ve stacku zůstane druhá Home
+  s tlačítkem zpět.
 - **TOFU (trust on first use):** podpisový odkaz nese origin serveru (HTTPS host nebo `server`
   u custom scheme). Při prvním odkazu z neznámého serveru appka token neodešle a zobrazí
   „Neznámý server“ s originem; po potvrzení se origin uloží do `dataStorage` a další odkazy

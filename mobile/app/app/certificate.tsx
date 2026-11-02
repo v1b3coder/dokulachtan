@@ -21,7 +21,7 @@ export default function CertificateScreen() {
   async function remove() {
     try {
       await removeCertificate(platformVaultDeps());
-      router.replace('/');
+      router.dismissTo('/');
     } catch (err) {
       Alert.alert(
         'Smazání zrušeno',
