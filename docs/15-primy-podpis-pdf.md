@@ -118,7 +118,7 @@ Server **MUSÍ**:
               "preferences": { "level": "ades" }, "areas": [] },
   "document": { "uuid": "…", "filename": "smlouva.pdf",
     "pages": [{ "index": 0, "width": 595.28, "height": 841.89, "preview_url": "…" }] },
-  "stamp": { "width": 150, "height": 44 }
+  "stamp": { "width": 150, "height": 58 }
 }
 ```
 

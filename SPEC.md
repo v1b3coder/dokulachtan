@@ -614,7 +614,7 @@ Request: `multipart/form-data` s `file` (povinné), `display_name` (nepovinné),
 "field": { "uuid": "…", "type": "qes", "preferences": { "level": "ades" }, "areas": [] },
 "document": { "uuid": "…", "filename": "smlouva.pdf",
 "pages": [{ "index": 0, "width": 595.28, "height": 841.89, "preview_url": "…" }] },
-"stamp": { "width": 150, "height": 44 } }`
+"stamp": { "width": 150, "height": 58 } }`
 
 Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypted_pdf`,
 `422 already_signed`, `422 file_too_large`, `422 invalid_level`, `429 rate_limited`.
