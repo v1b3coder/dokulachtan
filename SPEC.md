@@ -786,7 +786,8 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
    a **viditelnou pečeť podepisujícího** (zelený check, „Digitálně podepsáno“, badge úrovně, jméno
-   a e-mail z certifikátu, datum); plocha pole se zvětší na text (min. 150×58 pt), levý horní roh zůstává
+   a e-mail z certifikátu, datum); plocha pole se zvětší na text (min. 150×58 pt), levý horní roh zůstává;
+   pozadí pečeti je z 80 % neprůhledné, aby byl vidět dokument pod ní
    na pozici pole `qes` jako **appearance stream widgetu** podpisového pole.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože CRL jde do DSS
