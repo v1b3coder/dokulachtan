@@ -79,12 +79,12 @@ DocuSeal — jedna aplikace, jedna evidence, jeden e-mail. **Nestavíme druhý s
 - Umíme vyrobit podpis, který obstojí před ostatními nástroji (pdfsig, pyHanko, DSS/ETSI).
 - Umíme poznat, jestli je pero v certifikovaném trezoru (QES), nebo ne (AdES) — takže
   nebudeme AdES vydávat za QES.
-- Umíme ověřit i bez internetu (důležité pro dlouhodobou platnost podpisu).
+- Umíme ověřit i bez internetu v testech (LTV offline validace pyHanko s `allow_fetching=False`; důležité pro dlouhodobou platnost podpisu).
+- Umíme ověřit PDF na serveru a volitelně přes EU DSS z appky (opt-in, varování + checkbox).
 
 ## 8. Co ještě není
 
 - Reálná čtečka eObčanky (MOI Podpisové SDK) — v appce je zatím stub a fake card pro testy.
 - Kvalifikované časové razítko (nyní DigiCert free, non-qualified).
-- První reálný podpis na produkční instanci s PostSignum certem.
 
 Úpravy DocuSealu, podpisová appka, AdES podpis, přímý podpis PDF i ověření PDF jsou hotové.

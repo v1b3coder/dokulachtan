@@ -55,7 +55,7 @@ appka (S11/S12)                    fork (server)                        TSA / CR
   │◀── token + metadata ────────────│
   │ GET /qes/sessions/:token ───────▶ (dnešní obřad, beze změny)
   │ GET …/document → kontrola → biometrie → POST …/certificate → podpis → …/complete
-  │◀────────── state: completed ────│  CMS + TSA + LTV + pečeť + validace
+  │◀────────── state: completed ────│  CMS + TSA + DSS/LTV + pečeť + validace
   │ POST …/complete_submission ─────▶ completed → finální PDF + audit
   │ GET /api/submitters/:id ────────▶ documents[].url
   │◀──────────── finální PDF ──────│
@@ -87,7 +87,7 @@ i úklid dokumentů jsou upstream.
 
 ## LTV/LTA — co je a co není
 
-- DSS obsahuje CRL a certifikáty **podepisujícího**; DocTS kryje DSS i pečeť.
+- DSS obsahuje CRL a certy **ověřeného řetězu**; DocTS kryje DSS i pečeť.
 - **TSA revokace se neověřuje** a v DSS nejsou certy TSA, pečeti ani DocTS.
 - Offline ověření proto neslibuje úplné PAdES-LTA; UI a dokumentace mluví o LTV datech pro podepisujícího, ne o kvalifikovaném LTA.
 - DigiCert TSA je free/AATL, **ne kvalifikované** časové razítko.
@@ -147,7 +147,7 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 | `src/lib/pdfApi.ts` | klient (`createDocument`, `setStampArea`, `createSubmission`, `startSession`, `completeSubmission`, `documentUrl`, `user`), `stampArea`, mapování klepnutí |
 | `src/lib/pdfShare.ts` | stažení nativně do cache (`File.downloadFileAsync`), uložení do telefonu (`MediaStore` na Androidu 10+, SAF na starším Androidu, Files na iOS) a share sheet (vlastní modul na Androidu, `expo-sharing` na iOS) |
 | `modules/dokulachtan-share` | Android: chooser na hlavním vlákně + `saveToDownloads` přes `MediaStore` (bez promise visící po zavření sheetu) |
-| `app/sign.tsx` | S13: po obřadu dokončí submission a nabídne „Stáhnout“ (uložit do telefonu) a „Sdílet“ (share sheet) |
+| `app/sign.tsx` | S13: po obřadu dokončí submission a nabídne „Stáhnout“ (uložit do telefonu), „Sdílet“ (share sheet), „Otevřít“ (systémový prohlížeč) a „Uložit jinam…“ (SAF) |
 | `app/settings.tsx` | Server URL + API token (SecureStore) |
 | `__tests__/pdfApi.test.ts` | Jest (upload, chyby, mapování souřadnic) |
 | `__tests__/pdfShare.test.ts` | Jest (stažení, uložení, share sheet, fallback) |

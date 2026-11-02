@@ -26,7 +26,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-29), ne odhad.
 | `QES_SESSION_MAX_TTL` | `3600` | absolutní strop od `created_at` pro všechna prodloužení [s] |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
-| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (SPEC § 5.1a) [B] |
+| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se po certifikátu (pečeť z certu, SPEC § 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | — (fallback `request.base_url`) | veřejná URL instance pro odkazy a AASA |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM, čárkou oddělené; soubor může obsahovat víc certů) |
@@ -34,7 +34,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-29), ne odhad.
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepište |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA (PEM, čárkou oddělené); **povinné** když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
-| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro každý ne-kořenový cert řetězu (cert bez CRL DP = fail); staging/testy `false` |
+| `QES_REQUIRE_LTV` | `true` | CRL pro každý ne-kořenový cert; cert s CRL DP a nedostupnou CRL = fail i při `false`; `false` = cert bez CRL DP se přeskočí |
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené). I.CA hosty jsou tu proto, že její CRL DP jsou jen **http** (https na `qcrldp1.ica.cz` neodpovídá), takže prázdná hodnota („bez allowlistu" = jen https a veřejná adresa) pro I.CA nestačí. Explicitní ENV default **plně nahradí** — kdo podepisuje certem mimo PostSignum/I.CA, musí svoje hosty vypsat taky. Podpis certem I.CA navíc potřebuje její roots v `QES_TRUST_ROOTS` (výchozí `postsignum.pem` I.CA nezná). |
 | `QES_TEST_CRL_PATH` | — | cesta k testovacímu CRL, které fork vystaví na `/qes-test/root.crl` (jen staging) |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
@@ -192,7 +192,7 @@ Nikdy se nelogují tokeny, `data_to_sign`, raw signatury, PIN/QPIN ani obsah cer
 | `422 not_qualified` | cert bez `QcCompliance` | použijte kvalifikovaný cert (I.CA/PostSignum) |
 | `422 qes_required_qscd` | pole `preferences.level=qes`, cert bez `QcSSCD` | cert z čipu, nebo pole přepněte na `ades` |
 | `422 level_mismatch` | `QcSSCD` cert poslaný jako `phone_keystore` | telefon není QSCD; použijte čtečku |
-| `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví před certifikátem, SPEC § 5.1a) |
+| `422 signature_size_exceeded` | finální CMS se nevešel do rezervy `/Contents` | zvyšte `QES_SIGNATURE_RESERVE` (TBS se staví po certifikátu, SPEC § 5.1a) |
 | `ltv_unavailable` | cert v řetězu nemá CRL DP nebo CRL nelze stáhnout (chybí allowlist / egress / DNS) | přidejte hosty do `QES_LTV_ALLOWED_HOSTS` (I.CA: `qcrldp1.ica.cz`, `qcrldp2.ica.cz`, `crldp1.ica.cz`, `crldp2.ica.cz`) a ověřte egress; hláška obsahuje odmítnutý host; `QES_REQUIRE_LTV=false` u certu bez CRL DP pomůže (podpis bez LTV), u certu s CRL DP ne |
 | `tsa_unavailable` | nedostupné TSA a `QES_TSA_REQUIRED=true` | nastavte `QES_TSA_URL`, nebo `QES_TSA_REQUIRED=false` |
 | `pyhanko` → `UNTRUSTED` | chybí root v signing/verification trust store (podle toho, co se ověřuje), nebo v DSS/atributu nejsou revokační data | přidejte root (PEM) a CRL/OCSP do DSS |
@@ -261,7 +261,7 @@ bez allowlistu kód vyžaduje https a reálný podpis s `QES_REQUIRE_LTV=true` b
 Podpis certem I.CA navíc potřebuje její roots
 v `QES_TRUST_ROOTS`; bez nich selže dřív, na `not_trusted`. Reálný CRL PostSignum Qualified CA 4 má
 812 863 B a je v PDF jen jednou (DSS) → finální PDF ~0,9 MB; rezerva `/Contents` je pevná
-`QES_SIGNATURE_RESERVE` (default 64 KB), protože TBS se staví před certifikátem (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
+`QES_SIGNATURE_RESERVE` (default 64 KB), protože CRL jde do DSS a TBS se staví po certifikátu (SPEC § 5.1a, § 7.1, § 7.4, § 7.6).
 
 **Negativní scénáře:** `make test-negative` (N1–N17) proti lokálnímu forku → `test/out/qes-negative-report.txt`.
 

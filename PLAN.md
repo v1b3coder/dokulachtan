@@ -148,8 +148,8 @@ s fixtures z `test/certs/`. Nové moduly v `app/lib/qes/`, testy v `spec/lib/qes
 - [ ] 2.6 `Qes::Embed.embed(tbs_bytes, cms_der)` (SPEC § 7.3): `HexaPDF::DigitalSignature::Signing.embed_signature`,
       výstup = PDF, který pyHanko označí `INTACT:TRUSTED` (s test rootem) a `pdfsig` „Total document signed“
       → verify: `spec/lib/qes/pipeline_spec.rb` + `pyhanko` nad fixture; `qpdf --check` bez chyb
-- [ ] 2.7 `Qes::Ltv.add_revocation_values` (SPEC § 7.4): OCSP z AIA (fallback CRL z CRLDistributionPoints),
-      `id-aa-ets-revocationValues` do CMS, chybějící intermediates do `certificates`
+- [x] 2.7 `Qes::Ltv` + `Qes::Dss` (SPEC § 7.4): CRL z CRLDistributionPoints do DSS s VRI;
+      CMS LTV (`id-aa-ets-revocationValues`) byl zamítnut 2026-10-22 — pyHanko ho nečte a zvětšuje PDF
       → verify: `spec/lib/qes/ltv_spec.rb`; offline `pyhanko validate` (bez `--fetch`) → `trusted=True`
 - [ ] 2.8 `Qes::Validator.call` (SPEC § 7.5): Pdfium (`VerifyPdfSignature`) + pokrytí + úroveň + digest
       → verify: `spec/lib/qes/validator_spec.rb` — platný/tamper/neúplné pokrytí
@@ -307,7 +307,7 @@ Cíl: všechna akceptační kritéria SPEC § 15.4 splněna a doložena.
       → verify: `make qes-negative` → report v `test/out/qes-negative-report.txt` (N1–N17 OK)
 - [ ] 6.3 CI: `make verify` + `make qes-test` na každý commit; `make qes-e2e` v separátním jobu
       → verify: CI zelené (lokálně/Gitea Actions)
-- [ ] 6.4 Nasazení (staging i produkce): `QES_ENABLED=true`, `QES_TRUST_ROOTS`, `QES_TSA_URL` přes `fly secrets`;
+- [ ] 6.4 Nasazení (staging i produkce): **defaulty forku** (QES_ENABLED, trust roots, TSA); explicitně přes `fly secrets` jen `QES_PUBLIC_BASE_URL` a SMTP
       `fly deploy` z forku; healthcheck `/up`
       → verify: `curl https://<instance>/up` → 200 (u nás instance `dokulachtan`); `fly logs` bez chyb
 - [x] 6.5 Staging e2e se dvěma signery (SPEC § 15.2): `make qes-staging-e2e`
@@ -389,9 +389,9 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
       stažení = `GET /api/submitters/:id` → `documents[0].url` (existující API, žádný kód forku)
       → verify: `make qes-e2e-pdf` (3 signatury, auditní stránka, dokument ve složce)
 - [x] 8.6 Appka: `sign-pdf.tsx` (S11 + S12: picker, upload, náhled, klepnutí, obrys, `place`),
-      `pdfApi.ts` (klient + `stampArea`), `pdfShare.ts`, `settings.tsx` (API token), S13 (stažení a sdílení)
+      `pdfApi.ts` (klient + `stampArea`), `pdfShare.ts`, `settings.tsx` (API token), S13 (Stáhnout / Sdílet / Otevřít / Uložit jinam)
       → verify: `make qes-app-test` (44/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie):
-      výběr PDF → náhled → klepnutí → podpis → stažení a sdílení
+      výběr PDF → náhled → klepnutí → podpis → stažení / sdílení / otevření
 - [x] 8.7 E2E `make qes-e2e-pdf` (`scripts/qes_pdf_e2e.py`): bootstrap účtu + API token → upload →
       náhled → `PATCH` oblast → submission → spuštění obřadu → podpis **kódem appky**
       (`scripts/qes-app-e2e.ts`, reuse) → `PUT …/completed` → stažení → validace `pyhanko`
@@ -410,7 +410,7 @@ Detail: `docs/15-primy-podpis-pdf.md`. Stávající QES tok pro submissiony zůs
 |---|---|---|
 | MOI SDK AAR není veřejně dostupné (Nexus s credentials) | Fáze 5 nejde dokončit | Ověřit v kroku 5.2; kontaktovat SZR (`eidentita@szrcr.cz`); fake card mód pro testy |
 | MOI SDK nepodporuje Android 15 / nové Expo | A na mobilu nefunguje | Otestovat v kroku 5.1 na emulátoru s reálnou verzí; fallback: A jen na desktopu |
-| `pyHanko` neuzná naše LTV v CMS | Akceptační kritérium 2 | Ověřit v kroku 2.7; fallback: DSS dictionary (další práce) |
+| `pyHanko` neuzná LTV v DSS | Akceptační kritérium 2 | LTV je v DSS (ne v CMS); ověřit v kroku 2.7 |
 | FreeTSA/TSA nedostupné v CI | Testy TSA padají | TSA vypnout v CI (`QES_TSA_URL` prázdné), test s TSA jen lokálně |
 | Universal links na `fly.dev` neověřené | Deep link neotevře appku | Custom scheme fallback (SPEC § 10.3); vlastní doména na produkční instanci |
 | Zablokovaný PIN/QPIN při testech s reálnou kartou | Karta nepoužitelná | Testovat nejdřív fake card mód; reálný test až po dohodě |

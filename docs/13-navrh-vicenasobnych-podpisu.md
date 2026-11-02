@@ -43,7 +43,7 @@ Všechny revize zůstávají INTACT; `combined_document` je poslední revize.
 
 | # | Rozhodnutí | Důvod |
 |---|---|---|
-| D1 | **Všechny strany podepisují certifikátem** — šablona s `qes` polem musí mít `qes` pole u každého signera | uživatelský požadavek „výsledek musí být všemi digitálně podepsaný“; smíšené pořadí (kreslený podpis po QES) mimo rozsah |
+| D1 | **Všechny strany podepisují certifikátem** — šablona s `qes` polem musí mít `qes` pole u každého non-viewer signera; stejný signer může mít `qes` i `signature`, ale QES krok jde nakonec | uživatelský požadavek „výsledek musí být všemi digitálně podepsaný“; různí signeři nemohou míchat QES a kreslený podpis |
 | D2 | **Striktní pořadí** — `submitters_order: preserved` (nebo různá `order`), žádné paralelní skupiny | inkrementální podpis jinak nemá deterministický základ |
 | D3 | **Pečeť po každé session** (status quo) | minimální změna; finální PDF má N podpisů + N pečetí, každá revize INTACT |
 | D4 | **Artefakty zůstávají per-session** (status quo) | `documents` signera N = revize N, `combined_document` = poslední revize |

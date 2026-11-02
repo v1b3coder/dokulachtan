@@ -65,9 +65,10 @@ služba; „produkce“ tu neznamená konkrétní veřejné URL.
 
 - machine `811d97df9d6e08`, volume `dokulachtan_prod_data` (1 GB, `fra`, snapshoty)
   → `/data/docuseal`; starý volume `dokulachtan_data` byl smazán 2026-10-18.
-- signing `QES_TRUST_ROOTS=/app/config/qes/postsignum.pem` (jen reálné PostSignum CA),
-  verification `QES_VERIFICATION_TRUST_ROOTS` default `config/qes/czech.pem` (vydávající CA, ne rooty:
-  PostSignum, I.CA, eIdentity, NCA, KB), `QES_REQUIRE_LTV=true`, `QES_TSA_REQUIRED=true`, `QES_ENABLED=true`.
+- signing `QES_TRUST_ROOTS`, verification `QES_VERIFICATION_TRUST_ROOTS`, `QES_REQUIRE_LTV`,
+  `QES_TSA_*` a `QES_ENABLED` **nechává na defaultech forku** (PostSignum signing, `czech.pem`
+  verification, DigiCert TSA); explicitně se nastavuje jen `QES_PUBLIC_BASE_URL` a SMTP. Tím se testuje
+  chování, které dostane každý operátor.
 - healthcheck `/up` = 200; `/` → `/setup` (čeká na první účet); migrace automaticky při startu;
   `SECRET_KEY_BASE` a `docuseal.env` na volume.
 - SMTP Brevo nastaveno (`deploy/smtp.prod.env`, gitignored); první účet vytváří uživatel

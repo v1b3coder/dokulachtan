@@ -25,21 +25,23 @@ Konvence: **MUSÍ** = povinné v v1, **MĚL BY** = doporučené, **NESMÍ** = za
 | # | Co | Poznámka |
 |---|---|---|
 | 1 | **Varianta B** — klíč z PKCS#12 v telefonu, AdES | hlavní produktová cesta |
-| 2 | **Varianta A** — eObčanka přes BLE čtečku, QES | kompletní, včetně integrace MOI SDK |
+| 2 | **Varianta A** — eObčanka přes BLE čtečku, QES | připraveno; dnes stub, QES v appce nedosažitelné |
 | 3 | Server: pole `qes`, `QesSession`, API, joby, audit | ve forku DocuSealu |
-| 4 | Expo appka: obrazovky S1–S9, úložiště klíče, biometrie | Android first, iOS později |
-| 5 | Universal links + custom scheme fallback | vlastní doména pro produkční instanci |
+| 4 | Expo appka: obrazovky S1–S15, úložiště klíče, biometrie | Android first, iOS později |
+| 5 | iOS universal links + Android custom scheme | App Links zrušené; vlastní doména pro produkční instanci |
 | 6 | Pečeť DocuSealu inkrementálně **nad** podpisem appky | viz § 7.6 |
 | 7 | Validace výsledku (Pdfium interně, pyHanko/pdfsig v testech) | viz § 15 |
 | 8 | Audit: QES záznam v audit trail + vlastní data v DB | viz § 13 |
 | 9 | **Více podepisujících** (firemní podpisy): řetězení PAdES revizí, každý signer vlastní `QesSession` | § 4.6, § 7.11 |
+| 10 | **Přímý podpis PDF** (S11–S13) | nativní tok DocuSealu, docs/15 |
+| 11 | **Ověření PDF** (S14/S15) včetně volitelného EU DSS | docs/16, docs/19 |
 
 ### 1.2 Mimo rozsah v1
 
-Remote QTSP (varianta C), WebCrypto (B'), desktopový lokální agent, push notifikace,
+Remote QTSP (varianta C), WebCrypto (B'), OAuth/CSC, sidecar, desktopový lokální agent, push notifikace,
 hromadné podepisování více dokumentů jedním obřadem (multi-signer jednoho dokumentu je v rozsahu, § 4.6),
-vlastní CA, ne-EU eID, vizuální vzhled podpisu (signature appearance), více aktivních
-certifikátů v appce (import nahrazuje předchozí).
+vlastní CA, ne-EU eID, vlastní in-app PDF viewer, dodatečné ověření podpisu v appce, macOS build,
+vlastní appearance nad rámec QES pečeti, více aktivních certifikátů v appce (import nahrazuje předchozí).
 
 ---
 
@@ -127,6 +129,8 @@ Chování:
 - V **renderování výsledného PDF** se `qes` pole **nevykresluje** (žádný text ani obrázek);
   jeho hodnota je interní token.
 - Pro ostatní submitters se pole `qes` nezobrazuje (jako prázdné `signature`).
+- **Úroveň se zmrazí při vytvoření submission** (`submission.template_fields`); změna šablony později
+  nesmí změnit běžící submission a přes API ji nelze po startu snížit.
 
 **Pravidla pro více podepisujících (firemní podpisy, v1.5):** šablona s polem `qes` MUSÍ mít pole `qes`
 u **každého** non-viewer submittera (`qes_all_signers_required`) a MUSÍ podepisovat **striktně po sobě**
@@ -259,6 +263,8 @@ Pravidla:
 
 - Pořadí je striktní: signer N+1 NESMÍ otevřít formulář ani vytvořit `QesSession` dřív, než je submitter N
   `completed` (gating v `SubmitFormController#show` + `Qes::FormSessionsController#create`).
+- V jedné submission MUSÍ být nejvýš jedna aktivní podpisová revize (stav `prepared`…`awaiting_signature`);
+  další `QesSession` lze vytvořit až po dokončení předchozí. Vynuceno částečným unikátním indexem.
 - Stejný submitter **MŮŽE** mít víc polí `qes` (stejná osoba ve víc rolích): jeho další session se **MUSÍ** řetězit
   na jeho vlastní poslední dokončenou session (`QesSession.completed.where(submitter_id:)`), teprve když žádnou nemá,
   na finální PDF předchozího dokončeného submittera. Bez toho by se první podpis zahodil.
@@ -272,10 +278,12 @@ Pravidla:
 - `documents` signera N = finální PDF revize N (před/po pečeti dle § 7.6); `combined_document` = poslední revize.
 - Pro dokumenty složené z více příloh (`template_schema.size > 1`) MUSÍ být stránky mapované globálně
   (`page_offsets` dle metadat `pdf.number_of_pages`), aby se hodnoty a pečeť kreslily na správnou stránku.
-- Všechny strany MUSÍ podepisovat certifikátem (pole `qes`); smíšené pořadí (kreslený podpis po QES) je mimo v1.5.
+- Všechny strany MUSÍ podepisovat certifikátem (pole `qes`); různí signeři nemohou míchat QES a kreslený podpis.
+  Stejný signer MŮŽE mít `qes` i `signature`; QES krok jde nakonec, takže QES podpis kryje i kreslený podpis.
 
-**Omezení v1.5:** pole `qes` je přípustné jen v šabloně, kde **každý** non-viewer submitter má pole `qes`
-(žádné kreslené podpisy v QES šabloně). Ukládání šablony s kresleným podpisem vedle `qes` MUSÍ selhat
+**Omezení v1.5:** pole `qes` je přípustné jen v šabloně, kde **každý** non-viewer submitter má pole `qes`.
+Různí signeři nemohou míchat QES a kreslený podpis; stejný signer může mít `qes` i `signature`
+(QES krok jde nakonec). Ukládání šablony, kde některý non-viewer submitter nemá `qes`, MUSÍ selhat
 s `qes_all_signers_required`.
 
 ### 4.7 Datový model — `qes_sessions` a více signerů
@@ -766,8 +774,8 @@ izolovaný v `app/lib/qes/`.
 ### 7.1 TBS PDF
 
 Vstup: aktuální stav submission (vyplněná pole, bez `qes` hodnoty) a základ (buď šablona, nebo finální PDF předchozího signera).
-TBS se staví až při `POST /qes/sessions/:token/certificate`, kdy je znám certifikát a CRL podepisujícího
-(rezerva `/Contents` závisí na velikosti LTV revokačních dat, § 7.4).
+TBS se staví až při `POST /qes/sessions/:token/certificate`, kdy je znám certifikát podepisujícího
+(pečeť nese identitu z certu; rezerva `/Contents` je pevná 64 KB, protože CRL jde do DSS, § 7.4).
 Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
 1. **Základ:**
    - první QES signer (žádný dokončený předchůdce): vygeneruje PDF ze všech `submission.schema_documents`
@@ -779,8 +787,8 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
    a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, e-mail z certifikátu, datum)
    na pozici pole `qes` jako **appearance stream widgetu** podpisového pole.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
-   `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože TBS se staví **před**
-   certifikátem (§ 5.1a). Pole má **viditelný widget** s `/Rect` na ploše pole `qes` (stránka dle
+   `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože CRL jde do DSS
+   (§ 7.4) a TBS se staví **po** přijetí certifikátu (pečeť nese identitu z certu, § 5.1a). Pole má **viditelný widget** s `/Rect` na ploše pole `qes` (stránka dle
    `page_offsets`), `/AP /N` = form XObject s appearance streamem pečeti a `/F 4` (Print); pole se předává
    do `HexaPDF::DigitalSignature::Signatures#add`, který tak nevytvoří neviditelný widget `Rect: [0, 0, 0, 0]`.
    Widget i appearance stream jsou součástí podepsaných bajtů, protože existují už v TBS před podpisem.
@@ -811,8 +819,8 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
 4. `signing_time` **MUSÍ** být explicitní (`Time.now.utc`) a v obou fázích identický.
 5. Server uloží `signed_attrs_der` a vrátí appce base64.
 
-**Rezerva:** `QES_SIGNATURE_RESERVE` (default 65 536 B) je pevná a nezávislá na certifikátu, protože TBS
-se staví **před** jeho přijetím (§ 5.1a). Finální CMS se do ní musí vejít; jinak `signature_size_exceeded`
+**Rezerva:** `QES_SIGNATURE_RESERVE` (default 65 536 B) je pevná a nezávislá na certifikátu, protože CRL
+jde do DSS (§ 7.4) a TBS se staví **po** přijetí certifikátu (pečeť z certu, § 5.1a). Finální CMS se do ní musí vejít; jinak `signature_size_exceeded`
 (nikdy nezkracovat). LTV revokační data jdou do DSS (§ 7.4), ne do CMS.
 
 **Vlastnosti CMS, které server MUSÍ dodržet:**
@@ -1069,18 +1077,20 @@ spolu s `key_location`, `reader` (u A) a verzí protokolu.
 | S1 | **Home** | stav certifikátu (žádný / platný / **expiruje** = méně než 30 dní, jen varování); s klíčem primární „Podepsat PDF“ + sekundární „Ověřit PDF“, bez klíče primární „Importovat klíč (PKCS#12)“ + sekundární „Ověřit PDF“; karta certifikátu je klikací → S3, varování u expirace odkazuje na import; terciárně „Připojit čtečku“ (A) a „Nastavení“ | — |
 | S2 | **Import certifikátu** | výběr PKCS#12 (sekundární), heslo, primární „Importovat“ (vypnuté bez souboru), **testovací certifikát až za oddělovačem „Nebo“ jako alternativní cesta**; po uložení souhrn + primární „Hotovo“ | `invalid_p12`, `wrong_password`, `no_signing_key`, `qscd_certificate` (telefon není QSCD, § 5.2) |
 | S3 | **Detail certifikátu** | subject, issuer, platnost, sériové číslo, úroveň (AdES/QES dle QCStatements), „Importovat jiný klíč“ (sekundární), nebezpečná zóna s odstraněním (potvrzení + biometrie) | — |
-| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu primární „Stáhnout“ + sekundární „Sdílet“ + terciární „Zavřít“ | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neodpovídá otisku, který server označil za podepsaný, nebo neobsahuje reviewed TBS) |
+| S4 | **Žádost o podpis** (deep link) | název dokumentu, kdo podepisuje, certifikát, vyžaduje úroveň; **automaticky zvolený podepisující (§ 9.8)**; primární „Zobrazit dokument“ (jen `GET /document`, žádný klíč, žádný `POST /certificate`), po otevření dokumentu primární „Podepsat dokument“ (biometrie + `POST /certificate` + podpis), terciární „Zrušit“; při `certificate_missing`/`no_signer`/`needs_reader`/`needs_qes_key` primární „Nastavit podepisování“ → S10; po úspěchu text „Dokument byl podepsán. Můžete se vrátit do prohlížeče.“ + terciární „Zavřít“ (PDF se stahuje jen u přímého podpisu S13) | `expired_token`, `network`, `wrong_certificate` (lokální cert nesplňuje `level_required`, § 9.6), `no_signer` (→ S10), `document_mismatch` (reviewed TBS ≠ `data_to_sign`), `verification_failed` (finální PDF neodpovídá otisku, který server označil za podepsaný, nebo neobsahuje reviewed TBS) |
 | S5 | **Biometrie** | systémová výzva (`expo-local-authentication`) před každým podpisem | zamítnuto → zpět na S4 |
 | S6 | **Výsledek** | úspěch (úroveň, čas, hash) / chyba + „Zkusit znovu" / „Vyžádat nový odkaz" | — |
-| S7 | **Nastavení** | sekce Přímý podpis a ověření PDF (URL + API token jen pro přímý podpis PDF a ověření PDF + primární „Uložit“), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A); smazání dat je jen v S3, testovací certifikát jen v S2 | — |
+| S7 | **Nastavení** | sekce Přímý podpis a ověření PDF (URL + API token jen pro přímý podpis PDF a ověření PDF + primární „Uložit“, prázdné defaulty; chybějící server/API token **blokuje** DocuSeal akce), seznam důvěryhodných serverů pro podpisové odkazy s možností odvolat důvěru, Podepisování (certifikát → S3, čtečka → S8), Diagnostika, O aplikaci + **attribution MOI SDK** (u A); smazání dat je jen v S3, testovací certifikát jen v S2 | — |
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie, připojení | `reader_not_found`, `reader_disconnected` |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů (`getContainerList`), jen kvalifikované (`QcCompliance`), úroveň QES, PIN/QPIN výzva | `pin_blocked`, `applet_blocked`, `no_qualified_certificate` |
 | S10 | **Konfigurační wizard** (z S4, když není podepisující — § 9.8) | primární „Importovat klíč (PKCS#12)“ → S2, sekundární „Nastavit čtečku“ → S8, testovací certifikát až na konci; „Zpět“ | `import_failed`, `reader_not_found` |
 | S11 | **Výběr PDF** (přímý podpis, docs/15) | `expo-document-picker` (PDF) **nebo PDF ze share sheetu (Android, docs/15 § 6)** jako sekundární pole, název souboru, jméno do pečeti (default CN z vaultu), úroveň (AdES/QES), primární „Pokračovat“ (vypnuté bez souboru) → upload, terciární „Zrušit“ | `file_too_large`, `invalid_pdf`, `encrypted_pdf`, `already_signed`, `network` |
 | S12 | **Umístění pečeti** (přímý podpis) | náhled stránky ze serveru, přepínání stránek, klepnutí → obrys pečeti, primární „Podepsat“ (vypnuté bez umístění) → `place` → S4, terciární „Vybrat jiné PDF“ a „Zrušit“ | `invalid_position`, `wrong_state`, `expired_token` |
-| S13 | **Výsledek PDF** (přímý podpis) | reuse S6 + primární „Stáhnout a sdílet“ + sekundární „Zavřít“ | `wrong_state` (server ještě dokončuje → polling) |
+| S13 | **Výsledek PDF** (přímý podpis) | reuse S6 + primární „Stáhnout“ (uložit do telefonu), sekundární „Sdílet“ (share sheet), terciární „Zavřít“; po uložení „Otevřít“ (systémový prohlížeč) a „Uložit jinam…“ (SAF, zapamatuje složku) | `wrong_state` (server ještě dokončuje → polling) |
+| S14 | **Ověřit PDF / Co s PDF?** | výběr PDF nebo PDF ze share/open intentu; volba „Podepsat PDF“ / „Ověřit PDF“; u ověření volba providera **DocuSeal** (default) / **EU DSS** (opt-in, varování + checkbox); soubor, velikost, poznámka „PDF se na serveru neukládá automaticky“ | `file_too_large`, `invalid_pdf`, `encrypted_pdf`, `network`, `not_authenticated`, `rate_limited` |
+| S15 | **Výsledek ověření** | velký verdikt (barva), souhrn, seznam podpisů, pečeť, `origin`, primární „Ověřit jiné PDF“, sekundární „Uložit do DocuSealu“ (jen `intact && !modified`), „Technické detaily“ a „Zavřít“ jako textové odkazy | `invalid_pdf`, `encrypted_pdf`, `file_too_large`, `not_verifiable`, `storage_failed`, `network` |
 
-Pořadí a váha tlačítek na obrazovkách S1–S13 se řídí [docs/17-ui-hierarchie-akci.md](docs/17-ui-hierarchie-akci.md):
+Pořadí a váha tlačítek na obrazovkách S1–S15 se řídí [docs/17-ui-hierarchie-akci.md](docs/17-ui-hierarchie-akci.md):
 jedna primární akce na stav, alternativní cesty za oddělovačem, navigace a „Zrušit“ jako textové
 odkazy, mazání oddělené a s potvrzením.
 
@@ -1129,6 +1139,9 @@ odkazy, mazání oddělené a s potvrzením.
 6. `POST /complete` → S6; `provider.finalizeSession` (reset stavu karty).
 7. PIN/QPIN se **NESMÍ** ukládat ani logovat; po 3 chybných zadáních karta zablokuje kód →
    appka zobrazí „Kód zablokován, odblokujte na úřadu / v aplikaci eObčanka".
+
+**Stav (2026-10-31):** čtečka je stub (`StubCardSigner` → `reader_not_found`); QES v appce je dnes
+nedosažitelné, zapojení je odloženo do dodání hardware (§ 9.8).
 
 ### 9.5 Úložiště klíče (B) — rozhodnutí 2026-10-16: **při podpisu jen biometrie, žádné heslo**
 
@@ -1227,10 +1240,11 @@ Pravidla:
 zapojení čtečky je odloženo do dodání reálného hardware. `StubCardSigner` vrací `reader_not_found`,
 fake card mód je jen v e2e skriptu (`scripts/qes-app-e2e.ts`); QES v appce není dosažitelné.
 
-### 9.9 Přímý podpis PDF — tok (S11–S13)
+### 9.9 Přímý podpis PDF — tok (S11–S13; vstup S14)
 
-0. S11 ze **share sheetu** (Android, docs/15 § 6): `ACTION_SEND` `application/pdf` → appka otevře S11 s už vybraným PDF
-   a **rovnou ho nahraje** (bez ručního ukládání a hledání); štítek v share sheetu je „Podepsat PDF“.
+0. S14 ze **share i open intentu** (Android, docs/16 D10): `ACTION_SEND` i `ACTION_VIEW` `application/pdf`
+   → S14 s volbou „Podepsat PDF“ / „Ověřit PDF“; přímý podpis → S11 s už vybraným PDF
+   a **rovnou ho nahraje** (bez ručního ukládání a hledání).
 1. S11: `expo-document-picker` (PDF) → název souboru, jméno do pečeti (default CN z vaultu),
    úroveň (AdES/QES; na iOS jen AdES) → `POST /api/qes/documents` (multipart).
 2. Server vrátí `{template_id, field, document.pages[], stamp}`; appka zobrazí náhled stránky (S12)
@@ -1249,6 +1263,13 @@ fake card mód je jen v e2e skriptu (`scripts/qes-app-e2e.ts`); QES v appce nen�
 6. Chybové stavy: `invalid_pdf`, `encrypted_pdf`, `already_signed`, `file_too_large`, `invalid_level`,
    `wrong_state`, `expired_token`, `used_token`; texty dle § 9.6.
 
+### 9.10 Ověření PDF (S14/S15)
+
+Default provider je server (`POST /api/qes/verify`, docs/16 § 4.1); volitelně EU DSS z appky
+(opt-in, varování + checkbox, žádný tichý fallback, docs/19). Appka PDF nahraje, zobrazí verdikt
+a případně uloží do „Verified documents“ (jen `intact && !modified`; `POST /api/qes/verified_documents`
+znovu ověří). Podpis appka neověřuje; `revocation` je v v1 `not_checked`.
+
 ---
 
 ## 10. Deep links
@@ -1261,9 +1282,11 @@ fake card mód je jen v e2e skriptu (`scripts/qes-app-e2e.ts`); QES v appce nen�
 | `dokulachtan://sign?token=…&server=<origin>` | primární na Androidu (systémový chooser); server se bere z parametru a při prvním použití ho uživatel potvrdí (TOFU) |
 | `https://<host>/qes/app?token=…` | web fallback stránka s QR |
 
-Appka **MUSÍ** podporovat custom scheme; na iOS navíc universal link. Server **MUSÍ** vracet
-`universal_link` (`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign?token=…&server=<origin>`)
-v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
+Appka **MUSÍ** podporovat custom scheme; na iOS navíc universal link. Android App Links jsou **zrušené**
+(self-hosted nemá centrální server); Android jde přes custom scheme a systémový chooser, iOS AASA zůstává.
+Server **MUSÍ** vracet `universal_link` (`/qes/sign`) i `custom_scheme_link` (`dokulachtan://sign?token=…&server=<origin>`)
+v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1). Deep link nese jen token, nikdy cestu k souboru; předání PDF
+mezi obrazovkami jde přes jednorázový opaque identifikátor (`pdfHandoff`), ne `file://` v URL.
 
 ### 10.2 Soubory pro ověření
 
@@ -1292,13 +1315,13 @@ v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 
 | ENV | Default | Význam |
 |---|---|---|
-| `QES_ENABLED` | `true` | vypínač QES (default pro český deployment; `false` pro upstream/ne-QES) |
+| `QES_ENABLED` | `true` | feature gate forku: `false` = upstream chování, QES endpointy 404, žádná QES validace; regenerované PDF ztratí QES revizi |
 | `QES_SESSION_TTL` | `600` | platnost session pro podpis [s] |
 | `QES_REVIEW_TTL` | `900` | platnost session pro kontrolu dokumentu [s] (`GET /document` ji prodlouží) |
 | `QES_SESSION_MAX_TTL` | `3600` | absolutní strop od `created_at` pro všechna prodloužení [s] |
 | `QES_SIGNATURE_SIZE` | `20000` | placeholder signatury v CMS [B] |
 | `QES_SIGNATURE_MIN_SIZE` | `20000` | minimální rezerva `/Contents` (fallback) [B] |
-| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se před certifikátem (§ 5.1a) [B] |
+| `QES_SIGNATURE_RESERVE` | `65536` | pevná rezerva `/Contents` v TBS; staví se po certifikátu (§ 5.1a) [B] |
 | `QES_DEEP_LINK_BASE` | `dokulachtan://sign` | custom scheme |
 | `QES_PUBLIC_BASE_URL` | — (fallback `request.base_url`) | veřejná URL instance pro odkazy a AASA |
 | `QES_TRUST_ROOTS` | `config/qes/postsignum.pem` | signing trust store: které certy smí podepsat v tomto DocuSealu (PEM); jiná CA přepíše |
@@ -1306,7 +1329,7 @@ v `POST /s/:submit_form_slug/qes_sessions` (§ 6.1).
 | `QES_TSA_URL` | `http://timestamp.digicert.com` | RFC 3161 TSA (DigiCert free, AATL); kvalifikované I.CA/PostSignum přepíše |
 | `QES_TSA_TRUST_ROOTS` | `config/qes/digicert-tsa.pem` | cesty k rootům TSA; povinné když je `QES_TSA_URL` nastavené |
 | `QES_TSA_REQUIRED` | `true` | vyžadovat TSA token |
-| `QES_REQUIRE_LTV` | `true` | vyžadovat revokační data pro každý ne-kořenový cert řetězu (cert bez CRL DP = fail); staging/testy `false` |
+| `QES_REQUIRE_LTV` | `true` | CRL pro každý ne-kořenový cert; cert s CRL DP a nedostupnou CRL = fail i při `false`; `false` = cert bez CRL DP se přeskočí |
 | `QES_LTV_ALLOWED_HOSTS` | `crl.postsignum.cz,crl2.postsignum.cz,crl.postsignum.eu,qcrldp1.ica.cz,qcrldp2.ica.cz,crldp1.ica.cz,crldp2.ica.cz` | allowlist hostů pro CRL (SSRF ochrana; čárkou oddělené); prázdná hodnota = jen https a veřejná adresa (pro I.CA s http CRL DP nestačí); explicitní ENV default plně nahradí |
 | `QES_IOS_TEAM_ID` | — | pro AASA |
 | `QES_EXPIRY_JOB_INTERVAL` | `60` | perioda expiračního jobu [s]; `0` = vypnuto |
@@ -1623,19 +1646,21 @@ Oba dokumenty teď musí být v souladu; případný další rozpor je chyba, kt
 | 19 | Upload ověřuje `content_type` a `level_required` | docs/15 § 5.1 žádá obojí; SPEC to nezmiňoval | SPEC § 5.8.1 (`422 invalid_pdf` / `422 invalid_level`) |
 | 20 | Analýza nahraného PDF (`Qes::PdfSource`) | docs/15 § 6 uváděl jen `page_preview.rb`; normalizace rotace a validace patří do jednoho místa | SPEC § 4.8 (`Qes::PdfSource`) |
 | 21 | Vlastní tabulka `qes_pdf_sessions` a vlastní pipeline pro přímý podpis | **Zamítnuto 2026-10-18** (rozhodnutí uživatele: minimum vlastního kódu) — přímý podpis jede standardním DocuSeal tokem: šablona s polem `qes`, submission, běžný obřad; fork přidává jen nahrání PDF a API token pro spuštění obřadu | docs/15, SPEC § 4.8 a § 5.8 |
-| 22 | TBS PDF a `document_digest` v `GET /qes/sessions/:token` | **Opraveno 2026-10-22**: pevná rezerva 20 000 B nestačila na reálný CMS — CRL PostSignum Qualified CA 4 má 812 863 B a do CMS jde 2× (ETSI + Adobe), tj. ~1,63 MB; reálný certifikát končil `signature_size_exceeded` | TBS se staví až po přijetí certifikátu, rezerva = `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN`; `document_digest` se počítá tamtéž (§ 7.1, § 11). **Od 2026-10-27** nahrazeno pevnou rezervou `QES_SIGNATURE_RESERVE` a TBS se staví **před** certifikátem (§ 5.1a); `estimate_size`/`SIGNATURE_SIZE_MARGIN` odstraněny. |
+| 22 | TBS PDF a `document_digest` v `GET /qes/sessions/:token` | **Opraveno 2026-10-22**: pevná rezerva 20 000 B nestačila na reálný CMS — CRL PostSignum Qualified CA 4 má 812 863 B a do CMS jde 2× (ETSI + Adobe), tj. ~1,63 MB; reálný certifikát končil `signature_size_exceeded` | TBS se staví až po přijetí certifikátu, rezerva = `Qes::CmsBuilder.estimate_size` + `QES_SIGNATURE_SIZE_MARGIN`; `document_digest` se počítá tamtéž (§ 7.1, § 11). **Od 2026-10-27** nahrazeno pevnou rezervou `QES_SIGNATURE_RESERVE`; **od 2026-10-31** se TBS staví **po** certifikátu (pečeť nese identitu z certu, § 5.1a); `estimate_size`/`SIGNATURE_SIZE_MARGIN` odstraněny. |
 | 23 | LTV v CMS (ETSI `RevocationValues` + Adobe `RevocationInfoArchival`) | **Změněno 2026-10-22**: pyHanko unsigned atributy nečte (čte DSS a signed Adobe revinfo); CRL v CMS byl 2× ~813 kB a zvětšoval PDF; Adobe LTV používá DSS VRI | Revokační data jen v DSS s VRI, krytá DocTS (§ 7.4, § 7.6) |
 | 24 | Generátor výsledného PDF se vybírá podle šablony (`Qes.active_for?`) | **Opraveno 2026-10-29 (nález #3)**: rozhoduje dokončená QES session, ne pole v šabloně — volitelné `qes` pole bez podpisu vracelo prázdné `documents`; `QES_ENABLED` zůstává feature gate | § 7.7 |
 
 Kde je co v DESIGN.md opravené (řetěz DESIGN → SPEC):
-- § 3.1 — `preferences.level` (per-field), vícenásobní signeři a řetězení revizí,
+- § 3.1 — `preferences.level` (per-field), snapshot úrovně, vícenásobní signeři a řetězení revizí,
 - § 3.2 — atributy `QesSession` (`signed_attrs_der`, `certificate_chain`, `final_document`, `seal_state`, `app_metadata`),
-- § 3.3 — stavový automat včetně `awaiting_signature`,
+- § 3.3 — stavový automat včetně `awaiting_signature` a invariant jedné aktivní revize,
 - § 4 — kroky 5–9 (dvoukrokový protokol) + odstavec „Více podepisujících“,
-- § 5.1 — obrazovky S1–S9, § 6 — varianta A přes MOI Podpisové SDK,
-- § 7.1 — seznam souborů, § 7.2 — endpointy, § 7.3 — LTV v CMS, § 7.4 — pečeť, řetězení a kritérium hotovo,
-- § 8.1 — deep link bez `s`, § 8.2 — payload ve dvou krocích, § 8.4 — konfigurace,
-- § 12 #14 — vícenásobné digitální podpisy (firemní podpisy).
+- § 5.1 — obrazovky S1–S15, § 6 — varianta A přes MOI Podpisové SDK (dnes stub),
+- § 7.1 — seznam souborů + architektura forku, § 7.2 — endpointy, § 7.3 — LTV/DSS/TSA,
+- § 7.4 — finální PDF, pečeť, identita a kritérium hotovo,
+- § 8.1 — deep link, TOFU a zrušené App Links, § 8.2 — payload ve dvou krocích, § 8.4 — konfigurace,
+- § 9 — bezpečnostní model (trust stores, revokace, LTV fail-closed),
+- § 11 — provoz a build identity, § 12 #14–#31 — rozhodnutí, § 13–§ 15 — mimo rozsah, zamítnuté alternativy a otevřená rozhodnutí.
 
 ---
 

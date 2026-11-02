@@ -316,7 +316,8 @@ Sender        DocuSeal (fork)        Appka (Expo)         Signer
    - přidá inkrementálně pečeť DocuSealu (pokud je k dispozici PKCS) → `final_document`,
    - zapíše audit (cert, čas, hash, úroveň, e-mail z certu, výsledek) — stránka QES v audit trailu,
    - označí submittera `completed` a spustí standardní DocuSeal dokončení.
-10. **Výsledek.** Signer vidí potvrzení (a může PDF stáhnout); sender dostane notifikaci a v DocuSealu
+10. **Výsledek.** Signer vidí potvrzení „Dokument byl podepsán. Můžete se vrátit do prohlížeče.“
+    (PDF stahuje až u přímého podpisu S13); sender dostane notifikaci a v DocuSealu
     je finální dokument **podepsané PDF** — combined document se pro QES submission **nestaví znovu**,
     použije se podepsané PDF (viz 7.4).
 

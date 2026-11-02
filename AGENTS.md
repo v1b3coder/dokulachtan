@@ -33,6 +33,8 @@ DocuSealu (větev `dokulachtan`) + Expo appka. Uživatel: zaměstnanci firmy, po
 14. **Pečeť nese identitu z certifikátu** (CN + první SAN e-mail), ne submittera; `complete` ověří
     shodu (`stamp_mismatch`). Pečeť je **appearance stream widgetu** podpisového pole (ne obsah stránky).
 
+> Další závazná rozhodnutí, zamítnuté alternativy a otevřená rozhodnutí: [DESIGN.md](DESIGN.md) § 0, § 14 a § 15.
+
 ## Nepřekročitelná pravidla
 
 - **Klíč nikdy neopustí telefon/čip**; server vidí jen hash a podpis.
@@ -89,7 +91,7 @@ Pin forku musí sedět na `vendor/docuseal.rev`; hook to blokuje. Přeskočení:
 
 Hotovo P0–P8 kromě reálné čtečky (P5 je stub + fake card): QES vrstva, kryptografie
 (TBS → CMS → embed → LTV/DSS → DocTS → validace → pečeť), vícenásobné podpisy, přímý podpis PDF,
-ověření PDF, appka s vaultem a importem PKCS#12, tiery T0–T3.
+ověření PDF včetně volitelného EU DSS, appka s vaultem a importem PKCS#12, tiery T0–T3.
 
 Zbývá: reálná čtečka eObčanky (MOI SDK) a kvalifikované časové razítko (nyní DigiCert free).
 Zapojení čtečky v appce je odloženo do dodání hardware; QES v appce je dnes nedosažitelné.

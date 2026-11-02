@@ -4,6 +4,8 @@
 **Stav:** realizováno 2026-10-22 (D1–D5 potvrzeny uživatelem); nálezy N1–N19 jsou opravené, pravidla níže platí dál
 **Rozsah:** obrazovky appky (`mobile/app/app/*.tsx`), které obsahují tlačítka
 
+> Historické nálezy N1–N19 popisují stav **před** realizací; aktuální chování je v § 8–§ 10 a v DESIGN § 5.1.
+
 ## 1. Příčina
 
 Funkce se přidávaly po jedné a každá si přinesla vlastní tlačítko do stávajícího seznamu.
