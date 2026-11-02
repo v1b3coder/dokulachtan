@@ -786,7 +786,7 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
    a **viditelnou pečeť podepisujícího** (zelený check, „Digitálně podepsáno“, badge úrovně, jméno
-   a e-mail z certifikátu, datum)
+   a e-mail z certifikátu, datum); plocha pole se zvětší na text (min. 150×58 pt), levý horní roh zůstává
    na pozici pole `qes` jako **appearance stream widgetu** podpisového pole.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože CRL jde do DSS
@@ -1402,8 +1402,10 @@ podepisujícího se místo ní vykreslí přehled podpisu (`submit_form/_qes_sum
 subject/issuer/serial certifikátu, umístění klíče, čas podpisu, validace, pečeť). Pro pole aktuálního
 podepisujícího vrací stejný HTML `GET /s/:slug/qes_sessions/:id` jako `summary_html` (Vue `qes_summary.vue`);
 pro pole předchozích podepisujících ho vykresluje `submissions/_value.html.erb`. V **poli dokumentu**
-(omezená výška) se používá zkrácená varianta (`compact: true` — ikona, úroveň, jméno a e-mail z certifikátu,
-bez subject/issuer/serial a auditu) s podbarvením a `overflow-hidden`; plná varianta zůstává v kartě podepisujícího.
+(omezená výška) se používá zkrácená varianta (`compact: true` — ikona, úroveň, jméno a e-mail z certifikátu
+a datum podpisu, bez subject/issuer/serial a auditu) s podbarvením a `overflow-hidden`; plná varianta zůstává
+v kartě podepisujícího. Efektivní plocha pečeti se ukládá do `submission.template_fields`, takže náhled
+a PDF používají stejný obdélník.
 Třídy přehledu **MUSÍ** být v CSS balíčku `form` (content glob `tailwind.form.config.js` zahrnuje
 `app/views/submit_form`, kde partial přehledu žije).
 
