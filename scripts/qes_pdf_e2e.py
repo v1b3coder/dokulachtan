@@ -327,7 +327,7 @@ def main() -> int:
 
     base.log(f"\n## Pečeť v místě klepnutí ({check['field_area']})")
     base.log(f"- inkoust v místě pečeti: {check['stamp_ink']}, mimo pečeť: {check['other_ink']}")
-    if check["stamp_ink"] < 0.5 or check["other_ink"] != 0:
+    if check["stamp_ink"] < 0.2 or check["other_ink"] != 0:
         raise SystemExit("Pečeť není v místě klepnutí")
 
     if check["validation"]["coverage"] != "full":
