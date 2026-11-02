@@ -50,6 +50,19 @@ Veřejné entrypointy:
 Interní tiery T0–T3 a počty: [test/README.md](test/README.md).
 Hook pustí F1 s čerstvou DB; přeskočení `SKIP_QES_HOOK=1`.
 
+## Push
+
+Repo má dva remotes: `origin` (interní Gitea) a `github` (veřejné zrcadlo). Pre-push hook běží
+pro každou push URL zvlášť, takže dva samostatné pushe znamenají dva běhy F1. Proto:
+
+```bash
+make push               # oba remotes, testy jednou
+make push ARGS=main     # konkrétní refspec (i tag: ARGS=v1.3.10)
+```
+
+`scripts/push.sh` pushne nejdřív do `origin` (tam hook pustí testy) a pak do `github` s `--no-verify`.
+Pro jeden remote použij `git push origin` / `git push github` přímo.
+
 ## CI
 
 - `.github/workflows/qes.yml` — push `main`/PR: F2; schedule/dispatch: F3;

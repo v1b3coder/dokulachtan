@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks push app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -44,6 +44,9 @@ venv: ## Vytvoří .venv (pyHanko + podman-compose, pin z requirements-qes.txt)
 hooks: ## Nainstaluje git hooky z .githooks (pre-push: T0 + app testy + typecheck)
 	git config core.hooksPath .githooks
 	chmod +x .githooks/pre-push
+
+push: ## Push do gitea + GitHub zrcadla, pre-push testy jen jednou (ARGS=<refspec>)
+	scripts/push.sh $(ARGS)
 
 app-deps: ## Nainstaluje npm závislosti appky (npm ci)
 	cd mobile/app && npm ci
@@ -261,7 +264,7 @@ emulator: ## Debug APK pro emulátor (x86_64, lokální klíč)
 release: ## Release APK se staví v CI na tag (TAG=v1.3.10)
 	@test -n "$(TAG)" || { echo "Použij make release TAG=v1.3.10"; exit 1; }
 	@echo "Release APK se staví v CI:"
-	@echo "  git tag $(TAG) && git push origin $(TAG) && git push github $(TAG)"
+	@echo "  git tag $(TAG) && make push ARGS=$(TAG)"
 	@exit 1
 
 test-card: ## F4d: reálná čtečka (TODO, dnes stub)

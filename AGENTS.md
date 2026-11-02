@@ -71,7 +71,7 @@ nasazení a provoz (`deploy-*`, `smtp-*`), historické interop nástroje (`fixtu
 **Fáze testů** (detail a rozhodovací strom: [test/README.md](test/README.md)):
 
 - **F0** `make test-prepare` — po klonu / změně Dockerfilu.
-- **F1** `make test` — před pushem (T0 + JS + app + typecheck); hook `.githooks/pre-push`.
+- **F1** `make test` — před pushem (T0 + JS + app + typecheck); hook `.githooks/pre-push`; oba remotes `make push`.
 - **F2** `make test-ci` — před PR (F1 + T1).
 - **F3** `make test-full` — před release / po bumpu pinu (F2 + T2 + T3 + negativní + E2E).
 - **F4** `make test-manual` / `make test-android` — staging, EU DSS, emulátor; nikdy v CI.
