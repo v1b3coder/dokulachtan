@@ -382,8 +382,8 @@ Chyby: `404 unknown_token`, `410 expired_token`, `410 used_token`, `409 session_
 ### 5.1a `GET /qes/sessions/:token/document` — nepodepsaný TBS pro kontrolu
 
 Server **MUSÍ** vrátit **nepodepsaný TBS** (PDF s prázdnou rezervou `/Contents`) **až po** přijetí
-certifikátu (`POST /certificate`): viditelná pečeť nese CN a první SAN e-mail z certifikátu, takže TBS bez
-certifikátu neexistuje. TBS se staví při `POST /certificate` s pevnou rezervou `QES_SIGNATURE_RESERVE`
+certifikátu (`POST /certificate`): viditelná pečeť nese jméno (CN, jinak givenName + surname) a e-mail
+(první SAN, jinak e-mail z předmětu), takže TBS bez certifikátu neexistuje. TBS se staví při `POST /certificate` s pevnou rezervou `QES_SIGNATURE_RESERVE`
 (default 64 KB), nezávislou na certifikátu; `GET /document` TBS **NEPŘESTAVUJE**.
 
 - Stav: jen `awaiting_signature`.
@@ -418,7 +418,8 @@ Server **MUSÍ** ověřit:
    **NESMÍ** tvrdit `QcSSCD` (jinak `422 level_mismatch`),
 4. `level_required == "qes"` → certifikát **MUSÍ** mít `QcSSCD` (jinak `422 qes_required_qscd`),
 5. `level_required == "ades"` → stačí `QcCompliance` (bez něj `422 not_qualified`),
-6. TBS se staví **až z ověřeného certifikátu**; viditelná pečeť nese CN a první SAN e-mail. Identita
+6. TBS se staví **až z ověřeného certifikátu**; viditelná pečeť nese jméno (CN, jinak givenName + surname)
+   a e-mail (první SAN, jinak e-mail z předmětu). Identita
    pečeti se uloží do metadat TBS (`qes_stamp_identity`) a `complete` **MUSÍ** ověřit, že sedí s certifikátem
    podpisu (`422 stamp_mismatch`); jiný cert v `awaiting_signature` je `409 wrong_state`.
 
@@ -784,7 +785,8 @@ Postup (`Qes::TbsDocument.build(submitter, field, signature_size:)`):
      (`HexaPDF::Document.new(io: StringIO.new(final_document.download))`); dokument se **NEPŘESTAVUJE**
      ani neimportuje po stránkách.
 2. Do základu dokreslí hodnoty aktuálního submittera (`fill_submitter_fields`, `qes` pole se přeskočí)
-   a **viditelnou pečeť podepisujícího** („Digitálně podepsáno“, jméno, e-mail z certifikátu, datum)
+   a **viditelnou pečeť podepisujícího** (zelený check, „Digitálně podepsáno“, badge úrovně, jméno
+   a e-mail z certifikátu, datum)
    na pozici pole `qes` jako **appearance stream widgetu** podpisového pole.
 3. Vloží **jedno** podpisové pole `Sig` s rezervovaným `/Contents`: rezerva je **pevná**
    `QES_SIGNATURE_RESERVE` (default 64 KB), nezávislá na certifikátu, protože CRL jde do DSS
@@ -1400,8 +1402,8 @@ podepisujícího se místo ní vykreslí přehled podpisu (`submit_form/_qes_sum
 subject/issuer/serial certifikátu, umístění klíče, čas podpisu, validace, pečeť). Pro pole aktuálního
 podepisujícího vrací stejný HTML `GET /s/:slug/qes_sessions/:id` jako `summary_html` (Vue `qes_summary.vue`);
 pro pole předchozích podepisujících ho vykresluje `submissions/_value.html.erb`. V **poli dokumentu**
-(omezená výška) se používá zkrácená varianta (`compact: true` — ikona, úroveň, podepisující, certifikát,
-bez issuer/serial a auditu) s podbarvením a `overflow-hidden`; plná varianta zůstává v kartě podepisujícího.
+(omezená výška) se používá zkrácená varianta (`compact: true` — ikona, úroveň, jméno a e-mail z certifikátu,
+bez subject/issuer/serial a auditu) s podbarvením a `overflow-hidden`; plná varianta zůstává v kartě podepisujícího.
 Třídy přehledu **MUSÍ** být v CSS balíčku `form` (content glob `tailwind.form.config.js` zahrnuje
 `app/views/submit_form`, kde partial přehledu žije).
 
