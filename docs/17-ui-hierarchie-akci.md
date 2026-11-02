@@ -172,7 +172,7 @@ v náhledu Podepsat (plné) → Vybrat jiné PDF (obrys) → Zrušit (obrys).
    nahrazení názvem souboru). Po výběru se pod tlačítkem objeví malý **terciární**
    odkaz **„Otevřít“ + název souboru** (místní soubor před nahráním; podepisuje se
    verze s pečetí). Žádný samostatný řádek „Zkontrolovat PDF“.
-2. Jméno do pečeti, úroveň (beze změny).
+2. Úroveň (beze změny; jméno do DocuSealu se bere z certu, ne z formuláře).
 3. Chyba těsně nad akcí.
 4. **Primární** „Pokračovat“ (vypnuté bez souboru) — jen upload a založení session,
    **nepodepisuje**.

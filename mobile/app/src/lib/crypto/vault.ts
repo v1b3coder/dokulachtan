@@ -42,6 +42,10 @@ export interface VaultDeps {
 
 export interface StoredCertificateInfo {
   subject: string;
+  // Identita podepisujícího do DocuSealu: CN, jinak e-mail ze SAN. Starší
+  // payloady je nemají, `signerDisplayName` proto padá na `subject`.
+  commonName?: string | null;
+  email?: string | null;
   issuer: string;
   serial: string;
   notBefore: string;
@@ -268,6 +272,8 @@ export async function importCertificate(
 
   const info: StoredCertificateInfo = {
     subject: parsed.subject,
+    commonName: parsed.commonName,
+    email: parsed.email,
     issuer: parsed.issuer,
     serial: parsed.serial,
     notBefore: parsed.notBefore,
@@ -352,6 +358,12 @@ export async function certificateSummary(deps: VaultDeps): Promise<StoredCertifi
   const payload = await readStoredPayload(deps);
 
   return payload ? payload.info : null;
+}
+
+// Jméno podepisujícího do DocuSealu (`display_name` a submitter): CN z certu,
+// jinak SAN e-mail, jinak plný předmět (starší payloady bez `commonName`).
+export function signerDisplayName(info: StoredCertificateInfo): string {
+  return info.commonName ?? info.email ?? info.subject;
 }
 
 export async function removeCertificate(deps: VaultDeps): Promise<void> {

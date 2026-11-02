@@ -96,13 +96,14 @@ i úklid dokumentů jsou upstream.
 
 ### 5.1 `POST /api/qes/documents` — nahrání PDF (nový endpoint)
 
-`multipart/form-data` s `file` (povinné), `display_name` (nepovinné), `level_required` (`ades` default / `qes`).
+`multipart/form-data` s `file` (povinné), `display_name` (nepovinné; appka posílá
+jméno podepisujícího z certu — CN, jinak SAN e-mail), `level_required` (`ades` default / `qes`).
 Server **MUSÍ**:
 1. ověřit velikost (`QES_PDF_MAX_BYTES`) → `422 file_too_large`,
 2. ověřit magic bytes a `content_type` → `422 invalid_pdf`,
 3. odmítnout šifrovaná PDF (`422 encrypted_pdf`) a PDF s existující signaturou (`422 already_signed`),
 4. normalizovat rotaci stránek (`Qes::PdfSource.normalize_rotation`),
-5. založit šablonu ve složce **„Direct signing“** (jeden podepisující = jméno do pečeti, jedno pole `qes`
+5. založit šablonu ve složce **„Direct signing“** (jeden podepisující = jméno podepisujícího z certu, jedno pole `qes`
    s `preferences.level`, prázdné `areas`) a nahrát PDF jako dokument.
 
 201:
@@ -139,7 +140,7 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 
 | Soubor | Obsah |
 |---|---|
-| `app/sign-pdf.tsx` | S11 (výběr PDF, jméno do pečeti, úroveň) + S12 (náhled, klepnutí, obrys, „Podepsat“) |
+| `app/sign-pdf.tsx` | S11 (výběr PDF, úroveň) + S12 (náhled, klepnutí, obrys, „Podepsat“) |
 | `app/_layout.tsx` | sdílené PDF: `expo-share-intent` → S14 s interním handoffem (`?handoff=<id>`), ne s cestou v URL |
 | `src/lib/pdfHandoff.ts` | jednorázové předání lokálního PDF mezi S14 a S11 (opaque id, soubor zůstává v paměti) |
 | `src/lib/shareIntent.ts` | PDF ze share intentu (`sharedPdfFile`), ostatní soubory ignoruje |
@@ -165,7 +166,7 @@ volby QES (čtečka eObčanky je Android-only, SPEC § 9.4). Build čeká na App
 **Sdílení PDF (Android, SPEC § 9.9 krok 0):** v Android manifestu je `activity-alias` „**Podepsat PDF**“
 (`plugins/withSharePdfTarget.js`) pro `ACTION_SEND` s `application/pdf`; `app/_layout.tsx` přes
 `expo-share-intent` přijme soubor a otevře S14 s interním handoffem (`?handoff=<id>`). `app/sign-pdf.tsx` po načtení
-nastavení a jména do pečeti **rovnou nahraje** sdílené PDF (bez ručního ukládání a hledání). Zdroj je v cache
+nastavení **rovnou nahraje** sdílené PDF (bez ručního ukládání a hledání). Zdroj je v cache
 appky (`file://`), takže se nic nekopíruje do Documents; iOS share extension není v rozsahu. Cesta k souboru
 nikdy nejde v URL — `dokulachtan://sign-pdf?share=file:///…` zvenku `+native-intent` stripne a `takePdf` nic nevrátí.
 

@@ -9,6 +9,37 @@ function testP12(): Uint8Array {
   return Uint8Array.from(atob(TEST_P12_BASE64), (char) => char.charCodeAt(0));
 }
 
+// Cert s volitelným CN a SAN e-mailem pro identitu podepisujícího.
+function identityP12(identity: { commonName?: string; email?: string }): Uint8Array {
+  const keys = forge.pki.rsa.generateKeyPair(2048);
+  const certificate = forge.pki.createCertificate();
+
+  certificate.publicKey = keys.publicKey;
+  certificate.serialNumber = '01';
+  certificate.validity.notBefore = new Date('2026-01-01T00:00:00Z');
+  certificate.validity.notAfter = new Date('2027-01-01T00:00:00Z');
+  certificate.setSubject(identity.commonName
+    ? [{ name: 'commonName', value: identity.commonName }]
+    : [{ name: 'organizationName', value: 'Dokulachtan Test' }]);
+  certificate.setIssuer(certificate.subject.attributes);
+  certificate.setExtensions([
+    { name: 'basicConstraints', cA: false },
+    { name: 'keyUsage', digitalSignature: true, critical: true },
+    ...(identity.email
+      ? [{ name: 'subjectAltName', altNames: [{ type: 1, value: identity.email }] }]
+      : []),
+  ]);
+  certificate.sign(keys.privateKey, forge.md.sha256.create());
+
+  return p12WithBags(
+    forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(keys.privateKey)),
+    [forge.pem.encode({
+      type: 'CERTIFICATE',
+      body: forge.asn1.toDer(forge.pki.certificateToAsn1(certificate)).getBytes(),
+    })],
+  );
+}
+
 describe('parseP12', () => {
   it('parses the embedded test certificate as AdES with a signing key', () => {
     const parsed = parseP12(testP12(), TEST_P12_PASSWORD);
@@ -20,6 +51,27 @@ describe('parseP12', () => {
     expect(parsed.canSign).toBe(true);
     expect(parsed.subject).toContain('signer-ades');
     expect(parsed.privateKeyPem).toContain('BEGIN RSA PRIVATE KEY');
+  });
+
+  it('reads the signer identity from the certificate CN and SAN e-mail', () => {
+    const parsed = parseP12(identityP12({ commonName: 'Jan Novák', email: 'jan@example.com' }), 'test');
+
+    expect(parsed.commonName).toBe('Jan Novák');
+    expect(parsed.email).toBe('jan@example.com');
+  });
+
+  it('falls back to the SAN e-mail when the certificate has no CN', () => {
+    const parsed = parseP12(identityP12({ email: 'jan@example.com' }), 'test');
+
+    expect(parsed.commonName).toBeNull();
+    expect(parsed.email).toBe('jan@example.com');
+  });
+
+  it('reports no identity e-mail for a certificate without SAN', () => {
+    const parsed = parseP12(testP12(), TEST_P12_PASSWORD);
+
+    expect(parsed.commonName).toBe('signer-ades');
+    expect(parsed.email).toBeNull();
   });
 
   it('rejects a wrong password', () => {

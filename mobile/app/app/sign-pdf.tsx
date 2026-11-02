@@ -13,12 +13,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 
-import { certificateSummary } from '../src/lib/crypto/vault';
+import { certificateSummary, signerDisplayName } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
 import { offerPdf, takePdf } from '../src/lib/pdfHandoff';
 import { platformVaultDeps } from '../src/lib/platform';
@@ -88,7 +87,7 @@ function containBox(container: { width: number; height: number }, page: { width:
 export default function SignPdfScreen() {
   const [settings, setSettings] = useState<PdfApiSettings | null>(null);
   const [file, setFile] = useState<PdfUpload | null>(null);
-  const [displayName, setDisplayName] = useState('');
+  const [signerName, setSignerName] = useState<string | null>(null);
   const [level, setLevel] = useState<QesLevel>('ades');
   const [document, setDocument] = useState<PdfDocument | null>(null);
   const [localSha256, setLocalSha256] = useState<string | null>(null);
@@ -140,8 +139,8 @@ export default function SignPdfScreen() {
 
         setSettings(stored);
 
-        if (summary?.subject) {
-          setDisplayName((current) => current || summary.subject);
+        if (summary) {
+          setSignerName(signerDisplayName(summary));
         }
 
         setReady(true);
@@ -214,7 +213,10 @@ export default function SignPdfScreen() {
         return false;
       }
       const expected = localSha256 ?? await sha256File(upload).catch(() => null);
-      const created = await client.createDocument(upload, { displayName, levelRequired: level });
+      const created = await client.createDocument(upload, {
+        displayName: signerName ?? undefined,
+        levelRequired: level,
+      });
 
       if (created.source_sha256 && expected && created.source_sha256.toLowerCase() !== expected) {
         setError('source_mismatch');
@@ -314,7 +316,7 @@ export default function SignPdfScreen() {
 
         const user = await client.user();
         currentSubmitter = await client.createSubmission(document, {
-          name: displayName || user.email,
+          name: signerName ?? user.email,
           email: user.email,
         });
 
@@ -398,14 +400,6 @@ export default function SignPdfScreen() {
               </Text>
             </>
           ) : null}
-
-          <Text style={styles.label}>Jméno do pečeti</Text>
-          <TextInput
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Jan Novák"
-          />
 
           <Text style={styles.label}>Úroveň: {levelLabel(level)}</Text>
           <View style={styles.row}>
@@ -555,7 +549,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '700' },
   muted: { fontSize: 14, color: '#6b7280' },
   label: { fontSize: 13, color: '#6b7280', marginTop: 4 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 16, fontSize: 16, color: '#111827' },
   error: { color: '#991b1b', fontSize: 14 },
   detail: { color: '#b45309', fontSize: 12 },
   warningCard: {

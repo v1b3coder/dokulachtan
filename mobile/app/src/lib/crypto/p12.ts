@@ -22,6 +22,9 @@ export interface ParsedP12 {
   certificatePem: string;
   chainPems: string[];
   subject: string;
+  // Identita podepisujícího do DocuSealu: CN, jinak e-mail ze SAN.
+  commonName: string | null;
+  email: string | null;
   issuer: string;
   serial: string;
   notBefore: string;
@@ -85,11 +88,15 @@ export function parseP12(bytes: Uint8Array, password: string, options: ParseP12O
     throw new P12Error('qscd_certificate');
   }
 
+  const commonName = certificate.subject.getField('CN')?.value ?? null;
+
   return {
     privateKeyPem: forge.pki.privateKeyToPem(privateKey),
     certificatePem: signer.pem,
     chainPems: chain.map((item) => item.pem),
-    subject: certificate.subject.getField('CN')?.value ?? certificate.subject.attributes.map((a) => `${a.shortName}=${a.value}`).join(', '),
+    subject: commonName ?? certificate.subject.attributes.map((a) => `${a.shortName}=${a.value}`).join(', '),
+    commonName,
+    email: readEmail(certificate),
     issuer: certificate.issuer.getField('CN')?.value ?? certificate.issuer.attributes.map((a) => `${a.shortName}=${a.value}`).join(', '),
     serial: `0x${certificate.serialNumber.toUpperCase()}`,
     notBefore: new Date(certificate.validity.notBefore).toISOString(),
@@ -133,6 +140,16 @@ export function readQcStatements(certificate: forge.pki.Certificate): string[] {
   } catch {
     return [];
   }
+}
+
+// E-mail z certu: první rfc822Name v subjectAltName. Cert bez SAN e-mailu
+// (např. testovací) vrací null.
+function readEmail(certificate: forge.pki.Certificate): string | null {
+  const extension = certificate.getExtension('subjectAltName') as
+    | { altNames?: { type: number; value?: string }[] }
+    | undefined;
+
+  return extension?.altNames?.find((name) => name.type === 1)?.value ?? null;
 }
 
 function canSign(certificate: forge.pki.Certificate): boolean {

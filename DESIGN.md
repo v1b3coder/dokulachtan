@@ -364,7 +364,7 @@ na stav, alternativy za oddělovačem, navigace a „Zrušit“ jako textové od
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů, jen kvalifikované, QPIN |
 | S10 | **Konfigurační wizard** | když není podepisující: primární import klíče (PKCS#12), sekundární nastavení čtečky, testovací certifikát až na konci, „Zpět“ |
-| S11 | **Výběr PDF** (přímý podpis) | `expo-document-picker` **nebo PDF ze share sheetu (Android, štítek „Podepsat PDF“, rovnou upload)** jako sekundární pole, jméno souboru, jméno do pečeti (default CN z vaultu), úroveň (AdES/QES), primární „Pokračovat“ (vypnuté bez souboru), „Zrušit“ |
+| S11 | **Výběr PDF** (přímý podpis) | `expo-document-picker` **nebo PDF ze share sheetu (Android, štítek „Podepsat PDF“, rovnou upload)** jako sekundární pole, jméno souboru, úroveň (AdES/QES), primární „Pokračovat“ (vypnuté bez souboru), „Zrušit“ |
 | S12 | **Umístění pečeti** (přímý podpis) | náhled stránky ze serveru, přepínání stránek, klepnutí → obrys pečeti, primární „Podepsat“ (vypnuté bez umístění), „Vybrat jiné PDF“ a „Zrušit“ |
 | S13 | **Výsledek PDF** (přímý podpis) | reuse S6 + primární „Stáhnout“ (uložit do telefonu), sekundární „Sdílet“ (share sheet), terciární „Zavřít“; po uložení „Otevřít“ (systémový prohlížeč) a „Uložit jinam…“ (SAF, zapamatuje složku) |
 | S14 | **Ověřit PDF / Co s PDF?** | výběr PDF nebo PDF ze share/open intentu; volba „Podepsat PDF“ / „Ověřit PDF“; u ověření volba providera **DocuSeal** (default) / **EU DSS** (opt-in, varování + checkbox); soubor, velikost, poznámka „PDF se na serveru neukládá automaticky“ |

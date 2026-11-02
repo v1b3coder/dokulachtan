@@ -312,7 +312,7 @@ Důsledky:
   (kontrola šifrovaných/už podepsaných PDF a normalizace rotace stránek).
 
 ---|---|
-| `display_name` | jméno do pečeti (appka posílá default CN z vaultu) |
+| `display_name` | jméno podepisujícího z certu (CN, jinak SAN e-mail) |
 | `file_name` | původní název souboru (`document_name` v payloadu § 5.1) |
 | `page_count`, `page_sizes` | počet a rozměry stránek v bodech (JSON) |
 | `stamp` | `{page, x, y}` normalizovaně 0–1 (střed pečeti) |
@@ -606,7 +606,7 @@ Request: `multipart/form-data` s `file` (povinné), `display_name` (nepovinné),
 3. odmítnout šifrovaná PDF (`422 encrypted_pdf`) a PDF s existující signaturou (`422 already_signed`) —
    DocuSeal staví výsledek znovu ze stránek, takže by původní podpis zmizel,
 4. normalizovat rotaci stránek (`Qes::PdfSource.normalize_rotation`),
-5. založit **šablonu** (`Template`) ve složce „Direct signing“ s jedním podepisujícím (role = jméno do pečeti)
+5. založit **šablonu** (`Template`) ve složce „Direct signing“ s jedním podepisujícím (role = jméno podepisujícího z certu)
    a jedním polem typu `qes` (`preferences.level = level_required`, prázdné `areas`) a nahrát PDF jako její dokument,
 6. vrátit `201` s `template_id`, definicí pole, stránkami s náhledy a velikostí pečeti v bodech.
 
@@ -1084,7 +1084,7 @@ spolu s `key_location`, `reader` (u A) a verzí protokolu.
 | S8 | **Připojení čtečky** (A) | párování BLE, výběr čtečky, stav baterie, připojení | `reader_not_found`, `reader_disconnected` |
 | S9 | **Výběr certifikátu z karty** (A) | seznam kontejnerů (`getContainerList`), jen kvalifikované (`QcCompliance`), úroveň QES, PIN/QPIN výzva | `pin_blocked`, `applet_blocked`, `no_qualified_certificate` |
 | S10 | **Konfigurační wizard** (z S4, když není podepisující — § 9.8) | primární „Importovat klíč (PKCS#12)“ → S2, sekundární „Nastavit čtečku“ → S8, testovací certifikát až na konci; „Zpět“ | `import_failed`, `reader_not_found` |
-| S11 | **Výběr PDF** (přímý podpis, docs/15) | `expo-document-picker` (PDF) **nebo PDF ze share sheetu (Android, docs/15 § 6)** jako sekundární pole, název souboru, jméno do pečeti (default CN z vaultu), úroveň (AdES/QES), primární „Pokračovat“ (vypnuté bez souboru) → upload, terciární „Zrušit“ | `file_too_large`, `invalid_pdf`, `encrypted_pdf`, `already_signed`, `network` |
+| S11 | **Výběr PDF** (přímý podpis, docs/15) | `expo-document-picker` (PDF) **nebo PDF ze share sheetu (Android, docs/15 § 6)** jako sekundární pole, název souboru, úroveň (AdES/QES), primární „Pokračovat“ (vypnuté bez souboru) → upload, terciární „Zrušit“ | `file_too_large`, `invalid_pdf`, `encrypted_pdf`, `already_signed`, `network` |
 | S12 | **Umístění pečeti** (přímý podpis) | náhled stránky ze serveru, přepínání stránek, klepnutí → obrys pečeti, primární „Podepsat“ (vypnuté bez umístění) → `place` → S4, terciární „Vybrat jiné PDF“ a „Zrušit“ | `invalid_position`, `wrong_state`, `expired_token` |
 | S13 | **Výsledek PDF** (přímý podpis) | reuse S6 + primární „Stáhnout“ (uložit do telefonu), sekundární „Sdílet“ (share sheet), terciární „Zavřít“; po uložení „Otevřít“ (systémový prohlížeč) a „Uložit jinam…“ (SAF, zapamatuje složku) | `wrong_state` (server ještě dokončuje → polling) |
 | S14 | **Ověřit PDF / Co s PDF?** | výběr PDF nebo PDF ze share/open intentu; volba „Podepsat PDF“ / „Ověřit PDF“; u ověření volba providera **DocuSeal** (default) / **EU DSS** (opt-in, varování + checkbox); soubor, velikost, poznámka „PDF se na serveru neukládá automaticky“ | `file_too_large`, `invalid_pdf`, `encrypted_pdf`, `network`, `not_authenticated`, `rate_limited` |
@@ -1245,7 +1245,7 @@ fake card mód je jen v e2e skriptu (`scripts/qes-app-e2e.ts`); QES v appce nen�
 0. S14 ze **share i open intentu** (Android, docs/16 D10): `ACTION_SEND` i `ACTION_VIEW` `application/pdf`
    → S14 s volbou „Podepsat PDF“ / „Ověřit PDF“; přímý podpis → S11 s už vybraným PDF
    a **rovnou ho nahraje** (bez ručního ukládání a hledání).
-1. S11: `expo-document-picker` (PDF) → název souboru, jméno do pečeti (default CN z vaultu),
+1. S11: `expo-document-picker` (PDF) → název souboru,
    úroveň (AdES/QES; na iOS jen AdES) → `POST /api/qes/documents` (multipart).
 2. Server vrátí `{template_id, field, document.pages[], stamp}`; appka zobrazí náhled stránky (S12)
    a klepnutím umístí obrys pečeti (velikost `stamp` × měřítko náhledu).

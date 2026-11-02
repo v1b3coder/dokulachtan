@@ -3,6 +3,7 @@ import {
   unlockCertificate,
   removeCertificate,
   certificateSummary,
+  signerDisplayName,
   hasCertificate,
   VaultError,
   type VaultDeps,
@@ -221,6 +222,28 @@ describe('vault', () => {
 
     expect((await importTestCertificate(deps)).subject).toContain('signer-ades');
     expect(await hasCertificate(deps)).toBe(true);
+  });
+
+  it('uses the certificate CN, then the SAN e-mail, then the stored subject', () => {
+    const info = {
+      subject: 'Jan Novák',
+      issuer: 'Test CA',
+      serial: '0x01',
+      notBefore: '2026-01-01T00:00:00.000Z',
+      notAfter: '2027-01-01T00:00:00.000Z',
+      qcStatements: [],
+      level: 'ades' as const,
+      keyType: 'rsa',
+      keySize: 2048,
+      certificatePem: '',
+      chainPems: [],
+    };
+
+    expect(signerDisplayName({ ...info, commonName: 'Jan Novák', email: 'jan@example.com' }))
+      .toBe('Jan Novák');
+    expect(signerDisplayName({ ...info, commonName: null, email: 'jan@example.com' }))
+      .toBe('jan@example.com');
+    expect(signerDisplayName(info)).toBe('Jan Novák');
   });
 
   it('refuses to overwrite a stored key with the test certificate', async () => {
