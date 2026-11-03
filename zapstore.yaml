@@ -1,4 +1,39 @@
+# Zapstore listing pro Dokulachtan (Android APK z GitHub releases).
 repository: https://github.com/v1b3coder/dokulachtan
+# Podepisující identita pro whitelisting na relay.zapstore.dev (issue #412).
 pubkey: npub1zfdjznkywfh0rj33z7tru04p97d824ucxvw5hc4r6y6r64t5ej5qsawuth
 metadata_sources:
     - github
+
+name: Dokulachtan
+summary: Podepisuj PDF z mobilu kvalifikovaným certifikátem, klíč zůstává v telefonu.
+description: |
+  Dokulachtan je doprovodná appka k upravenému [DocuSeal](https://github.com/v1b3coder/docuseal).
+  Podepisuješ a ověřuješ dokumenty z mobilu kvalifikovaným certifikátem od českých
+  kvalifikačních autorit (iSignum/I.CA, PostSignum) — **klíč zůstává v zařízení a na server
+  se nikdy nenahraje**. Server vidí jen hash a podpis.
+
+  - **Podpis dokumentu z e-mailu** — firma pošle PDF s polem „Podpis certifikátem“; dokument
+    zkontroluješ, potvrdíš otiskem prstu nebo PINem a stav podpisu firma vidí v DocuSealu.
+  - **Přímý podpis PDF** — PDF z e-mailu, z WhatsAppu nebo z portálu vybereš přímo v appce,
+    umístíš pečeť a podepíšeš.
+  - **Ověření PDF** — appka řekne, jestli je podpis platný, kdo ho udělal a jestli se soubor
+    po podpisu nezměnil. Volitelně přes veřejné API EU DSS.
+  - **Vícenásobné podpisy** — každý podepisující má vlastní pole a vlastní relaci; podpisy
+    jdou po sobě a řetězí se jako PAdES revize.
+  - **Import PKCS#12** — heslo zadáváš jen při importu, pak už jen biometrií; klíč je šifrovaný
+    AES-256-GCM a odemyká se biometrií.
+
+  Dokumenty, e-maily, historie i audit zůstávají ve tvém DocuSealu, ke kterému se appka připojí
+  přes API (Server URL + API token). Dokumenty se do appky neukládají.
+
+  **Zatím neumí:** QES s čipem eObčanky (chybí reálná čtečka, MOI Podpisové SDK), kvalifikované
+  časové razítko (dnes DigiCert free) a iOS build (čeká na Apple Developer účet).
+license: AGPL-3.0
+website: https://github.com/v1b3coder/dokulachtan
+tags: [productivity, security]
+icon: ./mobile/app/assets/icon.png
+images:
+    - ./docs/img/app-home.png
+    - ./docs/img/app-sign.png
+    - ./docs/img/app-verify.png
