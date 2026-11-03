@@ -108,6 +108,24 @@ služba; adresa instance se v každém nasazení mění. Pro vlastní instanci u
 v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest); debug-phone/emulator build se staví lokálně.
 Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 
+## Zapstore
+
+Appka je na Zapstore jako [`cz.dokulachtan.signer`](https://zapstore.dev/apps/cz.dokulachtan.signer).
+Listing metadata jsou v [zapstore.yaml](zapstore.yaml); release APK se bere z GitHub releases.
+
+Jednorázový NIP-C1 proof (vlastnictví podpisového certifikátu) už existuje a platí do 2028-11-02.
+Vytváří se jen wizardem, protože potřebuje klíč release keystore:
+
+```bash
+zsp                     # wizard: APK → Prove it's yours → Publish
+zsp publish             # další release (proof už je aktivní)
+```
+
+Wizard si heslo ke keystore bere z `KEYSTORE_PASSWORD` v `.env` (mode 600, gitignored);
+po publikaci ho zase vymaž. Nové GitHub releases publikuje Zapstore sám (indexer), takže
+po vydání stačí pushnout tag. Kdyby relay vrátil `publisher is not allowed`, patří npub
+`zapstore.yaml` do whitelistu (issue v [zapstore/zapstore](https://github.com/zapstore/zapstore)).
+
 ## Konfigurace
 
 Konfigurace se čte z ENV s prefixem `QES_` (`Qes::Config`), hodnoty a troubleshooting jsou
