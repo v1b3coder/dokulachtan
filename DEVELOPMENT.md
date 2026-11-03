@@ -178,6 +178,7 @@ přes podman-compose.
 | 17 | [UI hierarchie akcí](docs/17-ui-hierarchie-akci.md) | pravidla uspořádání tlačítek v appce |
 | 19 | [Externí ověření PDF](docs/19-overeni-pdf-externi.md) | EU DSS jen v appce |
 | 24 | [Triage issues](docs/24-triage-issues.md) | otevřené nálezy R3/R4 proti aktuálnímu kódu |
+| 25 | [Kvalifikovaný certifikát PostSignum](docs/25-kvalifikovany-certifikat-postsignum.pdf) | reálná karta: aktivace kódů, žádost o certifikát, pobočky Praha 7/8 (PDF + HTML zdroj) |
 
 
 ## Historické nástroje

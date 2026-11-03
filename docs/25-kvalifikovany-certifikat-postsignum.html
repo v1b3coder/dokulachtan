@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Kvalifikovaný certifikát PostSignum na eObčanku</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 16mm 16mm;
+    @bottom-center {
+      content: "Kvalifikovaný certifikát PostSignum na eObčanku · strana " counter(page) " / " counter(pages);
+      font-family: "DejaVu Sans", sans-serif; font-size: 7.5pt; color: #8a8f98;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 9.6pt; line-height: 1.5; color: #1f2328; margin: 0;
+  }
+  h1 { font-size: 19pt; line-height: 1.2; margin: 0 0 2mm 0; color: #10233f; }
+  .sub { font-size: 10pt; color: #5b6470; margin: 0 0 6mm 0; }
+  h2 {
+    font-size: 12.5pt; color: #10233f; margin: 8mm 0 2.5mm 0;
+    padding-bottom: 1.4mm; border-bottom: 1.6pt solid #10233f;
+    page-break-after: avoid;
+  }
+  h3 { font-size: 10.4pt; margin: 5mm 0 1.5mm 0; color: #1c3d63; page-break-after: avoid; }
+  p { margin: 0 0 2.4mm 0; }
+  ul, ol { margin: 0 0 2.6mm 0; padding-left: 5.5mm; }
+  li { margin-bottom: 1.1mm; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3.5mm 0; font-size: 8.9pt; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+  th { background: #10233f; color: #fff; text-align: left; padding: 1.8mm 2.2mm; font-weight: bold; }
+  td { padding: 1.6mm 2.2mm; border-bottom: 0.4pt solid #d5dae1; vertical-align: top; }
+  tr:nth-child(even) td { background: #f4f6f9; }
+  .box { border-left: 3.2pt solid #10233f; background: #eef2f7; padding: 3mm 3.5mm; margin: 3mm 0 4mm 0; page-break-inside: avoid; }
+  .warn { border-left-color: #b3261e; background: #fdecea; }
+  .ok { border-left-color: #1e6b3a; background: #eaf5ee; }
+  .box b { color: #10233f; }
+  .warn b { color: #b3261e; }
+  .ok b { color: #1e6b3a; }
+  .step { border: 0.5pt solid #ccd3dc; border-radius: 2mm; padding: 3mm 3.5mm; margin: 0 0 3mm 0; page-break-inside: avoid; }
+  .step .num {
+    display: inline-block; background: #10233f; color: #fff; font-weight: bold;
+    width: 6.2mm; height: 6.2mm; line-height: 6.2mm; text-align: center;
+    border-radius: 50%; font-size: 9pt; margin-right: 2mm;
+  }
+  .step .ttl { font-size: 11pt; font-weight: bold; color: #10233f; }
+  .step .where { font-size: 8.4pt; color: #5b6470; margin: 0.6mm 0 2mm 8.2mm; }
+  .say { background: #fffdf2; border: 0.5pt dashed #b9a44a; border-radius: 1.5mm; padding: 2.2mm 3mm; margin: 2mm 0; font-size: 9.2pt; }
+  .say b { color: #6b5b12; }
+  code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt; background: #f0f2f5; padding: 0.3mm 1.2mm; border-radius: 1mm; }
+  .chk { font-family: "DejaVu Sans", sans-serif; font-size: 11pt; color: #10233f; }
+  .small { font-size: 8.3pt; color: #5b6470; }
+  .pb { page-break-before: always; }
+  .nobreak { page-break-inside: avoid; }
+  .tag { display: inline-block; font-size: 7.8pt; font-weight: bold; padding: 0.4mm 1.8mm; border-radius: 1mm; color: #fff; background: #10233f; }
+  .tag.red { background: #b3261e; }
+  .tag.green { background: #1e6b3a; }
+  .tag.amber { background: #8a6a10; }
+</style>
+</head>
+<body>
+
+<h1>Kvalifikovaný certifikát PostSignum na eObčanku</h1>
+<p class="sub">Návod krok za krokem pro kartu <b>eOP CZE v2.1</b>, č. <b>210910093</b> — stav: neaktivovaná<br>
+Praha 7 / Praha 8 · Linux, Android, macOS · zpracováno 3. 11. 2026</p>
+
+<div class="box warn">
+<b>Nejdřív to nejdůležitější: co máš a co potřebuješ</b>
+<p style="margin-top:2mm">Máš <b>smlouvu s PostSignum na komerční (nekvalifikovaný) certifikát</b> a ten certifikát máš uložený v aplikaci <b>iSignum na Androidu</b>.</p>
+<p><b>Komerční certifikát ale NEDÁ kvalifikovaný elektronický podpis (QES).</b> Komerční certifikát slouží k přihlašování a šifrování, ne k podpisu dokumentu s právní váhou vlastnoručního podpisu. Pro QES potřebuješ <b>kvalifikovaný certifikát</b>, jehož klíč je <b>vygenerovaný přímo v čipu</b> občanky. Ten se do čipu nedá jen tak nahrát — musí se v čipu vygenerovat.</p>
+<p style="margin-bottom:0">Takže tě nečeká „nahrátí stávajícího certifikátu“, ale <b>nová žádost o kvalifikovaný certifikát</b> s klíčem v čipu. Na to se ptá celý tenhle návod.</p>
+</div>
+
+<h2>1. Slovník — ať se domluvíš na přepážce</h2>
+<p>Terminologie je nejčastější důvod, proč se to na úřadě nebo na poště zasekne. Tady je minimum, které potřebuješ znát.</p>
+
+<div class="box">
+<b>Kolik má karta místa:</b> do čipu se vejde až <b>16 klíčů s certifikáty</b> — 4× RSA pro kvalifikované certifikáty (2048/3072/4096 b), 4× ECC pro kvalifikované (256/384/521 b), 4× RSA a 4× ECC pro autentizační. Kvalifikované klíče <b>nelze do čipu importovat ze souboru</b> — musí se vygenerovat v čipu.
+</div>
+
+<table>
+<thead><tr><th style="width:24%">Pojem</th><th>Co to je a k čemu slouží</th></tr></thead>
+<tbody>
+<tr><td><b>IOK</b><br>identifikační osobní kód</td><td>4–10 číslic. Schvaluješ jím <b>každou elektronickou identifikaci</b>. Nastavuje se <b>jen osobně na úřadu</b> společně s DOK. 3 chybná zadání = zablokováno.</td></tr>
+<tr><td><b>DOK</b><br>deblokační osobní kód</td><td>4–10 číslic. Slouží k <b>odblokování nebo změně IOK</b>. Prvotní nastavení <b>jen osobně na úřadu</b>. 10 chybných zadání = zablokováno.</td></tr>
+<tr><td><b>PUK</b></td><td>8–15 číslic. Nastavuješ jím <b>PIN a QPIN</b>. Nastavuješ ho <b>doma na PC</b>, ale až po zadání platného IOK. <b>PUK nelze odblokovat</b> — 5 chybných zadání a karta je pro podepisování nevratně mrtvá.</td></tr>
+<tr><td><b>PIN</b></td><td>5–15 číslic. Schvaluješ jím <b>správu certifikátů a klíčů</b> (vytvoření klíče, zápis certifikátu, smazání, přihlášení certifikátem). Nastavuješ ho doma po zadání PUK.</td></tr>
+<tr><td><b>QPIN</b></td><td>5–15 číslic. Schvaluješ jím <b>každý kvalifikovaný podpis</b>. Nastavuješ ho doma po zadání PUK.</td></tr>
+<tr><td><b>BOK</b></td><td>4–10 číslic. Osobní prokazování totožnosti na přepážce. S elektronickými funkcemi nesouvisí.</td></tr>
+<tr><td><b>Kvalifikovaný certifikát</b></td><td>Vydává ho kvalifikovaná certifikační autorita (PostSignum, I.CA). S klíčem v čipu a příznakem QcSSCD dává <b>QES</b> — právně rovnocenný vlastnoručnímu podpisu, platný v celé EU.</td></tr>
+<tr><td><b>Komerční certifikát</b></td><td>Nekvalifikovaný. Na přihlašování a šifrování. <b>Nedává QES.</b></td></tr>
+<tr><td><b>ID žádosti</b></td><td>Desetimístný kód (u čipu ve tvaru <code>BPxxxxxxxxxx</code>). Vznikne při generování klíče v iSignum. Bez něj certifikát na pobočce nevydají.</td></tr>
+<tr><td><b>QcSSCD</b></td><td>Příznak v certifikátu „klíč uložen v kvalifikovaném prostředku“. Jediné, co z podpisu dělá QES. Náš software ho musí ověřovat.</td></tr>
+</tbody>
+</table>
+
+<h2>2. Postup — pět kroků, dvě návštěvy</h2>
+<p>Celá cesta má pět kroků. Jen <b>dva</b> z nich jsou na přepážce, ostatní děláš doma. Pořadí je pevné — každý krok potřebuje výstup toho předchozího.</p>
+
+<div class="step nobreak">
+<span class="num">1</span><span class="ttl">Úřad ORP — aktivace DOK + IOK</span>
+<div class="where">📍 Osobně · ÚMČ Praha 7 nebo ÚMČ Praha 8 · jediný krok, který za tebe doma nikdo neudělá</div>
+<p>Tvoje karta hlásí <i>„IOK není aktivován“</i>, takže elektronické funkce jsou zatím vypnuté. Na přepážce si necháš nastavit <b>DOK i IOK</b> — vždy se zadávají jako dvojice. Přineseš občanku, úředník ověří totožnost.</p>
+<p class="small"><b>Adresy:</b> ÚMČ Praha 7 — U Průhonu 1338/38, Praha 7 (nebo Milady Horákové 2) · ÚMČ Praha 8 — U Meteoru 6, Praha 8 (Bílý dům, přízemí). V Praze to jde na <b>kterémkoli</b> úřadu městské části Praha 1–22.</p>
+<div class="say"><b>Co říct:</b> „Karta není aktivovaná, chci aktivovat elektronické funkce — nastavit DOK a IOK.“</div>
+</div>
+
+<div class="step nobreak">
+<span class="num">2</span><span class="ttl">Doma — PUK, PIN a QPIN</span>
+<div class="where">🏠 Doma · Linux / Mac / Windows · aplikace <b>eObčanka – Správce karty</b></div>
+<p>Po aktivaci na úřadě nastavíš doma tři kódy v tomto pořadí:</p>
+<ol>
+<li><b>PUK</b> — schválí se zadáním IOK z úřadu.</li>
+<li><b>PIN</b> — schválí se zadáním PUK.</li>
+<li><b>QPIN</b> — schválí se zadáním PUK.</li>
+</ol>
+<div class="box warn" style="margin:2.5mm 0 0 0">
+<b>Pozor:</b> PUK si zvol tak, aby sis ho fakt pamatoval. PUK <b>nelze odblokovat</b> — po 5 chybných zadáních už PIN ani QPIN nenastavíš a karta je pro podepisování nevratně mrtvá. PIN a QPIN naopak odblokovat lze (přes PUK).
+</div>
+</div>
+
+<div class="step nobreak">
+<span class="num">3</span><span class="ttl">Doma — klíč v čipu + ID žádosti</span>
+<div class="where">🏠 Doma · <b>iSignum</b> (Android už máš, je i pro Linux a macOS)</div>
+<p>Tohle <b>musí být hotové před návštěvou pobočky</b> — na pobočce klíč vygenerovat nelze. V iSignum vygeneruješ <b>soukromý klíč přímo v čipu</b> občanky a tím vznikne <b>ID žádosti</b> (<code>BPxxxxxxxxxx</code>).</p>
+<p>Generování klíče schvaluješ <b>PINem</b>, vytvoření žádosti o kvalifikovaný certifikát navíc <b>QPINem</b>.</p>
+<div class="say"><b>Co si poznamenat:</b> ID žádosti a přesný název, pod kterým klíč vzniká — budeš je potřebovat na pobočce.</div>
+</div>
+
+<div class="step nobreak">
+<span class="num">4</span><span class="ttl">Pobočka ČP / CzechPoint — vydání certifikátu</span>
+<div class="where">📍 Osobně · pobočka České pošty se službou Czech POINT</div>
+<p>Přijdeš s ID žádosti, smlouvou a doklady. Certifikát vydají na počkání, pak ho doma nainstaluješ.</p>
+<p class="small"><b>Adresy:</b> Praha 7 — <b>Milady Horákové 383/81</b>, 170 00 Praha 7-Holešovice · Praha 8 — <b>Burešova 1663/6</b>, 182 00 Praha 8-Kobylisy. Certifikáty vydávají <b>všechny pobočky ČP s Czech POINTem</b>.</p>
+<div class="say"><b>Co říct:</b> „Mám ID žádosti <code>BP…</code> a chci vydat kvalifikovaný certifikát pro elektronický podpis do eObčanky.“</div>
+<div class="box warn" style="margin:2.5mm 0 0 0">
+<b>Pozor:</b> CzechPoint v budově <b>ÚMČ Praha 7 elektronický podpis nezřizuje</b> — to umí jen pobočky České pošty. A certifikát nevydají bez hotového kroku 3.
+</div>
+</div>
+
+<div class="step nobreak">
+<span class="num">5</span><span class="ttl">Doma — import certifikátu</span>
+<div class="where">🏠 Doma · iSignum nebo nástroj od certifikační autority</div>
+<p>Vydaný certifikát naimportuješ do čipu pomocí iSignum (nebo nástroje, který dodá CA). Tím se certifikát spáruje s klíčem, který už v čipu je.</p>
+<p class="small">Hotovo — od té chvíle má karta kvalifikovaný certifikát a appka dokladu (dokulachtan) ji může použít pro QES.</p>
+</div>
+
+<h2 class="pb">3. Co si vzít na pobočku</h2>
+<table>
+<tr><th style="width:34%">Doklad</th><th>Poznámka</th></tr>
+<tr><td><b>Občanský průkaz s čipem</b></td><td>karta 210910093</td></tr>
+<tr><td><b>ID žádosti</b> (<code>BP…</code>)</td><td>vznikne v kroku 3 doma</td></tr>
+<tr><td><b>Smlouva o poskytování certifikačních služeb — 2×</b></td><td>podepsaná, vytištěná</td></tr>
+<tr><td><b>Údaje pro vydání certifikátu</b></td><td>vyplněný formulář</td></tr>
+<tr><td><b>Dva osobní doklady</b></td><td>občanka nebo pas jako primární + druhý doklad (řidičák, pas, rodný list…)</td></tr>
+<tr><td><b>Platební karta / hotovost</b></td><td>za vydání certifikátu se platí</td></tr>
+</table>
+<p class="small">Zmocnit zástupce nelze — musíš přijít osobně.</p>
+
+<h2>4. Přesné formulace na přepážku</h2>
+<p>Když si nejsi jistý, co říct, použij tyhle věty. Jsou krátké a míří k věci.</p>
+
+<h3>Na úřadu (krok 1)</h3>
+<div class="say">„Dobrý den, mám občanský průkaz s čipem, elektronické funkce nejsou aktivované. Chci aktivovat identifikační funkci — nastavit <b>DOK a IOK</b>.“</div>
+
+<h3>Na poště (krok 4)</h3>
+<div class="say">„Dobrý den, mám smlouvu s PostSignum, vygenerovaný klíč v čipu a ID žádosti <b>BP…</b>. Chci <b>vydat kvalifikovaný certifikát pro elektronický podpis</b> do eObčanky. Tady jsou dva osobní doklady a smlouva ve dvou vyhotoveních.“</div>
+<p class="small">Kdyby se ptali na komerční vs. kvalifikovaný: řekni, že chceš <b>kvalifikovaný pro vytváření kvalifikovaných elektronických podpisů</b> s klíčem vygenerovaným v čipu — jen ten má příznak QcSSCD a dává QES.</p>
+
+<h3>Když se něco zasekne</h3>
+<table>
+<tr><th style="width:38%">Situace</th><th>Co dělat</th></tr>
+<tr><td>„Karta není aktivovaná / IOK není nastaven“</td><td>Krok 1 — úřad ORP, DOK + IOK.</td></tr>
+<tr><td>„Smlouva nepokrývá kvalifikovaný certifikát“</td><td>Na pobočce požádej o rozšíření smlouvy; jde to při stejné návštěvě.</td></tr>
+<tr><td>„Na pobočce nejde vygenerovat klíč“</td><td>Správně — krok 3 musí být hotový doma předem.</td></tr>
+<tr><td>„Nemám ID žádosti“</td><td>Vrať se ke kroku 3, vygeneruj klíč a žádost v iSignum.</td></tr>
+<tr><td>PUK 3× špatně</td><td>PUK nelze odblokovat → nová občanka na úřadě.</td></tr>
+</table>
+<h2>5. Kdybys chtěl ušetřit jednu cestu</h2>
+<p>Existuje <b>Certifikát Online</b> — smlouvu i certifikát vyřídíš z domova, pokud máš <b>aktivovanou eObčanku a čtečku</b>. Nemusíš tedy na pobočku vůbec, krok 4 se přesune domů.</p>
+<div class="box ok">
+<b>Podmínka:</b> karta musí být aktivovaná (krok 1) a mít nastavené kódy (krok 2). Teprve pak jde Certifikát Online použít. Klíč pro kvalifikovaný certifikát se i tak generuje v čipu, takže krok 3 zůstává.
+</div>
+<p class="small">Ověř si na <code>postsignum.cz/certifikatonline</code>, jestli Online podporuje zrovna tvůj typ karty a kvalifikovaný certifikát s úložištěm v eObčance. Když ne, jdi klasicky na pobočku (krok 4).</p>
+
+<h2>6. Checklist</h2>
+<table>
+<thead><tr><th style="width:7%"></th><th style="width:55%">Krok</th><th style="width:38%">Kde</th></tr></thead>
+<tbody>
+<tr><td class="chk">☐</td><td>Úřad ORP: nastaven DOK + IOK</td><td>osobně, Praha 7/8</td></tr>
+<tr><td class="chk">☐</td><td>Doma: nastaven PUK (po IOK)</td><td>doma, Správce karty</td></tr>
+<tr><td class="chk">☐</td><td>Doma: nastaven PIN a QPIN (po PUK)</td><td>doma, Správce karty</td></tr>
+<tr><td class="chk">☐</td><td>Doma: klíč v čipu + ID žádosti</td><td>doma, iSignum</td></tr>
+<tr><td class="chk">☐</td><td>Ověřena smlouva na kvalifikovaný certifikát</td><td>pobočka / podpora</td></tr>
+<tr><td class="chk">☐</td><td>Vydán certifikát</td><td>pobočka ČP / CzechPoint</td></tr>
+<tr><td class="chk">☐</td><td>Import certifikátu do čipu</td><td>doma, iSignum</td></tr>
+<tr><td class="chk">☐</td><td>Ověřeno, že certifikát má QcSSCD a dává QES</td><td>doma, appka / pkcs11-tool</td></tr>
+</tbody>
+</table>
+
+<h2>7. Zdroje a podpora</h2>
+<ul class="small">
+<li><b>Podpora:</b> PostSignum <b>210 123 456</b> · DIA (eObčanka) <b>+420 227 023 444</b> · CzechPoint helpdesk <b>+420 222 13 13 13</b></li>
+<li>info.identita.gov.cz/eop — <i>Občanský průkaz s čipem</i>, <i>Kódy pro ochranu</i>, <i>Vytváření elektronických podpisů</i></li>
+<li>postsignum.cz — <i>Kvalifikované certifikáty</i>, <i>Postup pro získání certifikátu</i>, <i>Pobočky České pošty</i></li>
+<li>postaonline.cz — detail poboček Praha 7 (Milady Horákové 383/81) a Praha 8 (Burešova 1663/6)</li>
+<li>praha7.cz, praha8.cz — CzechPoint a oddělení osobních dokladů</li>
+<li>Ověřeno na kartě 210910093: typ <b>eOP CZE v2.1</b>, hláška „IOK není aktivován“</li>
+</ul>
+
+<div class="box" style="margin-top:5mm">
+<b>Poznámka pro projekt dokulachtan:</b> tenhle report je zároveň dokumentace blockeru pro variantu A (čip). Bez aktivované karty a kvalifikovaného certifikátu s QcSSCD nelze reálný QES tok otestovat — do té doby platí <code>FakeCardSigner</code> s testovacím QSCD certem a <code>qes-e2e-card</code>.
+</div>
+
+</body>
+</html>
