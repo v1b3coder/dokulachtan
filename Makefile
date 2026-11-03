@@ -274,10 +274,10 @@ test-tools: ## F5: nástroje a legacy (fixtures, validate, staré negative)
 	$(MAKE) verify apk-fingerprint-test qes-test-parallel-selftest
 
 # Interní sub-targety pro CI a debug; normálně používej fáze výše.
-test-t0: test-check test-check-js ## T0: QES vrstva + JS (interní)
+test-t0: test-check test-check-js qes-test-assets ## T0: QES vrstva + JS (interní)
 	QES_DB="$${QES_DB:-qes-t0.sqlite3}" QES_SCHEMA="$${QES_SCHEMA:-qes-t0.rb}" $(MAKE) qes-test-qes
 
-test-t1: test-check ## T1: celá sada bez system (interní)
+test-t1: test-check qes-test-assets ## T1: celá sada bez system (interní)
 	QES_DB="$${QES_DB:-qes-t1.sqlite3}" QES_SCHEMA="$${QES_SCHEMA:-qes-t1.rb}" $(MAKE) qes-test-fast
 
 test-t2: test-check qes-test-assets ## T2: celá sada se system (interní)
