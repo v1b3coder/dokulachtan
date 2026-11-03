@@ -84,6 +84,10 @@ def podman(*args: str, check: bool = True, input: str | None = None) -> str:
 
 def start_app() -> None:
     podman("rm", "-f", CONTAINER, check=False)
+    # Výstupní adresář musí být zapisovatelný i pro uživatele v kontejneru
+    # (na CI se UID kontejneru nemusí rovnat UID runnera).
+    OUT.mkdir(parents=True, exist_ok=True)
+    OUT.chmod(0o777)
     podman(
         "run", "-d", "--name", CONTAINER, "--network=host",
         "-v", f"{ROOT / 'vendor' / 'docuseal'}:/app",
