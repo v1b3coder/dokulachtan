@@ -126,6 +126,11 @@ po publikaci ho zase vymaž. Nové GitHub releases publikuje Zapstore sám (inde
 po vydání stačí pushnout tag. Kdyby relay vrátil `publisher is not allowed`, patří npub
 `zapstore.yaml` do whitelistu (issue v [zapstore/zapstore](https://github.com/zapstore/zapstore)).
 
+Media (ikona, screenshoty) jde na Blossom server z `BLOSSOM_URL`; default zsp je
+`https://cdn.zapstore.dev`. URL media jsou v tagách app eventu, takže změna serveru
+znamená republikovat s `zsp publish --overwrite-release`. Procesní ENV má přednost
+před `.env`, takže při změně ji předávej explicitně (`BLOSSOM_URL=… zsp publish`).
+
 ## Konfigurace
 
 Konfigurace se čte z ENV s prefixem `QES_` (`Qes::Config`), hodnoty a troubleshooting jsou
