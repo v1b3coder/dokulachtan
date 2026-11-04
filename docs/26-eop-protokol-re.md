@@ -105,10 +105,51 @@ Pro náš případ to znamená: přidat `acssmcio-0.6.2.aar` + `smartcardio-0.1.
 do `android/app/libs/`, přes `BluetoothTerminalManager` vyhledat/spojit čtečku a
 pak posílat APDU přes `CardChannel` — přesně jak to dělá demo.
 
-**Co zůstává neznámé:** přesný bajtový layout 3bajtové hlavičky (pořadí
-command/length) a režim AES (ECB/CBC) — knihovna to má v `internal/o.class`,
-co je pravděpodobně JNI wrapper nad nativní `.so` v `smartcardio` AAR. Pro
-použití AAR to není potřeba znát.
+**Typy volání (celé API `acssmcio`, standard `javax.smartcardio`):**
+
+```
+BluetoothTerminalManager
+  TERMINAL_TYPE_ACR3901U_S1 | ACR1255U_J1 | AMR220_C | ACR1255U_J1_V2 | ACR1555U
+  IOCTL_ESCAPE = 3500
+  BATTERY_STATUS_NOT_SUPPORTED | NONE | LOW | FULL | USB_PLUGGED
+  DEVICE_INFO_SYSTEM_ID | MODEL_NUMBER_STRING | SERIAL_NUMBER_STRING
+    | FIRMWARE_REVISION_STRING | HARDWARE_REVISION_STRING
+    | SOFTWARE_REVISION_STRING | MANUFACTURER_NAME_STRING
+  scan(callback) / getTerminals()
+
+CardTerminal
+  connect(mode) -> Card        // "direct" = napájení karty
+  isCardPresent() -> boolean
+  getName() -> String
+
+Card
+  getATR() -> ATR
+  transmitControlCommand(controlCode, command) -> byte[]
+  disconnect(reset)
+
+CardChannel
+  transmit(CommandAPDU) -> ResponseAPDU
+
+TransmitOptions
+  isT0GetResponse / setT0GetResponse
+  isT1GetResponse / setT1GetResponse
+  isT1StripLe / setT1StripLe
+
+CardStateMonitor
+  CARD_STATE_UNKNOWN | ABSENT | PRESENT
+```
+
+**Co zůstává neznámé:**
+
+1. **Escape payload** — `transmitControlCommand` bere payload od volajícího, v
+   knihovně není konstanta. V demo appce je to uživatelský vstup (`Control Code`
+   = `IOCTL_ESCAPE` = 3500, payload ze `Script`/`Input`).
+2. **Režim AES** (ECB/CBC) — v `internal/o.class`, pravděpodobně JNI wrapper nad
+   nativní `.so`. Pro použití AAR to není potřeba znát.
+
+Pro appku to znamená: psát proti standardnímu `javax.smartcardio` a
+`transmitControlCommand` volat jen pro escape příkazy, které stejně neznáme — APDU
+cesta (`CardChannel.transmit`) je plně popsaná výše.
 
 ## 5. Reprodukce
 
