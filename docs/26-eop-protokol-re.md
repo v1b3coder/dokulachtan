@@ -85,6 +85,41 @@ odvozené:
 - Zápis na `ae448003`, odpověď na `ae448002` (notify), druhá notify
   `ae448004`.
 
+**Layout framu je definitivně z jadx (`internal/n.java`):**
+
+```java
+public static byte[] a(byte cmd, byte[] data, int len) {
+    int payloadLen = 1;              // do délky se počítá i cmd bajt
+    int totalLen = 4;
+    if (data != null && len > 0) {
+        payloadLen = len + 1;
+        totalLen = 4 + len;
+    }
+    byte[] out = new byte[totalLen];
+    out[0] = cmd;
+    out[1] = (byte) (payloadLen & 255);       // délka low
+    out[2] = (byte) ((payloadLen >> 8) & 255); // délka high
+    if (data != null && len > 0) {
+        System.arraycopy(data, 0, out, 3, len);
+    }
+    out[totalLen - 1] = b.a(0, totalLen - 1, out);  // XOR checksum
+    return out;
+}
+```
+
+Tedy **`[cmd][len_lo][len_hi][data][XOR]`**, kde **`len = 1 + len(data)`**.
+
+| cmd | Význam |
+|---|---|
+| `0x00` | APDU na kartu |
+| `0x14` | control/escape wrapper |
+| `0x18` | card status (notifikace) |
+| `0x65` | escape příkaz (power) |
+| `0x72` | šifrovaný frame (AES) |
+
+**AES:** `o.a(key, data)` nad 16bajtovým klíčem; default `FF × 16`, v demo
+appce `MasterKeyDialog` (`a(byte[])` vyžaduje přesně 16 B).
+
 **Round-trip ověřen 2026-11-04** přes BlueZ na počítači: zápis na `AE448003`
 (notify na `AE448002` i `AE448004`) vrátil notifikaci
 
@@ -92,10 +127,9 @@ odvozené:
 9F 02 00 06 9B        9F ^ 02 ^ 00 ^ 06 = 9B  (checksum sedí)
 ```
 
-Tím je potvrzené, že **checksum je XOR předchozích bajtů** a reader na zápis
-odpovídá. Vrácená hodnota je ale *status*, ne výsledek APDU — karta v readeru
-nebyla napájená/vybraná (protokol má navíc escape/control vrstvu,
-`BluetoothTerminalManager.IOCTL_ESCAPE` = `3500`).
+Tím je framing potvrzený. Vrácená hodnota `0x9F` je ale *status* (`0x9F & 0x7F`
+= 31, ani APDU `0x00`, ani status `0x18`), ne výsledek APDU — karta nebyla
+napájená/vybraná, proto se čeká na `0x18` a retry klesá.
 
 **Aplikace framing neimplementuje:** knihovna vystavuje standardní
 `javax.smartcardio` (`Card`, `CardChannel`, `CommandAPDU`) a framing i AES řeší
