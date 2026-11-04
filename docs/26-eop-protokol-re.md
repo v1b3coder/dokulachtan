@@ -15,7 +15,7 @@ Datum: 2026-11-03. Prostředí: Linux Mint 22, BlueZ 5.72, `eobcanka 3.5.2`.
 | Identifikace karty | ✅ eOP vydaná po 7/2018 | ATR v pcsc-tools DB |
 | Kartový APDU protokol | ✅ odposlechnutý (níže) | shim nad `libsa2v1czep11.so` |
 | BLE GATT profil čtečky | ✅ vyenumerovaný (níže) | BlueZ `busctl` nad D-Bus |
-| BLE framing (obal APDU) | ❌ neznámý | 5 hypotéz bez odpovědi |
+| BLE framing (obal APDU) | ✅ uvnitř ACS EVK | AES-128 + XOR checksum, knihovna dává `javax.smartcardio` |
 | Podpisový protokol | ❌ nezachytitelný | karta nemá klíč/cert (`C_FindObjects` = 0) |
 
 ## 2. Kartový APDU protokol
@@ -71,15 +71,32 @@ BlueZ ji vidí jen v LE-only scanu (`scan.transport le`), ne v dual režimu.
 Ověřené čtení přes D-Bus (`busctl`): Manufacturer `ACS`, Model
 `acr3901u-s1-016073`, Serial `RR305-016073`, Firmware `V1F23`, Battery 254.
 
-## 4. Co chybí
+## 4. BLE framing
 
-1. **BLE framing** — jak se APDU obaluje do zápisu na `ae448003`. Zkoušené hypotézy
-   (raw, 1bajtová délka, 2bajtová BE/LE, command byte + délka) nevrátily
-   notifikaci. Potřebné vzít z ACS BLE EVK (`acssmcio`) nebo odposlechnout
-   oficiální Android appku (HCI snoop log).
-2. **Podpisový protokol** — karta v tomto stavu nemá žádný objekt
-   (`C_FindObjects` = 0 pro cert/privkey/pubkey/data), takže `C_Sign` se nikdy
-   nezavolá. Bez karty s podpisovým certifikátem ho nezachytíme.
+ACS publikuje framing **uvnitř EVK knihovny** `acssmcio` (AAR), ne jako samostatný
+spec. Z `acssmcio-0.6.2-android21` (`com/acs/smartcardio/internal/n.class`) je
+odvozené:
+
+- **AES-128** na datech (`internal/o.a`), klíč = 16bajtový master key; výchozí
+  `FF × 16`, v demo appce se dá změnit (`MasterKeyDialogFragment`).
+- **Frame** = 3bajtová hlavička s příkazem + data + **XOR checksum**;
+  celkem `4 + len` bajtů. Checksum = XOR všech bajtů framu kromě posledního
+  (`b.a(int,int,byte[])`).
+- Zápis na `ae448003`, odpověď na `ae448002` (notify), druhá notify
+  `ae448004`.
+
+**Aplikace framing neimplementuje:** knihovna vystavuje standardní
+`javax.smartcardio` (`Card`, `CardChannel`, `CommandAPDU`) a framing i AES řeší
+uvnitř. Demo (`BLETest`) volá jen `card.getATR()` a `channel.transmit(new CommandAPDU(...))`.
+
+Pro náš případ to znamená: přidat `acssmcio-0.6.2.aar` + `smartcardio-0.1.7.aar`
+do `android/app/libs/`, přes `BluetoothTerminalManager` vyhledat/spojit čtečku a
+pak posílat APDU přes `CardChannel` — přesně jak to dělá demo.
+
+**Co zůstává neznámé:** přesný bajtový layout 3bajtové hlavičky (pořadí
+command/length) a režim AES (ECB/CBC) — knihovna to má v `internal/o.class`,
+co je pravděpodobně JNI wrapper nad nativní `.so` v `smartcardio` AAR. Pro
+použití AAR to není potřeba znát.
 
 ## 5. Reprodukce
 
@@ -109,6 +126,7 @@ busctl introspect org.bluez /org/bluez/hci0/dev_<MAC>/service0009/char000a
 
 - **Varianta A přes USB OTG** je plně podložená: CCID spec je veřejná a kartový
   protokol výše je odposlechnutý. Chybí jen CCID implementace pro Android.
-- **Varianta A přes BLE** potřebuje navíc BLE framing (odstavec 4.1).
+- **Varianta A přes BLE** je podložená ACS EVK (`acssmcio`): AAR dává
+  `javax.smartcardio`, framing i AES řeší uvnitř. Chybí jen obstarat AAR.
 - MOI Podpisové SDK zůstává nejkratší cestou (`PLAN.md` 5.2); tento dokument je
   záložní cesta a zároveň důkaz, že protokol není veřejně dokumentovaný.
