@@ -253,9 +253,10 @@ function mapSignature(signature: DssSignature, qualification: string): PdfVerifi
     // ten je důvěryhodný stejně jako `QESig`/`AdESig`, ale nesmí se zaměnit.
     trusted: indication === 'TOTAL_PASSED' && qualification.includes('Sig'),
     coverage: coverageFor(signature.SignatureScope),
-    common_name: signature.SignedBy ?? null,
-    subject: chain[0] ?? null,
-    issuer: chain[1] ?? null,
+    name: signature.SignedBy ?? null,
+    // E-maily ani strukturované jméno DSS nevrací; z certu je má jen server.
+    emails: [],
+    issuer_name: chain[1] ?? null,
     serial: null,
     signing_time: signature.SigningTime ?? null,
     not_before: null,

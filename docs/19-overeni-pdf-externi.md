@@ -76,7 +76,7 @@ to stejný vzor jako volba úrovně v S11.
 | 1 | **Badge provider** | „Ověřeno: DocuSeal“ / „Ověřeno: EU DSS“ |
 | 2 | Velký verdikt | existující texty; u `eu_dss` upravené (níže) |
 | 3 | Karta souboru | název, velikost, datum; `origin` jen u lokálního |
-| 4 | Karta „Podepsal“ | CN, issuer, level, čas, coverage, trusted |
+| 4 | Karta „Podepsal“ | jméno, e-maily, vydavatel, level, čas, coverage, trusted |
 | 5 | Karta „Kontrola“ | intact, změny, coverage, revokace, pečeť |
 | 6 | Karta „Externí ověření“ | jen `eu_dss`: „PDF bylo odesláno na servery Evropské komise (EU DSS).“ |
 | 7 | Seznam podpisů | beze změny (u `eu_dss` jen QES, bez pečeti) |
@@ -131,6 +131,8 @@ Externí report se neukládá, takže se v webu neobjeví.
   - `provider: "eu_dss"`, `provider_name: "EU DSS"`, `provider_url: EU_DSS_URL`,
   - `origin: "unknown"`, `seal: { present, trusted: false, count }`,
   - `signatures` jen QES (pečeť a timestamp se agregují zvlášť),
+  - `name` = `SignedBy`, `emails` = `[]` (DSS e-maily nevrací), `issuer_name` = CN vydavatele
+    z `CertificateChain`; `chain` zůstává pro technické detaily,
   - `revocation` z `SubIndication` (`REVOKED` → `revoked`, `TOTAL_PASSED` → `good`,
     jinak `unknown`; bez podpisů `not_checked`),
   - `level` z `SignatureQualification` (`QESig` → `qes`, `AdESig` → `ades`, jinak `none`),
@@ -154,6 +156,8 @@ Externí report se neukládá, takže se v webu neobjeví.
 
 ### 4.3 `src/lib/verifyPdf.ts`
 
+- `signatureTitle` = `name` (jinak popis druhu podpisu), `signatureIssuer` = `issuer_name`
+  (jinak „neznámý“), `signatureEmails` = všechny e-maily jako jeden řádek,
 - `verdictView` rozlišuje `provider` (externí texty výše),
 - `canStore` jen `provider === 'local' && intact && !modified && !stored`,
 - `originLabel('unknown')` → „Původ neověřen“,

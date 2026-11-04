@@ -115,8 +115,11 @@ ověření a navíc uloží PDF do složky „Verified documents“. Uloží se 
       "trusted": true,
       "coverage": "full",
       "common_name": "Jan Novák",
-      "subject": "CN=Jan Novák, O=Firma s.r.o., C=CZ",
-      "issuer": "CN=PostSignum Qualified CA 4, O=PostSignum, C=CZ",
+      "name": "Jan Novák",
+      "emails": ["jan@firma.cz"],
+      "issuer_name": "PostSignum Qualified CA 4 · Česká pošta, s.p. · CZ",
+      "subject": "C=CZ · O=Firma s.r.o. · CN=Jan Novák",
+      "issuer": "C=CZ · O=Česká pošta, s.p. · CN=PostSignum Qualified CA 4",
       "serial": "0x1A2B3C",
       "signing_time": "2026-10-22T09:15:00Z",
       "not_before": "2025-01-01T00:00:00Z",
@@ -146,6 +149,10 @@ Uložení (`POST /api/qes/verified_documents`) vrátí stejný report a navíc:
 
 Poznámky:
 
+- `signatures[].name` = jméno z certifikátu (CN, jinak givenName + surname), `emails` = všechny e-maily
+  (SAN rfc822Name + `emailAddress` v předmětu, bez duplicit; certifikát jich může mít víc),
+  `issuer_name` = lidsky čitelný vydavatel (CN, OU, O, C); `common_name`, `subject` a `issuer`
+  zůstávají technické (plné DN s UTF-8 hodnotami) pro technické detaily;
 - `signatures[].trusted` = řetěz k `QES_VERIFICATION_TRUST_ROOTS` (platí pro `kind: "qes"`, tj. `ETSI.CAdES.detached`);
   u `kind: "seal"` je vždy `false` — pečeť má vlastní `seal.trusted` proti certům účtu;
 - `seal` = agregát z `Qes::PdfiumTrust.report` (`adbe.pkcs7.detached`, certy účtu DocuSeal);
@@ -229,8 +236,11 @@ module Qes
 end
 ```
 
-`signature_payload` jen vybere `kind`, `level`, `intact`, `trusted`, `coverage`, `common_name`, `subject`,
-`issuer`, `serial`, `signing_time`, `not_before`, `not_after`, `chain`. `origin` je `docuseal`, když
+`signature_payload` jen vybere `kind`, `level`, `intact`, `trusted`, `coverage`, `common_name`, `name`, `emails`,
+`issuer_name`, `subject`, `issuer`, `serial`, `signing_time`, `not_before`, `not_after`, `chain`. `name`, `emails`
+a `issuer_name` počítá `Qes::CertificateInfo` z certifikátu (`display_name`, `emails`, `issuer_name`);
+`subject` a `issuer` jsou plné DN s UTF-8 hodnotami (`subject_text`, `issuer_text`), ne `to_s`
+(`/C=CZ/…` escapuje non-ASCII bajty). `origin` je `docuseal`, když
 `CompletedDocument` (scoped na `account`) má stejný `sha256`; jinak `external`. `seal.trusted` se
 počítá z `Qes::PdfiumTrust.report` proti `Accounts.load_trusted_certs(account)`, zatímco `signatures[].trusted`
 proti `QES_VERIFICATION_TRUST_ROOTS` (dvě různé důvěry). `messages` patří k pečeti (`seal`), ne k podpisu
@@ -243,7 +253,9 @@ podepisujícího — texty „signed with trusted certificate“ u QES by jinak 
 | `app/controllers/api/qes_verifications_controller.rb` | **nový**: upload + ověření + JSON; `store` navíc uloží PDF | 100 |
 | `app/lib/qes/verifier.rb` | **nový**: orchestrace `Qes::Validator` + `Qes::PdfiumTrust` + verdikt + `origin` | 80 |
 | `app/lib/qes/verified_documents.rb` | **nový**: template ve složce „Verified documents“ + report v preferences | 50 |
-| `app/lib/qes/validator.rb` | `verify_one`: `kind`, `common_name` (CN), `subject` (plný subject), `issuer`, `serial`, `not_before`, `not_after`, `chain`, `trusted` jen pro `qes`; `call`: `modified`, `trusted_certs:`; `pdfium_report`: `verified`, `trusted`, `modified` | 35 |
+| `app/lib/qes/certificate_info.rb` | `issuer_name` (CN, OU, O, C), `emails` (SAN + `emailAddress`), `subject_text`/`issuer_text` (plné DN s UTF-8), `display_name`/`subject_email` nad `to_a` s UTF-8 hodnotami (místo BINARY) | 25 |
+| `app/lib/qes/certificate_name.rb` | **nový**: `display` (vydavatel bez typů), `format` (DN s typy), `value`, `utf8` z `to_a` | 40 |
+| `app/lib/qes/validator.rb` | `verify_one`: `kind`, `common_name` (CN), `name` (CN, jinak givenName + surname), `emails`, `issuer_name`, `subject`/`issuer` (plné DN s UTF-8), `serial`, `not_before`, `not_after`, `chain`, `trusted` jen pro `qes`; `call`: `modified`, `trusted_certs:`; `pdfium_report`: `verified`, `trusted`, `modified` | 40 |
 | `app/lib/qes/pdf_source.rb` | `validate!(data, allow_signed: false)` | 2 |
 | `app/lib/qes.rb` | `trust_roots` (signing), `verification_trust_roots` (ověření) a `tsa_trust_roots` | 10 |
 | `lib/verify_pdf_signature.rb` | **bit-identický s upstreamem** (nulový diff); `Qes::PdfiumTrust` ho jen volá | 0 |
@@ -287,7 +299,7 @@ existuje (tj. template vznikl uložením ověřeného PDF). Nic se nepřepočít
   názvem.
 - Panel zobrazuje verdikt (`valid` / `valid_untrusted` / `valid_unqualified` / `invalid` /
   `unsigned`; u `invalid` rozliší `modified`), úroveň, origin, coverage, `validated_at`, `stored_at`,
-  pečeť, revokaci (`not_checked`), seznam podpisů (CN, issuer, čas, INTACT, trusted u QES)
+  pečeť, revokaci (`not_checked`), seznam podpisů (jméno, e-maily, vydavatel, čas, INTACT, trusted u QES)
   a rozbalitelné technické detaily (subject, serial, chain, trusted roots, messages, SHA-256).
 - Žádná nová tabulka ani endpoint pro čtení reportu; report zůstává v `preferences`.
 
@@ -308,15 +320,16 @@ S14 a S15 mohou být v jednom souboru `app/verify-pdf.tsx` (stejně jako S11/S12
 - velký stav: „Podpis je platný (QES/AdES)“, „Podpis je platný, ale certifikát není důvěryhodný“,
   „PDF je podepsané, ale ne kvalifikovaným podpisem“, „PDF bylo po podpisu změněno“,
   „PDF není podepsané“;
-- „Podepsal: Jan Novák“ / „Vydal: PostSignum Qualified CA 4“ / „Datum podpisu: …“ /
+- „Podepsal: Jan Novák“ / „E-mail: jan@firma.cz“ (všechny e-maily z certifikátu, teoreticky víc) /
+  „Vydal: PostSignum Qualified CA 4 · Česká pošta, s.p. · CZ“ / „Datum podpisu: …“ /
   „Úroveň: QES/AdES“ / „Pokrytí: celý dokument / částečné / žádné“ (u `partial` s `modified: false`
   jde o LTV data po podpisu, ne o změnu obsahu);
 - „Pečeť DocuSealu: ověřena / neověřená“ (jen když `seal.present`);
 - „Revokace: neověřeno“ (`revocation`, v1 vždy `not_checked`);
 - „PDF z DocuSealu“ / „PDF z jiného zdroje“ (`origin`);
 - „PDF bylo po podpisu změněno“ (jen když `modified`);
-- seznam podpisů (u vícenásobných podpisů), každý: CN, úroveň, čas, issuer, INTACT/neplatný,
-  důvěryhodný/nedůvěryhodný (u `kind: "qes"`), u `kind: "seal"` „pečeť DocuSealu“;
+- seznam podpisů (u vícenásobných podpisů), každý: jméno, úroveň, čas, e-maily, vydavatel,
+  INTACT/neplatný, důvěryhodný/nedůvěryhodný (u `kind: "qes"`), u `kind: "seal"` „pečeť DocuSealu“;
 - „Technické detaily“: `chain`, `serial`, `not_before`, `not_after`, `trusted_roots`, `messages`;
 - „Uložit do DocuSealu“ (jen když `intact && !modified` a ještě není uložené) →
   `POST /api/qes/verified_documents`; po úspěchu „Uloženo do složky Verified documents“;
@@ -345,9 +358,9 @@ export interface PdfVerificationSignature {
   intact: boolean;
   trusted: boolean;
   coverage: 'full' | 'partial' | 'none';
-  common_name: string | null;
-  subject: string | null;
-  issuer: string | null;
+  name: string | null;
+  emails: string[];
+  issuer_name: string | null;
   serial: string | null;
   signing_time: string | null;
   not_before: string | null;
@@ -477,7 +490,12 @@ do ActiveStorage/Documents se dostane jen na tlačítko „Uložit do DocuSealu�
 - `GET /templates/:id/qes_verification` s `Turbo-Frame: modal` → iframe na proxy PDF;
 - stažení PDF z panelu → `Content-Disposition: attachment`.
 
-`spec/lib/qes/verifier_spec.rb`: verdikt pro všech 5 stavů, `seal` agregace, `origin` scoped na účet.
+`spec/lib/qes/verifier_spec.rb`: verdikt pro všech 5 stavů, `seal` agregace, `origin` scoped na účet,
+`name`/`emails`/`issuer_name` z certifikátu (včetně SAN e-mailů) a `subject`/`issuer` s UTF-8
+hodnotami (žádné `/C=CZ/…` ani `\xC4\x8C`).
+
+`spec/lib/qes/certificate_info_spec.rb`: `emails` (všechny SAN + `emailAddress`, bez duplicit),
+`issuer_name` (CN, OU, O, C, hodnota s čárkou zůstane celá) a UTF-8 hodnoty z `to_a`.
 
 `spec/lib/qes/pipeline_spec.rb` (rozšíření): `report[:signatures].first` má `kind`, `subject`, `issuer`,
 `serial`, `not_before`, `not_after`, `chain`; `report[:modified]` je `false` pro podepsané PDF a `true`
@@ -512,7 +530,7 @@ PDF opouští stroj; nespouštět v běžném CI.
 - `__tests__/pdfApi.test.ts`: `verifyDocument` pošle multipart na `/api/qes/verify`,
   `storeVerifiedDocument` na `/api/qes/verified_documents`, parsuje report, `422` → `PdfApiError`;
 - `__tests__/verifyPdf.test.ts`: všech 5 verdiktů → české texty/barvy, `canStore`,
-  `shareTargetRoute` (jen u dvou aliasů);
+  `signatureTitle`/`signatureEmails`/`signatureIssuer`, `shareTargetRoute` (jen u dvou aliasů);
 - emulátor: Home → „Ověřit PDF“ → podepsané PDF → zelený verdikt; nepodepsané → šedý;
   přidaná stránka → červený; share sheet „Podepsat PDF“ i open-with „Ověřit PDF“ → S14 → volba
   „Podepsat PDF“ / „Ověřit PDF“ → stejný výsledek (cold start i warm start).

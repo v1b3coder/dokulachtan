@@ -108,8 +108,22 @@ export function signatureKindLabel(signature: PdfVerificationSignature): string 
   }
 }
 
+// Jméno podepisujícího z certifikátu: CN, jinak givenName + surname
+// (server posílá hotové `name`; u EU DSS je to `SignedBy`).
 export function signatureTitle(signature: PdfVerificationSignature): string {
-  return signature.common_name || signature.subject || signatureKindLabel(signature);
+  return signature.name || signatureKindLabel(signature);
+}
+
+// Vydavatel certifikátu lidsky (server posílá `issuer_name`, např.
+// „PostSignum Qualified CA 4 · Česká pošta, s.p. · CZ“); raw `/C=CZ/…`
+// zůstává jen v reportu pro technické detaily.
+export function signatureIssuer(signature: PdfVerificationSignature): string {
+  return signature.issuer_name || 'neznámý';
+}
+
+// Všechny e-maily z certifikátu (SAN, teoreticky víc adres) jako jeden řádek.
+export function signatureEmails(signature: PdfVerificationSignature): string {
+  return signature.emails.join(', ');
 }
 
 export function formatBytes(bytes: number): string {

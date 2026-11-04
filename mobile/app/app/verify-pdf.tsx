@@ -35,6 +35,8 @@ import {
   formatDate,
   originLabel,
   revocationLabel,
+  signatureEmails,
+  signatureIssuer,
   signatureKindLabel,
   signatureTitle,
   verdictBackground,
@@ -220,6 +222,7 @@ export default function VerifyPdfScreen() {
 
   const view = report ? verdictView(report) : null;
   const signer = report?.signatures.find((signature) => signature.kind === 'qes');
+  const signerEmails = signer ? signatureEmails(signer) : '';
   const external = provider === 'eu_dss';
   const canVerify = (!external || consent) && (external || !!settings);
 
@@ -267,7 +270,8 @@ export default function VerifyPdfScreen() {
             <View style={styles.card}>
               <Text style={styles.label}>Podepsal</Text>
               <Text style={styles.value}>{signatureTitle(signer)}</Text>
-              <Text style={styles.muted}>{signer.issuer || 'Neznámý vydavatel'}</Text>
+              {signerEmails ? <Text style={styles.muted}>E-mail: {signerEmails}</Text> : null}
+              <Text style={styles.muted}>Vydal: {signatureIssuer(signer)}</Text>
               <Text style={styles.muted}>
                 {levelLabel(signer.level)} · {formatDate(signer.signing_time)} ·{' '}
                 {coverageLabel(report.coverage)}
@@ -316,19 +320,24 @@ export default function VerifyPdfScreen() {
           {report.signatures.length > 0 ? (
             <View style={styles.card}>
               <Text style={styles.label}>Podpisy ({report.signatures.length})</Text>
-              {report.signatures.map((signature, index) => (
-                <View key={`${signature.serial ?? signature.kind}-${index}`} style={styles.signature}>
-                  <Text style={styles.value}>{signatureTitle(signature)}</Text>
-                  <Text style={styles.muted}>
-                    {signatureKindLabel(signature)} · {levelLabel(signature.level)} ·{' '}
-                    {formatDate(signature.signing_time)}
-                  </Text>
-                  <Text style={styles.muted}>{signature.issuer || 'Neznámý vydavatel'}</Text>
-                  <Text style={signature.intact ? styles.ok : styles.error}>
-                    {signature.intact ? 'V pořádku' : 'Neplatný'}
-                  </Text>
-                </View>
-              ))}
+              {report.signatures.map((signature, index) => {
+                const emails = signatureEmails(signature);
+
+                return (
+                  <View key={`${signature.serial ?? signature.kind}-${index}`} style={styles.signature}>
+                    <Text style={styles.value}>{signatureTitle(signature)}</Text>
+                    <Text style={styles.muted}>
+                      {signatureKindLabel(signature)} · {levelLabel(signature.level)} ·{' '}
+                      {formatDate(signature.signing_time)}
+                    </Text>
+                    {emails ? <Text style={styles.muted}>E-mail: {emails}</Text> : null}
+                    <Text style={styles.muted}>Vydal: {signatureIssuer(signature)}</Text>
+                    <Text style={signature.intact ? styles.ok : styles.error}>
+                      {signature.intact ? 'V pořádku' : 'Neplatný'}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           ) : null}
 

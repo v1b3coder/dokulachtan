@@ -5,7 +5,10 @@ import {
   formatBytes,
   originLabel,
   revocationLabel,
+  signatureEmails,
+  signatureIssuer,
   signatureKindLabel,
+  signatureTitle,
   verdictView,
 } from '../src/lib/verifyPdf';
 
@@ -16,9 +19,9 @@ function signature(kind: PdfVerificationSignature['kind']): PdfVerificationSigna
     intact: true,
     trusted: true,
     coverage: 'full',
-    common_name: 'Jan Novák',
-    subject: 'CN=Jan Novák',
-    issuer: 'CN=Test CA',
+    name: 'Jan Novák',
+    emails: ['jan@firma.cz'],
+    issuer_name: 'PostSignum Qualified CA 4 · Česká pošta, s.p. · CZ',
     serial: '0x1',
     signing_time: '2026-10-22T10:00:00Z',
     not_before: '2025-01-01T00:00:00Z',
@@ -145,5 +148,22 @@ describe('verifyPdf', () => {
     expect(formatBytes(512)).toBe('512 B');
     expect(formatBytes(2048)).toBe('2.0 kB');
     expect(formatBytes(3 * 1024 * 1024)).toBe('3.0 MB');
+  });
+
+  it('shows the certificate name, all e-mails and the issuing authority', () => {
+    expect(signatureTitle(signature('qes'))).toBe('Jan Novák');
+    expect(signatureEmails({ ...signature('qes'), emails: ['jan@firma.cz', 'druhy@firma.cz'] }))
+      .toBe('jan@firma.cz, druhy@firma.cz');
+    expect(signatureIssuer(signature('qes')))
+      .toBe('PostSignum Qualified CA 4 · Česká pošta, s.p. · CZ');
+  });
+
+  it('falls back to the signature kind when the certificate has no name', () => {
+    expect(signatureTitle({ ...signature('seal'), name: null })).toBe('Pečeť DocuSealu');
+  });
+
+  it('handles a certificate without e-mail and an unknown issuer', () => {
+    expect(signatureEmails({ ...signature('qes'), emails: [] })).toBe('');
+    expect(signatureIssuer({ ...signature('qes'), issuer_name: null })).toBe('neznámý');
   });
 });

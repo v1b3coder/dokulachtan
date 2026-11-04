@@ -56,7 +56,7 @@ Nové soubory (nic z upstreamu):
 - `app/lib/qes/value_validator.rb` — kontrola formátu hodnoty `qes` pole (SPEC § 4.4)
 - `app/lib/qes/session_manager.rb` — stavový automat (SPEC § 4.3)
 - `app/lib/qes/token.rb`, `tbs_document.rb`, `cms_builder.rb`,
-  `placeholder_signed_data_creator.rb`, `certificate_info.rb`, `ltv.rb`, `dss.rb`,
+  `placeholder_signed_data_creator.rb`, `certificate_info.rb`, `certificate_name.rb`, `ltv.rb`, `dss.rb`,
   `doc_timestamp.rb`, `timestamp_token.rb`, `validator.rb`, `verifier.rb`,
   `verified_documents.rb`, `pdf_source.rb`, `embed.rb`, `seal.rb`, `result_attachments.rb`,
   `audit_page.rb`

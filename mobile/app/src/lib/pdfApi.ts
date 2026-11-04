@@ -137,9 +137,12 @@ export interface PdfVerificationSignature {
   intact: boolean;
   trusted: boolean;
   coverage: PdfCoverage;
-  common_name: string | null;
-  subject: string | null;
-  issuer: string | null;
+  // Lidsky citelna metadata certifikatu (docs/16 § 4.2): jmeno,
+  // vsechny e-maily ze SAN a vydavatel. Raw `subject`/`issuer` zustavaji
+  // jen v reportu pro technicke detaily.
+  name: string | null;
+  emails: string[];
+  issuer_name: string | null;
   serial: string | null;
   signing_time: string | null;
   not_before: string | null;

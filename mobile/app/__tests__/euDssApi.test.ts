@@ -108,8 +108,9 @@ describe('EuDssApi', () => {
     expect(result.revocation).toBe('good');
     expect(result.seal).toEqual({ present: false, trusted: false, count: 0 });
     expect(result.signatures).toHaveLength(1);
-    expect(result.signatures[0].common_name).toBe('Jan Novák');
-    expect(result.signatures[0].issuer).toBe('CN=PostSignum Qualified CA 4');
+    expect(result.signatures[0].name).toBe('Jan Novák');
+    expect(result.signatures[0].emails).toEqual([]);
+    expect(result.signatures[0].issuer_name).toBe('CN=PostSignum Qualified CA 4');
     expect(result.file.size).toBe(8);
     expect(result.file.sha256).toBe(
       'bd37485629dc3d4a0c1074d1084e75a3274e9721d050c8db691080b3b1a7a18e',
