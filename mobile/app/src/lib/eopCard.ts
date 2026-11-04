@@ -7,6 +7,16 @@
 
 export type Transmit = (apduHex: string) => Promise<string>;
 
+/** Chyba kartového protokolu s kódem, který UI umí přeložit. */
+export class EopCardError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super(code);
+    this.code = code;
+  }
+}
+
 const SELECT_AID_CHANNELS = [0x02, 0x01];
 
 /** Vrátí AID appletu odvozené z ATR, nebo null když ATR není eOP. */
@@ -69,7 +79,7 @@ export async function selectApplet(transmit: Transmit, aid: Uint8Array): Promise
     }
   }
 
-  throw new Error('applet_not_found');
+  throw new EopCardError('applet_not_found');
 }
 
 // Kanonické čtení je dvoufázové: P1 00 vrátí 2bajtovou délku, P1 01 data.
@@ -85,7 +95,7 @@ export async function readDataTag(transmit: Transmit, tag: number): Promise<Uint
       return data.data;
     }
 
-    throw new Error('data_tag_failed');
+    throw new EopCardError('data_tag_failed');
   }
 
   const direct = await sendWithData(transmit, `81 CA 01 ${hex(tag)} 00`);
@@ -103,7 +113,7 @@ export async function readDataTag(transmit: Transmit, tag: number): Promise<Uint
     }
   }
 
-  throw new Error('data_tag_failed');
+  throw new EopCardError('data_tag_failed');
 }
 
 /** Přečte číslo dokladu (tag 0x01) jako ASCII. */
@@ -127,7 +137,7 @@ async function send(transmit: Transmit, apduHex: string): Promise<number> {
   const bytes = fromHex(response);
 
   if (bytes.length < 2) {
-    throw new Error('invalid_response');
+    throw new EopCardError('invalid_response');
   }
 
   return (bytes[bytes.length - 2] << 8) | bytes[bytes.length - 1];
@@ -138,7 +148,7 @@ async function sendWithData(transmit: Transmit, apduHex: string): Promise<{ data
   const bytes = fromHex(await transmit(apduHex));
 
   if (bytes.length < 2) {
-    throw new Error('invalid_response');
+    throw new EopCardError('invalid_response');
   }
 
   return {
@@ -151,7 +161,7 @@ function fromHex(value: string): Uint8Array {
   const clean = value.replace(/\s+/g, '');
 
   if (clean.length % 2 !== 0) {
-    throw new Error('invalid_hex');
+    throw new EopCardError('invalid_hex');
   }
 
   return Uint8Array.from(clean.match(/.{2}/g) ?? [], (pair) => parseInt(pair, 16));

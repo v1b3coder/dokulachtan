@@ -1,11 +1,9 @@
 package cz.dokulachtan.signer.cardreader
 
-import android.content.Context
 import com.acs.smartcardio.BluetoothTerminalManager
+import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import javax.smartcardio.Card
 import javax.smartcardio.CardChannel
 import javax.smartcardio.CardTerminal
@@ -16,6 +14,9 @@ import javax.smartcardio.CommandAPDU
  *
  * Modul dělá jen transport: scan (LE-only), connect, device info, baterie a
  * transmit APDU. Framing i AES-128 řeší ACS knihovna, ne tenhle modul.
+ *
+ * Chyby se předávají jako `CodedException` s kódem, který UI zná
+ * (`reader_not_found`, `reader_not_connected`, `reader_error`).
  */
 class CardReaderModule : Module() {
   private var manager: BluetoothTerminalManager? = null
@@ -23,13 +24,36 @@ class CardReaderModule : Module() {
   private var card: Card? = null
   private var channel: CardChannel? = null
 
+  private fun fail(code: String, cause: Throwable? = null): Nothing {
+    throw CodedException(code, code, cause)
+  }
+
   private fun requireManager(): BluetoothTerminalManager {
-    return manager ?: BluetoothTerminalManager(appContext.reactContext ?: throw IllegalStateException("no context"))
-      .also { manager = it }
+    val context = appContext.reactContext ?: fail("reader_error")
+    return manager ?: BluetoothTerminalManager(context).also { manager = it }
   }
 
   private fun requireChannel(): CardChannel {
-    return channel ?: throw IllegalStateException("reader_not_connected")
+    return channel ?: fail("reader_not_connected")
+  }
+
+  /** Skenuje jen ACR3901U-S1 (LE-only), vrací nalezené čtečky. */
+  private fun scanFor(name: String?, timeoutMs: Int): CardTerminal? {
+    val mgr = requireManager()
+    var found: CardTerminal? = null
+
+    try {
+      mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
+        if (found == null && (name == null || t.name == name)) {
+          found = t
+        }
+      }
+      Thread.sleep(timeoutMs.toLong())
+    } finally {
+      mgr.stopScan()
+    }
+
+    return found
   }
 
   override fun definition() = ModuleDefinition {
@@ -38,64 +62,76 @@ class CardReaderModule : Module() {
     Function("scan") { timeoutMs: Int ->
       val mgr = requireManager()
       val found = mutableListOf<Map<String, String>>()
-      val latch = CountDownLatch(1)
 
-      mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
-        synchronized(found) { found.add(mapOf("name" to t.name)) }
+      try {
+        mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
+          synchronized(found) { found.add(mapOf("name" to t.name)) }
+        }
+        Thread.sleep(timeoutMs.toLong())
+      } finally {
+        mgr.stopScan()
       }
-      latch.await(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-      mgr.stopScan()
 
       synchronized(found) { found.toList() }
     }
 
     Function("connect") { name: String ->
-      val mgr = requireManager()
-      var target: CardTerminal? = null
-      val latch = CountDownLatch(1)
+      val t = scanFor(name, 15000) ?: fail("reader_not_found")
 
-      mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
-        if (t.name == name) {
-          synchronized(this) { target = t }
-          latch.countDown()
-        }
+      try {
+        val c = t.connect("direct")
+        val ch = c.basicChannel
+        terminal = t
+        card = c
+        channel = ch
+        mapOf("name" to t.name)
+      } catch (e: Exception) {
+        terminal = null
+        card = null
+        channel = null
+        fail("reader_error", e)
       }
-      latch.await(15, TimeUnit.SECONDS)
-      mgr.stopScan()
-
-      val t = target ?: throw IllegalStateException("reader_not_found")
-      val c = t.connect("direct")
-      val ch = c.basicChannel
-      terminal = t
-      card = c
-      channel = ch
-      mapOf("name" to t.name)
     }
 
     Function("deviceInfo") {
-      val t = terminal ?: throw IllegalStateException("reader_not_connected")
+      val t = terminal ?: fail("reader_not_connected")
       val mgr = requireManager()
-      mapOf(
-        "model" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_MODEL_NUMBER_STRING, 5000),
-        "serial" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_SERIAL_NUMBER_STRING, 5000),
-        "firmware" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_FIRMWARE_REVISION_STRING, 5000),
-        "manufacturer" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_MANUFACTURER_NAME_STRING, 5000),
-        "battery" to mgr.getBatteryLevel(t, 5000),
-      )
+
+      try {
+        mapOf(
+          "model" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_MODEL_NUMBER_STRING, 5000),
+          "serial" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_SERIAL_NUMBER_STRING, 5000),
+          "firmware" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_FIRMWARE_REVISION_STRING, 5000),
+          "manufacturer" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_MANUFACTURER_NAME_STRING, 5000),
+          "battery" to mgr.getBatteryLevel(t, 5000),
+        )
+      } catch (e: Exception) {
+        fail("reader_error", e)
+      }
     }
 
     Function("transmit") { apduHex: String ->
       val ch = requireChannel()
-      val apdu = apduHex.filter { !it.isWhitespace() }.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-      val response = ch.transmit(CommandAPDU(apdu))
-      response.bytes.joinToString("") { "%02X".format(it) }
+
+      try {
+        val apdu = apduHex.filter { !it.isWhitespace() }.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        ch.transmit(CommandAPDU(apdu)).bytes.joinToString("") { "%02X".format(it) }
+      } catch (e: Exception) {
+        fail("reader_error", e)
+      }
     }
 
     Function("disconnect") {
       val t = terminal
+
       if (t != null) {
-        manager?.disconnect(t)
+        try {
+          manager?.disconnect(t)
+        } catch (_: Exception) {
+          // Odpojení nesmí nechat modul ve stavu „připojeno“.
+        }
       }
+
       channel = null
       card = null
       terminal = null

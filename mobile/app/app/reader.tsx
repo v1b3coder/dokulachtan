@@ -45,7 +45,12 @@ export default function ReaderScreen() {
   }
 
   async function disconnect() {
-    await signer.finalizeSession();
+    try {
+      await signer.finalizeSession();
+    } catch {
+      // Stav se vyčistí i když odpojení selže.
+    }
+
     setInfo([]);
     setDocumentNumber(null);
     setStatus(null);
@@ -62,15 +67,7 @@ export default function ReaderScreen() {
         Režim: {fakeCard ? 'fake card (testovací cert)' : 'reálná čtečka (ACS BLE EVK)'}
       </Text>
 
-      {status ? (
-        <Text style={styles.error}>
-          {status === 'reader_not_found'
-            ? 'Čtečka nenalezena. Přepněte ji do Bluetooth režimu a zkuste to znovu.'
-            : status === 'no_qualified_certificate'
-              ? 'Karta nemá nahraný kvalifikovaný certifikát. Podpis zatím není možný.'
-              : status}
-        </Text>
-      ) : null}
+      {status ? <Text style={styles.error}>{MESSAGES[status] ?? status}</Text> : null}
 
       {info.length > 0 ? (
         <View style={styles.card}>
@@ -98,6 +95,16 @@ export default function ReaderScreen() {
     </ScrollView>
   );
 }
+
+const MESSAGES: Record<string, string> = {
+  reader_not_found: 'Čtečka nenalezena. Přepněte ji do Bluetooth režimu a zkuste to znovu.',
+  reader_not_connected: 'Čtečka není připojená. Připojte ji znovu.',
+  reader_disconnected: 'Čtečka se odpojila. Připojte ji znovu.',
+  applet_not_found: 'Karta neodpovídá jako eObčanka. Zkontrolujte, že je vložená správná karta.',
+  data_tag_failed: 'Kartu se nepodařilo přečíst. Zkuste to znovu.',
+  no_qualified_certificate: 'Karta nemá nahraný kvalifikovaný certifikát. Podpis zatím není možný.',
+  reader_error: 'Chyba čtečky. Zkuste to znovu.',
+};
 
 const styles = StyleSheet.create({
   container: { padding: 24, gap: 10, backgroundColor: '#faf7f5', flexGrow: 1 },

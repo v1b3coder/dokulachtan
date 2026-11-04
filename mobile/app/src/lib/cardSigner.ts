@@ -11,7 +11,7 @@ import {
   transmitApdu,
   type CardDeviceInfo,
 } from '../../modules/dokulachtan-card-reader';
-import { aidFromAtr, readDocumentNumber, selectApplet } from './eopCard';
+import { aidFromAtr, EopCardError, readDocumentNumber, selectApplet } from './eopCard';
 import { parseP12 } from './crypto/p12';
 import { signSignedAttrs, toBase64 } from './crypto/softwareSigner';
 import { TEST_P12_PASSWORD, TEST_QSCD_P12_BASE64 } from './testCertificate';
@@ -56,21 +56,21 @@ export class AcsCardSigner implements CardSigner {
   private info: CardDeviceInfo | null = null;
 
   async initializeSession(): Promise<void> {
-    const readers = await scanCardReaders();
+    const readers = await withCardErrors(() => scanCardReaders());
 
     if (readers.length === 0) {
       throw new CardSignerError('reader_not_found');
     }
 
-    const reader = await connectCardReader(readers[0].name);
+    const reader = await withCardErrors(() => connectCardReader(readers[0].name));
 
     this.readerName = reader.name;
-    this.info = await cardDeviceInfo();
+    this.info = await withCardErrors(() => cardDeviceInfo());
   }
 
   async listContainers(): Promise<CardContainer[]> {
     if (!this.readerName) {
-      throw new CardSignerError('reader_not_connected');
+      throw new CardSignerError('reader_disconnected');
     }
 
     // Karta bez certu: žádný kontejner k podpisu.
@@ -86,7 +86,12 @@ export class AcsCardSigner implements CardSigner {
   }
 
   async finalizeSession(): Promise<void> {
-    await disconnectCardReader();
+    try {
+      await disconnectCardReader();
+    } catch {
+      // Odpojení nesmí nechat appku ve stavu „připojeno“.
+    }
+
     this.readerName = null;
     this.info = null;
   }
@@ -94,7 +99,7 @@ export class AcsCardSigner implements CardSigner {
   /** Číslo dokladu z čipu (tag 0x01), čitelné bez PINu. */
   async readDocumentNumber(): Promise<string> {
     if (!this.readerName) {
-      throw new CardSignerError('reader_not_connected');
+      throw new CardSignerError('reader_disconnected');
     }
 
     // ATR se čte přes PC/SC vrstvu knihovny, tady ho nahradíme konstantou
@@ -102,16 +107,48 @@ export class AcsCardSigner implements CardSigner {
     const aid = aidFromAtr(ATR_EOP);
 
     if (!aid) {
-      throw new CardSignerError('no_qualified_certificate');
+      throw new CardSignerError('applet_not_found');
     }
 
-    await selectApplet(transmitApdu, aid);
+    return withCardErrors(async () => {
+      await selectApplet(transmitApdu, aid);
 
-    return readDocumentNumber(transmitApdu);
+      return readDocumentNumber(transmitApdu);
+    });
   }
 
   get deviceInfo(): CardDeviceInfo | null {
     return this.info;
+  }
+}
+
+const CARD_READER_CODES = new Set([
+  'reader_not_found',
+  'reader_disconnected',
+  'reader_error',
+]);
+
+// Přeloží chybu transportu nebo kartového protokolu na kód, který UI zná.
+async function withCardErrors<T>(action: () => Promise<T>): Promise<T> {
+  try {
+    return await action();
+  } catch (err) {
+    if (err instanceof CardSignerError) {
+      throw err;
+    }
+
+    if (err instanceof EopCardError) {
+      throw new CardSignerError(err.code);
+    }
+
+    // Kódy z nativního modulu (CodedException) už UI zná.
+    const code = (err as { code?: unknown }).code;
+
+    if (typeof code === 'string' && CARD_READER_CODES.has(code)) {
+      throw new CardSignerError(code);
+    }
+
+    throw new CardSignerError('reader_error');
   }
 }
 
