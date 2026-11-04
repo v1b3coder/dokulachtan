@@ -151,8 +151,8 @@ Poznámky:
 
 - `signatures[].name` = jméno z certifikátu (CN, jinak givenName + surname), `emails` = všechny e-maily
   (SAN rfc822Name + `emailAddress` v předmětu, bez duplicit; certifikát jich může mít víc),
-  `issuer_name` = lidsky čitelný vydavatel (CN, OU, O, C); `common_name`, `subject` a `issuer`
-  zůstávají technické (plné DN s UTF-8 hodnotami) pro technické detaily;
+  `issuer_name` = lidsky čitelný vydavatel (CN, OU, O, C); `common_name` zůstává jen CN,
+  `subject` a `issuer` plné DN s UTF-8 hodnotami pro technické detaily;
 - `signatures[].trusted` = řetěz k `QES_VERIFICATION_TRUST_ROOTS` (platí pro `kind: "qes"`, tj. `ETSI.CAdES.detached`);
   u `kind: "seal"` je vždy `false` — pečeť má vlastní `seal.trusted` proti certům účtu;
 - `seal` = agregát z `Qes::PdfiumTrust.report` (`adbe.pkcs7.detached`, certy účtu DocuSeal);
