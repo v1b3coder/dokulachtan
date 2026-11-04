@@ -1,6 +1,6 @@
 # 16 — Ověření PDF
 
-Status: **implementováno a nasazeno** (2026-10-22) — produkční instance **v52**, staging **v25**, APK **1.3.9**; server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno 2026-10-23.
+Status: **implementováno a nasazeno** (2026-10-22; produkce **v66**, staging **v39**, APK **1.4.3**) — server + appka + testy. **Web UI** (panel ověření, náhled a stažení PDF) doplněno 2026-10-23.
 Navazuje na DESIGN.md § 1/§ 4/§ 7, SPEC.md § 7.5 a docs/15 (přímý podpis PDF).
 
 ## 1. Use case
