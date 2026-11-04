@@ -85,6 +85,18 @@ odvozené:
 - Zápis na `ae448003`, odpověď na `ae448002` (notify), druhá notify
   `ae448004`.
 
+**Round-trip ověřen 2026-11-04** přes BlueZ na počítači: zápis na `AE448003`
+(notify na `AE448002` i `AE448004`) vrátil notifikaci
+
+```
+9F 02 00 06 9B        9F ^ 02 ^ 00 ^ 06 = 9B  (checksum sedí)
+```
+
+Tím je potvrzené, že **checksum je XOR předchozích bajtů** a reader na zápis
+odpovídá. Vrácená hodnota je ale *status*, ne výsledek APDU — karta v readeru
+nebyla napájená/vybraná (protokol má navíc escape/control vrstvu,
+`BluetoothTerminalManager.IOCTL_ESCAPE` = `3500`).
+
 **Aplikace framing neimplementuje:** knihovna vystavuje standardní
 `javax.smartcardio` (`Card`, `CardChannel`, `CommandAPDU`) a framing i AES řeší
 uvnitř. Demo (`BLETest`) volá jen `card.getATR()` a `channel.transmit(new CommandAPDU(...))`.
