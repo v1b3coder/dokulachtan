@@ -20,6 +20,7 @@ import javax.smartcardio.CommandAPDU
  */
 class CardReaderModule : Module() {
   private var manager: BluetoothTerminalManager? = null
+  private val discovered = mutableMapOf<String, CardTerminal>()
   private var terminal: CardTerminal? = null
   private var card: Card? = null
   private var channel: CardChannel? = null
@@ -37,46 +38,29 @@ class CardReaderModule : Module() {
     return channel ?: fail("reader_not_connected")
   }
 
-  /** Skenuje jen ACR3901U-S1 (LE-only), vrací nalezené čtečky. */
-  private fun scanFor(name: String?, timeoutMs: Int): CardTerminal? {
-    val mgr = requireManager()
-    var found: CardTerminal? = null
-
-    try {
-      mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
-        if (found == null && (name == null || t.name == name)) {
-          found = t
-        }
-      }
-      Thread.sleep(timeoutMs.toLong())
-    } finally {
-      mgr.stopScan()
-    }
-
-    return found
-  }
-
   override fun definition() = ModuleDefinition {
     Name("DokulachtanCardReader")
 
     AsyncFunction("scan") { timeoutMs: Int ->
       val mgr = requireManager()
-      val found = mutableListOf<Map<String, String>>()
+
+      synchronized(discovered) { discovered.clear() }
 
       try {
         mgr.startScan(BluetoothTerminalManager.TERMINAL_TYPE_ACR3901U_S1) { t ->
-          synchronized(found) { found.add(mapOf("name" to t.name)) }
+          synchronized(discovered) { discovered[t.name] = t }
         }
         Thread.sleep(timeoutMs.toLong())
       } finally {
         mgr.stopScan()
       }
 
-      synchronized(found) { found.toList() }
+      synchronized(discovered) { discovered.keys.map { mapOf("name" to it) } }
     }
 
+    // Čtečku bere z posledního scanu, aby se neskenovalo dvakrát (scan + connect).
     AsyncFunction("connect") { name: String ->
-      val t = scanFor(name, 15000) ?: fail("reader_not_found")
+      val t = synchronized(discovered) { discovered[name] } ?: fail("reader_not_found")
 
       try {
         val c = t.connect("direct")
@@ -103,6 +87,8 @@ class CardReaderModule : Module() {
           "serial" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_SERIAL_NUMBER_STRING, 5000),
           "firmware" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_FIRMWARE_REVISION_STRING, 5000),
           "manufacturer" to mgr.getDeviceInfo(t, BluetoothTerminalManager.DEVICE_INFO_MANUFACTURER_NAME_STRING, 5000),
+          // ACS vrací status (0..4), ne procenta: 0 nepodporováno, 1 neznámá,
+          // 2 nízká, 3 plná, 4 nabíjí se přes USB. -1 = volání selhalo.
           "battery" to mgr.getBatteryLevel(t, 5000),
         )
       } catch (e: Exception) {

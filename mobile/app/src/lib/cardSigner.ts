@@ -120,6 +120,11 @@ export class AcsCardSigner implements CardSigner {
   get deviceInfo(): CardDeviceInfo | null {
     return this.info;
   }
+
+  /** Lidsky čitelný stav baterie (ACS vrací status, ne procenta). */
+  get batteryLabel(): string {
+    return batteryLabel(this.info?.battery);
+  }
 }
 
 const CARD_READER_CODES = new Set([
@@ -128,6 +133,19 @@ const CARD_READER_CODES = new Set([
   'reader_permission_denied',
   'reader_error',
 ]);
+
+const BATTERY_LABELS: Record<number, string> = {
+  0: 'nepodporováno',
+  1: 'neznámá',
+  2: 'nízká',
+  3: 'plná',
+  4: 'nabíjí se (USB)',
+};
+
+/** ACS vrací status baterie, ne procenta; -1 znamená, že volání selhalo. */
+export function batteryLabel(status: number | undefined): string {
+  return BATTERY_LABELS[status ?? -1] ?? 'neznámá';
+}
 
 // Přeloží chybu transportu nebo kartového protokolu na kód, který UI zná.
 async function withCardErrors<T>(action: () => Promise<T>): Promise<T> {

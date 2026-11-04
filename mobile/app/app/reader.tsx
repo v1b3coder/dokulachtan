@@ -32,7 +32,7 @@ export default function ReaderScreen() {
           `Čtečka: ${device.model}`,
           `Sériové číslo: ${device.serial}`,
           `Firmware: ${device.firmware}`,
-          `Baterie: ${device.battery}`,
+          `Baterie: ${signer.batteryLabel}`,
         ]);
       }
 

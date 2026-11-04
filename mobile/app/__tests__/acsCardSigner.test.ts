@@ -8,7 +8,7 @@ import {
   scanCardReaders,
   transmitApdu,
 } from '../modules/dokulachtan-card-reader';
-import { AcsCardSigner, CardSignerError } from '../src/lib/cardSigner';
+import { AcsCardSigner, CardSignerError, batteryLabel } from '../src/lib/cardSigner';
 
 jest.mock('../modules/dokulachtan-card-reader', () => ({
   isCardReaderAvailable: jest.fn(),
@@ -46,6 +46,22 @@ async function expectCode(action: () => Promise<unknown>, code: string) {
     expect((error as CardSignerError).code).toBe(code);
   }
 }
+
+describe('batteryLabel', () => {
+  it('přeloží ACS status baterie na text', () => {
+    expect(batteryLabel(0)).toBe('nepodporováno');
+    expect(batteryLabel(1)).toBe('neznámá');
+    expect(batteryLabel(2)).toBe('nízká');
+    expect(batteryLabel(3)).toBe('plná');
+    expect(batteryLabel(4)).toBe('nabíjí se (USB)');
+  });
+
+  it('neznámý stav (včetně -1) nespadne', () => {
+    expect(batteryLabel(-1)).toBe('neznámá');
+    expect(batteryLabel(undefined)).toBe('neznámá');
+    expect(batteryLabel(99)).toBe('neznámá');
+  });
+});
 
 describe('AcsCardSigner chybové cesty (SPEC § 9.1 S8)', () => {
   let signer: AcsCardSigner;
