@@ -122,11 +122,36 @@ busctl tree org.bluez | grep -A20 dev_<MAC>
 busctl introspect org.bluez /org/bluez/hci0/dev_<MAC>/service0009/char000a
 ```
 
+## 5. Co je v eObčanka APK (cz.mvcr.eobcanka 1.8.0)
+
+Aplikace (53 MB, APKPure) obsahuje SDK zkompilované dovnitř:
+
+| Část | Co to je |
+|---|---|
+| `libclib.so` | kartová knihovna, jediný JNI vstup `com.aheaditec.talsec.security.Natives.d` |
+| `libtmlib.so` | transport (T=1), JNI `...security.api.Natives.start/stop` |
+| `libsecurity.so` | 15 JNI funkcí `com.aheaditec.talsec.security.Natives.a`–`q` |
+| `libcryptog.so` | crypto, `...security.FullNatives.x/y/z` |
+| `libspeProvider.so` | `com.aheaditec.eopsdk.plugins.KeyStore.getKEnc/getKMac` |
+| `classes*.dex` | Java část je obfuskovaná (žádné `cz/mvcr` balíčky) |
+
+Native libs jsou pro **arm64-v8a, armeabi-v7a, x86 i x86_64** a mají
+staticky linkované OpenSSL (`AES_encrypt`, `ASN1_item_sign`, …).
+
+**Vendor je AHEAD iTec = Monet+** (Brno, `monetplus.cz`), produkt **ProID**
+(„kvalifikovaný podpis, digitální identita, řízení certifikátů“). To je stejný
+vendord jako `com.aheaditec:ccid` z `PLAN.md` 5.2 — ne jen MOI/SZR.
+
 ## 6. Důsledek pro projekt
 
-- **Varianta A přes USB OTG** je plně podložená: CCID spec je veřejná a kartový
-  protokol výše je odposlechnutý. Chybí jen CCID implementace pro Android.
-- **Varianta A přes BLE** je podložená ACS EVK (`acssmcio`): AAR dává
-  `javax.smartcardio`, framing i AES řeší uvnitř. Chybí jen obstarat AAR.
-- MOI Podpisové SDK zůstává nejkratší cestou (`PLAN.md` 5.2); tento dokument je
-  záložní cesta a zároveň důkaz, že protokol není veřejně dokumentovaný.
+- **Varianta A přes BLE** je hlavní cesta (rozhodnutí 2026-11-04): ACS EVK
+  (`acssmcio`) dává `javax.smartcardio`, framing i AES-128 řeší uvnitř, AAR jsou
+  veřejně dostupné. Kartový protokol výše sedí na `CardChannel`.
+- **Podpisový protokol** je jediné, co zůstává otevřené: karta bez klíče/certu
+  (`C_FindObjects` = 0) ho neodemkne. Řeší ho eOP SDK od **Monet+ (ProID)**,
+  který eObčanka veze (`com.aheaditec.eopsdk`).
+- **Nejkratší cesta k podpisu** je licencovat eOP SDK od Monet+ (ProID) — stejný
+  vendord jako `com.aheaditec:ccid` v `PLAN.md` 5.2, ne jen MOI/SZR. RE + reimplementace
+  je možná (native libs jsou pro x86_64), ale je to staticky linkované OpenSSL.
+- **USB OTG** zůstává plně podložené: CCID spec je veřejná a kartový protokol výše
+  je odposlechnutý. Chybí jen CCID implementace pro Android.
