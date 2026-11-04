@@ -4,7 +4,8 @@
     "baseUrl": "..",
     "paths": {
       "@/*": ["./src/*"],
-      "react-native": ["./scripts/react-native-stub.ts"]
+      "react-native": ["./scripts/react-native-stub.ts"],
+      "expo-modules-core": ["./scripts/expo-modules-core-stub.ts"]
     }
   }
 }
