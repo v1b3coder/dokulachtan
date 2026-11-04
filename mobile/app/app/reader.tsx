@@ -100,6 +100,7 @@ const MESSAGES: Record<string, string> = {
   reader_not_found: 'Čtečka nenalezena. Přepněte ji do Bluetooth režimu a zkuste to znovu.',
   reader_not_connected: 'Čtečka není připojená. Připojte ji znovu.',
   reader_disconnected: 'Čtečka se odpojila. Připojte ji znovu.',
+  reader_permission_denied: 'Aplikace nemá oprávnění k Bluetoothu. Povolte je v nastavení.',
   applet_not_found: 'Karta neodpovídá jako eObčanka. Zkontrolujte, že je vložená správná karta.',
   data_tag_failed: 'Kartu se nepodařilo přečíst. Zkuste to znovu.',
   no_qualified_certificate: 'Karta nemá nahraný kvalifikovaný certifikát. Podpis zatím není možný.',

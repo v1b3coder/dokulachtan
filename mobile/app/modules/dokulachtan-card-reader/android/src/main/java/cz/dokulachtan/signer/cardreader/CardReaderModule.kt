@@ -59,7 +59,7 @@ class CardReaderModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("DokulachtanCardReader")
 
-    Function("scan") { timeoutMs: Int ->
+    AsyncFunction("scan") { timeoutMs: Int ->
       val mgr = requireManager()
       val found = mutableListOf<Map<String, String>>()
 
@@ -75,7 +75,7 @@ class CardReaderModule : Module() {
       synchronized(found) { found.toList() }
     }
 
-    Function("connect") { name: String ->
+    AsyncFunction("connect") { name: String ->
       val t = scanFor(name, 15000) ?: fail("reader_not_found")
 
       try {
@@ -93,7 +93,7 @@ class CardReaderModule : Module() {
       }
     }
 
-    Function("deviceInfo") {
+    AsyncFunction("deviceInfo") {
       val t = terminal ?: fail("reader_not_connected")
       val mgr = requireManager()
 
@@ -110,7 +110,7 @@ class CardReaderModule : Module() {
       }
     }
 
-    Function("transmit") { apduHex: String ->
+    AsyncFunction("transmit") { apduHex: String ->
       val ch = requireChannel()
 
       try {
@@ -121,7 +121,7 @@ class CardReaderModule : Module() {
       }
     }
 
-    Function("disconnect") {
+    AsyncFunction("disconnect") {
       val t = terminal
 
       if (t != null) {

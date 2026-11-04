@@ -125,6 +125,7 @@ export class AcsCardSigner implements CardSigner {
 const CARD_READER_CODES = new Set([
   'reader_not_found',
   'reader_disconnected',
+  'reader_permission_denied',
   'reader_error',
 ]);
 
