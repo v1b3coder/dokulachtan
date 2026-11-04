@@ -12,7 +12,7 @@ appka se k němu připojí přes API.
 DocuSeal není jen pro pokročilý workflow. Dokulachtan používá jeho infrastrukturu i pro základní podpis
 a ověření. Navíc v upraveném DocuSealu najdeš týmové workflow a vícenásobné podpisy.
 
-[**Stáhnout appku**](https://github.com/v1b3coder/dokulachtan/releases/latest) ·
+[**Nainstalovat appku**](https://zapstore.dev/apps/cz.dokulachtan.signer) ·
 [DocuSeal](https://github.com/v1b3coder/docuseal) ·
 [Jak to funguje](#jak-to-funguje)
 
@@ -96,6 +96,19 @@ QES s čipem eObčanky je v přípravě. Tam bude klíč v čipu a appka bude po
 
 Teď Dokulachtan podepisuje AdES. Za AdES podpis se neplatí. QES s čipem eObčanky je v přípravě.
 
+## Instalace
+
+Appka je pro Android 7.0 a novější.
+
+**Zapstore (doporučeno)** — [Dokulachtan na Zapstore](https://zapstore.dev/apps/cz.dokulachtan.signer).
+Nainstaluj si klienta [Zapstore](https://zapstore.dev/apps/dev.zapstore.app), najdi v něm Dokulachtana
+a klepni na instalaci. Nové verze si appka stahuje sama; každé APK Zapstore ověří proti hashi
+a podpisu od autora, takže se neinstaluje nic, co autor nevydal.
+
+**Ruční instalace APK** — stáhni `dokulachtan-signer-<verze>.apk`
+z [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest) a otevři ho v telefonu.
+Android se zeptá na povolení instalace z neznámého zdroje. Aktualizace pak hlídej sám.
+
 ## Vyzkoušet
 
 **Podepisuješ dokument?**
@@ -110,8 +123,9 @@ Odkaz posílá upravený DocuSeal; v šabloně musí být pole „Podpis certifi
 
 1. Nainstaluj si [upravený DocuSeal](https://github.com/v1b3coder/docuseal) a nastav trust roots na autoritu,
    která ti certifikát vydala (výchozí je PostSignum). Appka se k němu připojí přes API.
-2. Stáhni si appku (Android 7.0+) z [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest)
-   a v *Nastavení* zadej Server URL a API token (DocuSeal → Nastavení → API).
+2. Nainstaluj appku ([Zapstore](https://zapstore.dev/apps/cz.dokulachtan.signer), nebo APK
+   z [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest)) a v *Nastavení* zadej
+   Server URL a API token (DocuSeal → Nastavení → API).
 3. V DocuSealu nahraj PDF, přidej pole „Podpis certifikátem“ a odešli.
 
 ## Stav
