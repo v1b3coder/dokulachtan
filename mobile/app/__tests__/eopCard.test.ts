@@ -15,6 +15,19 @@ describe('aidFromAtr', () => {
     expect(Buffer.from(aidFromAtr(ATR)!).toString('hex').toUpperCase()).toBe(AID);
   });
 
+  // Hypotéza pravidla, ne ověřený fakt: druhý český ATR z pcsc-tools by měl
+  // dát AID D2 03 10 01 00 01 00 01 01. Ověřit lze jen druhou kartou.
+  it('odvodí AID i pro druhý český ATR (hypotéza pravidla)', () => {
+    const second = Uint8Array.from([
+      0x3b, 0x7e, 0x94, 0x00, 0x00, 0x80, 0x25, 0xd2, 0x03, 0x10, 0x01, 0x00, 0x56, 0x00, 0x00,
+      0x00, 0x01, 0x01, 0x00,
+    ]);
+
+    expect(Buffer.from(aidFromAtr(second)!).toString('hex').toUpperCase()).toBe(
+      'D20310010001000101',
+    );
+  });
+
   it('vrátí null pro cizí ATR', () => {
     expect(aidFromAtr(Uint8Array.from([0x3b, 0x65, 0x00, 0x00, 0x9c, 0x11]))).toBeNull();
   });
@@ -48,17 +61,30 @@ describe('selectApplet', () => {
 });
 
 describe('readDocumentNumber', () => {
-  it('přečte číslo dokladu přes 6C retry', async () => {
+  it('přečte číslo dokladu dvoufázově (délka, pak data)', async () => {
     const sent: string[] = [];
     const transmit = async (apdu: string) => {
       sent.push(apdu);
 
-      // Karta nejdřív vrátí 6C 09 (wrong length), pak data + 9000.
-      return sent.length === 1 ? '6C09' : '3231303931303039339000';
+      // P1 00 vrátí 2bajtovou délku (9), P1 01 data + 9000.
+      return sent.length === 1 ? '00099000' : '3231303931303039339000';
     };
 
     await expect(readDocumentNumber(transmit)).resolves.toBe('210910093');
-    expect(sent).toEqual(['81 CA 01 01 00', '81 CA 01 01 09']);
+    expect(sent).toEqual(['81 CA 00 01 02', '81 CA 01 01 09']);
+  });
+
+  it('spadne na přímé čtení s 6C retry, když délka nepřijde', async () => {
+    const sent: string[] = [];
+    const transmit = async (apdu: string) => {
+      sent.push(apdu);
+
+      return sent.length === 1 ? '6A88' : sent.length === 2 ? '6C09' : '3231303931303039339000';
+    };
+
+    await expect(readDocumentNumber(transmit)).resolves.toBe('210910093');
+    expect(sent[0]).toBe('81 CA 00 01 02');
+    expect(sent[2]).toBe('81 CA 01 01 09');
   });
 
   it('vyhodí chybu, když tag selže', async () => {

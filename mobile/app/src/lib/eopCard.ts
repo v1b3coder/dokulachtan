@@ -24,19 +24,18 @@ export function aidFromAtr(atr: Uint8Array): Uint8Array | null {
   }
 
   const iin = readCompactTlv(historical, 1, 2);
-  const issuer = readCompactTlv(historical, 7, 5);
 
-  if (!iin || !issuer) {
+  if (!iin) {
     return null;
   }
 
-  // AID = IIN (5 B) + 01 + poslední 3 bajty issuer dat v opačném pořadí
+  // AID = IIN (5 B) + 01 + poslední 3 bajty ATR v opačném pořadí
   const aid = new Uint8Array(9);
   aid.set(iin, 0);
   aid[5] = 0x01;
-  aid[6] = issuer[issuer.length - 1];
-  aid[7] = issuer[issuer.length - 2];
-  aid[8] = issuer[issuer.length - 3];
+  aid[6] = atr[atr.length - 1];
+  aid[7] = atr[atr.length - 2];
+  aid[8] = atr[atr.length - 3];
 
   return aid;
 }
@@ -73,20 +72,34 @@ export async function selectApplet(transmit: Transmit, aid: Uint8Array): Promise
   throw new Error('applet_not_found');
 }
 
-/** Přečte datový tag karty. Karta vrací 6C xx (wrong length), pak přesné Le. */
+// Kanonické čtení je dvoufázové: P1 00 vrátí 2bajtovou délku, P1 01 data.
+// Když karta délku nevrátí, zkusí se přímé čtení s 6C xx (wrong length) retry.
 export async function readDataTag(transmit: Transmit, tag: number): Promise<Uint8Array> {
-  const first = await sendWithData(transmit, `81 CA 01 ${hex(tag)} 00`);
+  const size = await sendWithData(transmit, `81 CA 00 ${hex(tag)} 02`);
 
-  if (first.sw === 0x9000) {
-    return first.data;
+  if (size.sw === 0x9000 && size.data.length === 2) {
+    const length = (size.data[0] << 8) | size.data[1];
+    const data = await sendWithData(transmit, `81 CA 01 ${hex(tag)} ${hex(length)}`);
+
+    if (data.sw === 0x9000) {
+      return data.data;
+    }
+
+    throw new Error('data_tag_failed');
   }
 
-  if ((first.sw >> 8) === 0x6c) {
-    const le = first.sw & 0xff;
-    const second = await sendWithData(transmit, `81 CA 01 ${hex(tag)} ${hex(le)}`);
+  const direct = await sendWithData(transmit, `81 CA 01 ${hex(tag)} 00`);
 
-    if (second.sw === 0x9000) {
-      return second.data;
+  if (direct.sw === 0x9000) {
+    return direct.data;
+  }
+
+  if ((direct.sw >> 8) === 0x6c) {
+    const le = direct.sw & 0xff;
+    const retry = await sendWithData(transmit, `81 CA 01 ${hex(tag)} ${hex(le)}`);
+
+    if (retry.sw === 0x9000) {
+      return retry.data;
     }
   }
 

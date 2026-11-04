@@ -173,13 +173,18 @@ CardStateMonitor
   CARD_STATE_UNKNOWN | ABSENT | PRESENT
 ```
 
-**Co zůstává neznámé:**
+**Co zůstává neznámé (a proč to appku neblokuje):**
 
-1. **Escape payload** — `transmitControlCommand` bere payload od volajícího, v
-   knihovně není konstanta. V demo appce je to uživatelský vstup (`Control Code`
-   = `IOCTL_ESCAPE` = 3500, payload ze `Script`/`Input`).
-2. **Režim AES** (ECB/CBC) — v `internal/o.class`, pravděpodobně JNI wrapper nad
-   nativní `.so`. Pro použití AAR to není potřeba znát.
+1. **Odvození AID** — pravidlo `IIN + 0x01 + reverse(poslední 3 bajty ATR)` sedí na
+   obě známé české ATR (druhé je z `pcsc-tools`, neověřené kartou), ale je to
+   **hypotéza**: pravidlo samotné je v nativní `libclib.so`, ne v Java části AAR.
+   Ověřit ho jde jen druhou kartou nebo disassembly nativní knihovny.
+   V `eopCard.ts` je na jednom místě a test ho hlídá; když pravidlo nesedí,
+   `selectApplet` zkusí oba kanály a vrátí `applet_not_found`, ne pád.
+2. **Režim AES** (ECB/CBC) — `internal/o.class`, JNI wrapper nad nativní `.so`.
+   Pro použití AAR to není potřeba znát.
+3. **Escape payload** — `transmitControlCommand` bere payload od volajícího, v
+   knihovně není konstanta. Pro APDU cestu (`CardChannel.transmit`) ho nepotřebujeme.
 
 Pro appku to znamená: psát proti standardnímu `javax.smartcardio` a
 `transmitControlCommand` volat jen pro escape příkazy, které stejně neznáme — APDU
