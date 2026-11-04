@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'cz.dokulachtan.signer'
+version = '1.0.0'
+
+android {
+  namespace "cz.dokulachtan.signer.cardreader"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // ACS BLE EVK (SmartCardIO): dodává javax.smartcardio přes BLE.
+  // Framing i AES-128 řeší knihovna, appka je neimplementuje.
+  implementation files("libs/smartcardio-0.1.7.aar")
+  implementation files("libs/acssmcio-0.6.2.aar")
+}

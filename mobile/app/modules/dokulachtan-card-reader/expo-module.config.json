@@ -1,0 +1,6 @@
+{
+  "platforms": ["android"],
+  "android": {
+    "modules": ["cz.dokulachtan.signer.cardreader.CardReaderModule"]
+  }
+}

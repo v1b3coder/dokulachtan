@@ -1,30 +1,54 @@
-// S8 Připojení čtečky (SPEC § 9.1): v této fázi je MOI SDK stub —
-// fyzická čtečka je mimo rozsah, fake card mód umí celý tok s testovacím certem.
+// S8 Připojení čtečky (SPEC § 9.1, § 9.4): ACS BLE EVK (`acssmcio`) přes
+// standardní javax.smartcardio. Framing i AES-128 řeší knihovna, appka posílá APDU.
+// Kartový info protokol je v `src/lib/eopCard.ts`; karta bez certu podpis neodemkne.
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { createCardSigner, CardSignerError } from '../src/lib/cardSigner';
-import { PrimaryButton } from '../src/ui/buttons';
+import { AcsCardSigner, CardSignerError } from '../src/lib/cardSigner';
+import { PrimaryButton, TextButton } from '../src/ui/buttons';
 
 export default function ReaderScreen() {
+  const [signer] = useState(() => new AcsCardSigner());
   const [status, setStatus] = useState<string | null>(null);
-  const [containers, setContainers] = useState<string[]>([]);
+  const [info, setInfo] = useState<string[]>([]);
+  const [documentNumber, setDocumentNumber] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const fakeCard = process.env.EXPO_PUBLIC_QES_FAKE_CARD === '1';
 
   async function connect() {
-    const signer = createCardSigner(fakeCard);
+    setBusy(true);
+    setStatus(null);
+    setInfo([]);
+    setDocumentNumber(null);
 
     try {
       await signer.initializeSession();
 
-      const list = await signer.listContainers();
+      const device = signer.deviceInfo;
 
-      setContainers(list.map((item) => `${item.label} (${item.level.toUpperCase()})`));
-      setStatus(null);
+      if (device) {
+        setInfo([
+          `Čtečka: ${device.model}`,
+          `Sériové číslo: ${device.serial}`,
+          `Firmware: ${device.firmware}`,
+          `Baterie: ${device.battery}`,
+        ]);
+      }
+
+      setDocumentNumber(await signer.readDocumentNumber());
     } catch (err) {
       setStatus(err instanceof CardSignerError ? err.code : 'reader_error');
+    } finally {
+      setBusy(false);
     }
+  }
+
+  async function disconnect() {
+    await signer.finalizeSession();
+    setInfo([]);
+    setDocumentNumber(null);
+    setStatus(null);
   }
 
   return (
@@ -32,25 +56,25 @@ export default function ReaderScreen() {
       <Text style={styles.title}>Připojení čtečky</Text>
       <Text style={styles.muted}>
         Podporované čtečky: ACR 3901 U-S1, bR301 BLE (černá), CT 1100, AirID 2 (+ USB OTG). Komunikace
-        probíhá přes MOI Podpisové SDK v aplikaci, klíč zůstává v čipu.
+        probíhá přes ACS BLE knihovnu v aplikaci, klíč zůstává v čipu.
       </Text>
       <Text style={styles.label}>
-        Režim: {fakeCard ? 'fake card (testovací cert)' : 'reálná čtečka (v této verzi nepodporovaná)'}
+        Režim: {fakeCard ? 'fake card (testovací cert)' : 'reálná čtečka (ACS BLE EVK)'}
       </Text>
 
       {status ? (
         <Text style={styles.error}>
           {status === 'reader_not_found'
-            ? fakeCard
-              ? 'Čtečka nenalezena. Spárujte ji v aplikaci eObčanka.'
-              : 'Tato verze aplikace čtečku nepodporuje. Reálné zapojení přijde s hardwarem.'
-            : status}
+            ? 'Čtečka nenalezena. Přepněte ji do Bluetooth režimu a zkuste to znovu.'
+            : status === 'no_qualified_certificate'
+              ? 'Karta nemá nahraný kvalifikovaný certifikát. Podpis zatím není možný.'
+              : status}
         </Text>
       ) : null}
 
-      {containers.length > 0 ? (
+      {info.length > 0 ? (
         <View style={styles.card}>
-          {containers.map((item) => (
+          {info.map((item) => (
             <Text key={item} style={styles.value}>
               {item}
             </Text>
@@ -58,7 +82,19 @@ export default function ReaderScreen() {
         </View>
       ) : null}
 
-      <PrimaryButton title="Vyhledat čtečku" onPress={connect} />
+      {documentNumber ? (
+        <View style={styles.card}>
+          <Text style={styles.label}>Číslo dokladu</Text>
+          <Text style={styles.value}>{documentNumber}</Text>
+        </View>
+      ) : null}
+
+      {info.length > 0 ? (
+        <PrimaryButton title="Odpojit čtečku" onPress={disconnect} />
+      ) : (
+        <PrimaryButton title="Připojit čtečku" onPress={connect} loading={busy} />
+      )}
+      <TextButton title="Zpět" onPress={() => undefined} />
     </ScrollView>
   );
 }
