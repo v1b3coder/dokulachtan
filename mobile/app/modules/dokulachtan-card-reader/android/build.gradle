@@ -17,6 +17,8 @@ android {
 dependencies {
   // ACS BLE EVK (SmartCardIO): dodává javax.smartcardio přes BLE.
   // Framing i AES-128 řeší knihovna, appka je neimplementuje.
-  implementation files("libs/smartcardio-0.1.7.aar")
-  implementation files("libs/acssmcio-0.6.2.aar")
+  // `compileOnly`: AGP 8 neumí zabalit lokální `.aar` do AAR knihovny
+  // (`bundleReleaseAar` spadne); do APK je zabalí `withCardReaderAars`.
+  compileOnly files("libs/smartcardio-0.1.7.aar")
+  compileOnly files("libs/acssmcio-0.6.2.aar")
 }
