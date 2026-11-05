@@ -588,3 +588,82 @@ se dělí na dvě 16bajtové poloviny, jde s vysokou pravděpodobností o
 **AES-256 klíč = sdílený secret** nebo **SHA-256(secret)** rozdělený na
 K_enc/K_mac. Ověřit to jde na kartě bez rizika: špatný MAC karta odmítne
 **před** kontrolou PINu, takže chybný klíč nespotřebuje pokus.
+
+## 13. Rozhodující nález: SSC pochází z karty (2026-11-05, večer)
+
+Statická analýza `mse_set_mutual_auth` (`FUN_00210ff8`) a `get_reset_select_info`
+(`FUN_0020248c`) konečně vysvětlila 18bajtový vstup `MSE:Set DST`. Není to
+zápis náhodného čísla, ale **čtení karty**:
+
+```
+00 A6 00 00        -> 6C 12            (Case 1, karta hlásí délku 18)
+00 A6 00 00 12     -> <18 B> 9000       (Case 2, Le=0x12; 4 B + 4 B + 10 B AID)
+```
+
+`get_reset_select_info()` rozpadá odpověď takto:
+
+| offset | délka | význam |
+|---|---|---|
+| 0 | 4 B | první polovina „reset select info“ |
+| 4 | 4 B | druhá polovina (dohromady 8 B **SSC**) |
+| 8 | 10 B | AID appletu (`A0000000288010370202`) |
+
+Teprve potom middleware pošle `MSE:Set DST` **s tímto SSC** znovu jako data
+(`00 A6 00 00 12 <8 B SSC> <10 B AID>`), což karta přijme (`9000`). Pozorování:
+
+- middleware má v rámci jednoho procesu SSC konstantní (`3B9166EA8B24197D`
+  6× v jednom probe, `16693840…` v trace) a mezi procesy jiný — hodnota je tedy
+generovaná/uložená na kartě, ne v middleware,
+- náš pokus poslat náhodné 8B (`--ssc <random>`) karta odmítla
+  (`SCARD_E_NOT_TRANSACTED`) a zůstala ve stavu, který vyžaduje cold reset
+  (§ 14.1); tím se potvrdilo, že SSC se musí **číst**, ne hádat,
+- ověřit, zda karta SSC jen ukládá, nebo i validuje, už nešlo, protože karta
+  byla zablokovaná (§ 14.1).
+
+**Důsledek pro clean-room implementaci:** SSC se **negeneruje**, ale **čte**
+`00 A6 00 00 12` z karty. Tím odpadá poslední nejistota v `MSE:Set DST`.
+
+## 14. Odposlech SM klíčů přes GDB (2026-11-05)
+
+Aby šel ověřit KDF bez karty, odposlechli jsme běžící middleware pod GDB
+(`scripts/eop_gdb_extract.py`). Breakpointy:
+
+| adresa (file vaddr) | funkce | co dává |
+|---|---|---|
+| `0x1137fc` | `mutual_authenticate` | `param_1`, `param_2`, `param_3` |
+| `0x4ae93` | AES key schedule | klíč (16 B) |
+
+Na vstupu `mutual_authenticate` se přečte `param_1[3]` (crypto objekt) a z jeho
+vtable se nastaví breakpointy na `+0x48` (init), `+0x50` (feed), `+0x58`
+(derive), `+0x88`/`+0x90`/`+0x98` (get secret). Z jednoho úspěšného podpisu
+(`valid=True`) vypadlo:
+
+```
+ECDH init(1), feed 8+8+8+8+32 B, derive -> 64 B:
+  8f3b1a46cd660e36e23e7bc76e748b0329de80e18521070e4b9c4d23a907fc4
+  8b165df47af142e9cb2810c274c4f6cbf5adfe7f415c413124c403bb16476c615
+SSC (16 B, roste po 1): 12ad047d677b75cc0665df2aa185f825 …2a
+PIN plaintext: 3533353738393132 ff ff ff ff ff ff ff 80   ("53578912" + 0xFF×7 + 0x80)
+PIN ciphertext: 75ceefcbb9c96ec95f14dd70c25b8cc4
+```
+
+**Co to znamená:**
+
+- ECDH sdílený secret je 64 B (dvě 32bajtové poloviny), ne 32 B, jak se
+  dřív myslelo.
+- SM provider má 16bajtový **SSC**, který se po každém APDU inkrementuje
+  (v logu `…25`, `…26`, `…27`), a `k90`/`k98` jsou update/final MAC.
+- PIN se šifruje jako `PIN || 0xFF×7 || 0x80`, výstup je 16 B — tvar
+  odpovídá ISO 9797-1 padding method 2 na 16bajtovém bloku (data + 0x80 + nuly),
+  ale s 0xFF místo 0x00; to je potřeba ověřit proti KDF.
+- **KDF zůstává jediná neznámá**: ze 64B ECDH výstupu a 16B SSC vzniká
+  16B klíč. Kandidáti (SHA-256(secret||counter), AES-CMAC, …) se dají ověřit
+  offline proti dvojici plaintext/ciphertext PINu výše, bez karty.
+
+### 14.1 Blokace hardware (2026-11-05)
+
+Při pokusech s náhodným SSC karta přešla do stavu `SCARD_E_NOT_TRANSACTED`
+a odmítá i `SELECT AID`. ATR jde přečíst, ale `SCardTransmit` vrací
+`0x80100016`; `SCardReconnect(RESET/UNPOWER)` ani `SCardControl` nepomohou.
+Kartu je potřeba **fyzicky vyresetovat** (vyndat/zandat, případně restart
+`pcscd`), což agent neumí. Do té doby nelze na kartě nic dalšího testovat.
