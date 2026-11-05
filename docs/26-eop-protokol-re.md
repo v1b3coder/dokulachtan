@@ -382,3 +382,57 @@ Odvození SM klíče (ECDH + KDF) z `EXTERNAL AUTHENTICATE` je poslední
 card-specific část; `MSE:Set AT` data i formát zpráv jsou výše. Do té doby je
 jediná funkční cesta na desktopu middleware (`scripts/eop_card_sign.py --sign`)
 a na Androidu jmrtd + ACS EVK.
+
+## 9. Mapa applet API (z middlewaru, 2026-11-05)
+
+`libeop2v1czep11.so` je self-contained (jen `libpcsclite`, `libstdc++`, `libc`),
+stripped, ale nese vlastní trace stringy `c_ias_applet::<metoda>(...)`. Z nich je
+čitelná celá applet API — to je kostra, kterou je potřeba implementovat:
+
+| Skupina | Metody |
+|---|---|
+| PIN | `pin_verify`, `pin_verify_status`, `pin_change`, `pin_unblock`, `pin_unverify` |
+| **PIN session** | `pin_session_verify_init`, `_do`, `_final` |
+| MSE | `mse_set`, `mse_set_external_auth`, `mse_set_mutual_auth`, `mse_restore` |
+| Autentizace | `general_authenticate`, `mutual_authenticate`, `mutual_authenticate_status` |
+| ECDH | `ecdh_external_authenticate`, `ecdh_internal_authenticate` |
+| 3DES (legacy) | `ms_3des3_authenticate`, `_key`, `_status`, `_reset` |
+| SM | `get_sm_provider`, `set_sm_provider` |
+| Klíče | `generate_key_pair`, `gen_random` |
+| Podpis | `pso_sign`, `pso_hash`, `_set`, `_finalize`, `pso_verify_certificate`, `pso_decipher_rsa`, `pso_decipher_ecc` |
+| Soubory | `select_file`, `select_file_df`, `select_file_name`, `select_file_path`, `read_binary`, `create_file`, `delete_file`, `activate_file`, `deactivate_file`, `get_data`, `put_data`, `resize`, `erase_binary` |
+
+**SM je AES, ne 3DES.** Provider `c_ias_aes_provider` (vedle `c_ias_sm_provider`),
+stringy `AES 16-byte challenge parameter`, `AES challenge`; 16bajtové MAC
+v trace (`8E 10 …`) tomu odpovídá. `ms_3des3_*` je legacy cesta
+(`3DES3 Microsoft authentication key`) pro starší karty.
+
+**QPIN není plain `VERIFY`.** Middleware má `pin_verify` (plain, P2 `0x83`)
+a vedle `pin_session_verify_init/do/final` — QPIN jde **tříapduovým sezením**.
+To je důvod, proč v trace před otevřením dialogu nejsou žádná data
+(`0C 20 00 83 12 8E 10 …` je jen dotaz na počet pokusů) a proč se QPIN
+nedá poslat jako `C_Login`.
+
+### 9.1 Co blokuje dokončení podpisu
+
+1. **QPIN dialog nejde ovládat syntetickým vstupem.** Dialog je forkovaný
+   `eop2v1czep11 --caller=<pid>` (Qt/X11, `WM_CLASS=Eop2v1czep11`). `xdotool`
+   přes XTEST ani XSendEvent do pole nedostane (ověřeno: pole zůstalo prázdné,
+   `Number of attempts : 3` se nemění). **Zrušení ani timeout počítadlo
+   nesnižuje** — po každém pokusu zůstalo PIN 3/3.
+2. **SM klíč** z `EXTERNAL AUTHENTICATE` (80 B = 64 B ECDH veřejný klíč +
+   16 B AES-MAC) není odvozený. Chybí KDF.
+
+### 9.2 Jak to dokončit
+
+- **Nejrychlejší:** dokončit jeden podpis ručně (člověk u klávesnice) a odposlechnout
+  celý trace včetně `pin_session_verify_*` a `PSO:CDS`. Z něj je vidět přesný tvar
+  QPIN sezení a pořadí příkazů.
+- **Self-contained:** doanalyzovat KDF z `ecdh_external_authenticate` v Ghidře
+  (analýza proběhla, `-import` + `-process` funguje; skriptování v
+  `analyzeHeadless` v tomto prostředí padá na `JavaScriptProvider`, chce to
+  PyGhidra nebo GUI).
+- **Ověřeno bez rizika:** `PSO:CDS` (`00 2A 9E 9A`) karta zná (`6985`),
+  `MSE:Set DST` (`00 22 41 A4`) i `MSE:Set AT` (`00 22 C1 A4`) vrací `9000`.
+  `MSE:Set AT` ale nechá kartu čekat na `GENERAL AUTHENTICATE`; bez něj
+  plaintext příkaz skončí `6B00` a pomůže jen cold reset.
