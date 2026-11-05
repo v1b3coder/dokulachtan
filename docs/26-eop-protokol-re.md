@@ -492,3 +492,39 @@ GET RESPONSE   00 C0 00 00 FF                                          -> 256 B 
 Odvodit KDF ze `EXTERNAL AUTHENTICATE` (ECDH → AES klíč + MAC klíč).
 Až to bude, je možné celý tok výše implementovat v appce přes jmrtd
 (`SecureMessagingWrapper`) a `javax.smartcardio` z ACS EVK, bez middleware.
+
+## 11. Revers middlewaru: stavěče APDU (2026-11-05)
+
+`libeop2v1czep11.so` je stripped, ale jeho trace stringy (`c_ias_applet::<metoda>(
+...)`) referencují kód. Přes PyGhidra (Java skripty v `analyzeHeadless` padají,
+Python přes PyGhidra funguje) se dají dohledat a dekompilovat stavače:
+
+| Metoda | APDU | Poznámka |
+|---|---|---|
+| `pso_sign` | `00 2A 9E 9A <Lc> <data>` | `FUN_002218a4` |
+| `pin_verify` | `00 20 00 <P2> <Lc> <data>` | SM varianta `0C 20 00 <P2>` |
+| `pin_session_verify_init` | `00 20 FB <P2> 08 <8 B>` | `FUN_00217a3e` |
+| `ecdh_external_authenticate` | `00 82 00 00 <Lc> [8 B][payload]` | `FUN_00215cb2` |
+| `ms_3des3_authenticate` | `00 82 00 31 08 <8 B>` | `FUN_0021251c`, legacy 3DES |
+| `general_authenticate` | `00 86 00 00 <Lc> <TLV>` | `FUN_002154de`, ECDH/BSI |
+| `mse_set` | `00 22 <P1> <P2> <Lc> <data>` | `mse_set_external_auth` staví tag `0x81` s veřejným klíčem |
+
+SM provider je AES (`c_ias_aes_provider`, 16B MAC) vedle `c_ias_sm_provider`;
+3DES (`ms_3des3_*`, `3DES3 Microsoft authentication key`) je legacy větev pro
+starší karty. KDF třída (`FUN_00243a50`..`FUN_00243e54`) je ve skutečnosti
+**cipher context** (key schedule): `malloc(0x80)` + DES pro 8B klíč,
+`malloc(0x180)` + AES pro 16B, `malloc(0x180)` + 3DES pro 24B — žádný KDF
+tam není.
+
+### 11.1 Co je ověřené a co chybí
+
+- **Ověřené bez rizika:** `00 A6 00 00 12 <8 B> <AID>` s **čerstvou** hodnotou
+  → `9000`; se **zastaralou** hodnotou ze starší session karta **resetuje**
+  (`SCARD_E_NOT_TRANSACTED`) — hodnota je tedy session klíč, který karta validuje.
+  `GET CHALLENGE` (`00 84 00 00 08`) → 8 B, `MSE:Set AT`
+  (`00 22 C1 A4 09 80 01 8C 83 01 01 95 01 80`) → `9000`, `PSO:CDS`
+  (`00 2A 9E 9A`) → `6985`.
+- **Chybí:** jak middleware odvodí 8bajtovou session hodnotu do `00 A6`
+  a SM klíč z ECDH (`EXTERNAL AUTHENTICATE` 80 B = 8 B + 72 B, kde
+  72 B = 64 B veřejný klíč + 8 B MAC). Stavače příkazů jsou výše, odvození
+  klíče ne — to je poslední kus pro clean-room podpis v appce.
