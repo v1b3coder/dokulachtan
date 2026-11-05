@@ -528,3 +528,63 @@ tam není.
   a SM klíč z ECDH (`EXTERNAL AUTHENTICATE` 80 B = 8 B + 72 B, kde
   72 B = 64 B veřejný klíč + 8 B MAC). Stavače příkazů jsou výše, odvození
   klíče ne — to je poslední kus pro clean-room podpis v appce.
+
+## 12. `mutual_authenticate`: celé sestavení SM (dekompilováno)
+
+`c_ias_applet::mutual_authenticate` (`FUN_002137fc`) je funkce, která SM
+skutečně staví. Dekompilace dává celý sled kroků:
+
+```c
+typ = key_type(key)                     // 2 = AES, 1 = 3DES
+alg = (typ == 2) ? 0x9C : 0x1C        // 0x9C = AES, 0x1C = 3DES
+
+gen_keypair(eph, 1)                     // vtable+0xA0: ephemerální pár
+export_pubkey(eph, 0x13, &ptr, &len)   // 0x13 = DER veřejný klíč
+append(apdu, ptr, len)                  // -> EXTERNAL AUTHENTICATE data
+
+// tři 8bajtové bloky z 32bajtového bufferu (challenge / nonce)
+store_8(vtable+0x178, buf8,      8)
+store_8(vtable+0x178, buf8,      8)
+store_8(vtable+0x178, buf32 + 8, 8)
+store_8(vtable+0x178, buf32 + 16, 8)
+store_8(vtable+0x178, buf32 + 24, 8)
+
+// MSE:Set AT (TLV)
+tlv(0xCA, param_2 & 0xFF)               // algoritmus
+tlv(0xC8, (alg == 0x9C) ? 0x8C : 0x1C)
+tlv(0xCD, 0x80)
+send_mse_set_at(vtable+0x168, tlv)
+store_8(vtable+0x180, challenge, 8)       // 8B prefix do EXTERNAL AUTHENTICATE
+
+// ECDH s veřejným klíčem karty
+ecdh_init(key + 0x48, param_2, 0, 0)
+ecdh_feed(key + 0x50, card_pubkey, len)
+ecdh_derive(key + 0x58, 0, &len)
+
+// výsledek: 32bajtový sdílený secret (16 + 16)
+get_secret(key + 0x90, &local_48, 0x10)
+get_secret(key + 0x98, buf + 0x10, 0x10)
+
+// odvození SM klíče z 32B secretu
+derive_sm_key(vtable+0x1A8, 0x9C, secret, len, ...)
+```
+
+**Co z toho plyne:**
+
+- Sdílený secret je **32 bajtů** (dvě 16bajtové poloviny).
+- Odvození SM klíče je volání `vtable+0x1A8` s argumentem `0x9C` (AES) nebo
+  `0x1C` (3DES) a 32bajtovým secretem. To je poslední virtuální metoda,
+  kterou je potřeba dohledat (její tělo není v `mutual_authenticate`).
+- `0x9C` v `MSE:Set AT` odpovídá `80 01 8C` z reálného trace (`0x8C` = AES-128
+  bez MAC-only varianty).
+- 8bajtový prefix v `EXTERNAL AUTHENTICATE` je **challenge** uložený
+  `vtable+0x180`, ne náhodné číslo — proto se stará hodnota po resetu nehodí
+  a karta se resetuje.
+
+### 12.1 Poslední krok
+
+Dohledat tělo `vtable+0x1A8` (KDF). Vzhledem k tomu, že vstup je 32 B a výstup
+se dělí na dvě 16bajtové poloviny, jde s vysokou pravděpodobností o
+**AES-256 klíč = sdílený secret** nebo **SHA-256(secret)** rozdělený na
+K_enc/K_mac. Ověřit to jde na kartě bez rizika: špatný MAC karta odmítne
+**před** kontrolou PINu, takže chybný klíč nespotřebuje pokus.
