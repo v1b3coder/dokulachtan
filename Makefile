@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-app-test qes-app-typecheck hooks push app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-e2e-card-real qes-app-test qes-app-typecheck hooks push app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -34,7 +34,7 @@ test-help: ## Vypíše mapování fází na interní targety
 	@echo "F4 debug-phone = debug APK na telefon (arm64)"
 	@echo "F4 emulator    = debug APK pro emulátor (x86_64)"
 	@echo "F4 release     = release APK v CI na tag (TAG=v1.3.10)"
-	@echo "F4 test-card   = reálná čtečka (TODO)"
+	@echo "F4 test-card   = reálná čtečka (průzkum čipu, bez PINu)"
 	@echo "F5 test-tools   = verify apk-fingerprint-test qes-test-parallel-selftest"
 
 venv: ## Vytvoří .venv (pyHanko + podman-compose, pin z requirements-qes.txt)
@@ -267,8 +267,13 @@ release: ## Release APK se staví v CI na tag (TAG=v1.3.10)
 	@echo "  git tag $(TAG) && make push ARGS=$(TAG)"
 	@exit 1
 
-test-card: ## F4d: reálná čtečka (TODO, dnes stub)
-	@echo "reálná čtečka není implementovaná (StubCardSigner)"
+test-card: ## F4d: reálná čtečka — průzkum čipu (bez PINu)
+	.venv/bin/python scripts/eop_card_sign.py --probe
+	@echo "Podpis s čipem: EOP_PIN=... make qes-e2e-card-real (QPIN zadáš v dialogu ovladače)"
+
+qes-e2e-card-real: ## F4d: podpis PDF reálným čipem (PIN + QPIN, docs/26 § 7)
+	@test -n "$$EOP_PIN" || { echo "Použij EOP_PIN=... make qes-e2e-card-real"; exit 1; }
+	.venv/bin/python scripts/eop_card_sign.py --sign
 
 test-tools: ## F5: nástroje a legacy (fixtures, validate, staré negative)
 	$(MAKE) verify apk-fingerprint-test qes-test-parallel-selftest

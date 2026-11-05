@@ -5,7 +5,8 @@ Cíl: zjistit, jak mluvit s českou eObčankou (eOP) bez MOI Podpisového SDK, a
 (`eobcanka.deb`) přes `LD_PRELOAD` shim nad `SCardTransmit`, plus enumerace BLE GATT
 přes BlueZ.
 
-Datum: 2026-11-03. Prostředí: Linux Mint 22, BlueZ 5.72, `eobcanka 3.5.2`.
+Datum: 2026-11-03, podpisový protokol ověřen 2026-11-05. Prostředí: Linux Mint 22,
+BlueZ 5.72, `eobcanka 3.5.2`.
 
 ## 1. Co je hotové a ověřené
 
@@ -16,7 +17,7 @@ Datum: 2026-11-03. Prostředí: Linux Mint 22, BlueZ 5.72, `eobcanka 3.5.2`.
 | Kartový APDU protokol | ✅ odposlechnutý (níže) | shim nad `libsa2v1czep11.so` |
 | BLE GATT profil čtečky | ✅ vyenumerovaný (níže) | BlueZ `busctl` nad D-Bus |
 | BLE framing (obal APDU) | ✅ uvnitř ACS EVK | AES-128 + XOR checksum, knihovna dává `javax.smartcardio` |
-| Podpisový protokol | ❌ nezachytitelný | karta nemá klíč/cert (`C_FindObjects` = 0) |
+| Podpisový protokol | ✅ ověřeno 2026-11-05 | PIN + QPIN dialog, `C_Sign` na DER podepsaných atributů (§ 7) |
 
 ## 2. Kartový APDU protokol
 
@@ -239,11 +240,81 @@ vendord jako `com.aheaditec:ccid` z `PLAN.md` 5.2 — ne jen MOI/SZR.
 - **Varianta A přes BLE** je hlavní cesta (rozhodnutí 2026-11-04): ACS EVK
   (`acssmcio`) dává `javax.smartcardio`, framing i AES-128 řeší uvnitř, AAR jsou
   veřejně dostupné. Kartový protokol výše sedí na `CardChannel`.
-- **Podpisový protokol** je jediné, co zůstává otevřené: karta bez klíče/certu
-  (`C_FindObjects` = 0) ho neodemkne. Řeší ho eOP SDK od **Monet+ (ProID)**,
-  který eObčanka veze (`com.aheaditec.eopsdk`).
-- **Nejkratší cesta k podpisu** je licencovat eOP SDK od Monet+ (ProID) — stejný
-  vendord jako `com.aheaditec:ccid` v `PLAN.md` 5.2, ne jen MOI/SZR. RE + reimplementace
-  je možná (native libs jsou pro x86_64), ale je to staticky linkované OpenSSL.
+- **Podpisový protokol** je ověřený (§ 7): kvalifikovaný certifikát je na kartě,
+  PIN odemkne kartu (`CKU_USER`) a QPIN se zadává v dialogu ovladače při
+  každém `C_Sign`. eOP SDK od **Monet+ (ProID)** (`com.aheaditec.eopsdk`)
+  tedy není potřeba — stačí standardní PKCS#11 (`libeop2v1czep11.so`) a pyHanko.
+- **Nejkratší cesta k podpisu** je hotová: `scripts/eop_card_sign.py` podepíše
+  PDF reálným čipem (F4d). Zbývá jen zapojit čtečku do appky (BLE) a ověřit
+  kombinaci Bluetooth + podpis.
 - **USB OTG** zůstává plně podložené: CCID spec je veřejná a kartový protokol výše
   je odposlechnutý. Chybí jen CCID implementace pro Android.
+
+## 7. Podpisový protokol (ověřeno 2026-11-05)
+
+Na rozdíl od § 1 (karta bez certu) má reálná eObčanka s kvalifikovaným
+certifikátem funkční podpis. Ověřeno na Linuxu s `eobcanka 3.5.2`, čtečka ACS
+ACR3901U (USB CCID), karta `eOP2v1 CZE 210910093`.
+
+### 7.1 Co karta hlásí
+
+| Objekt | Hodnota |
+|---|---|
+| Applet Admin (slot 0x1) | PIN 4–10 (`IOK`), `CKU_USER` = IOK |
+| Applet uživatele (slot 0x0) | PIN 5–15 (`PIN`), `CKU_USER` = PIN |
+| Certifikát | `iSignum 20261104-143213`, issuer **PostSignum Qualified CA 4** |
+| QCStatements | **QcCompliance + QcSSCD** → QES (ne AdES) |
+| Klíč | RSA 2048, `keyUsage: nonRepudiation`, `CKA_ALWAYS_AUTHENTICATE` |
+| Mechanismus | `SHA256-RSA-PKCS` (i `RSA-PKCS`, `SHA256-RSA-PKCS-PSS`) |
+
+### 7.2 Tři kódy, tři pole
+
+Karta má tři schvalovací kódy a PKCS#11 je mapuje na tři různá „pole“.
+Jejich záměna je nejčastější chyba (potvrzuje i oficiální příručka)
+a každá záměna decrementuje počítadlo — po 3 chybných zadáních kód
+zablokuje (PIN/QPIN 3 pokusy; PIN lze resetovat PUKem, QPIN také).
+
+| Kód | PKCS#11 | Applet / slot | Kdy |
+|---|---|---|---|
+| **IOK** (4–10) | `CKU_USER` | Admin, 0x1 | identifikace |
+| **PIN** (5–15) | `CKU_USER` | uživatel, 0x0 | správa certů, jednorázově |
+| **QPIN** (5–15) | **dialog ovladače** | uživatel, 0x0 | **při každém** podpisu |
+
+`CKU_CONTEXT_SPECIFIC` modul **nepřijímá** (`CKR_USER_TYPE_INVALID`) a `C_Login`
+s QPIN jako `CKU_USER` skončí `CKR_PIN_INCORRECT` (to je ta záměna polí).
+QPIN se tedy **nezadává přes `C_Login`**, ale do dialogu
+„Verification of signature PIN (QPIN)“, který modul otevře během `C_Sign`.
+Dialog ukazuje „Number of attempts : N“; po úspěšném podpisu se počítadlo
+nemění, po chybném se decrementuje.
+
+### 7.3 Tok podpisu
+
+```
+C_Login(CKU_USER, PIN)                    # jednorázově odemkne kartu
+C_SignInit(CKM_SHA256_RSA_PKCS, key)      # privátní klíč je viditelný
+C_Sign(der_signed_attrs)                  # ovladač zobrazí dialog QPIN
+                                          # → uživatel zadá QPIN
+                                          # → raw RSA podpis
+```
+
+Podepisují se **DER podepsané atributy CMS**, ne digest PDF (rozhodnutí #5).
+pyHanko je dodá v `Signer.async_sign_raw(data, digest_algorithm, dry_run)`:
+`data` jsou DER podepsané atributy, `dry_run=True` vrací placeholder 256 B
+(bez karty), `dry_run=False` volá `C_Sign` (a tím dialog QPIN). LTV/DSS
+zůstává mimo CMS.
+
+### 7.4 Reprodukce
+
+```bash
+.venv/bin/python scripts/eop_card_sign.py --probe        # jen čtení, bez PINu
+EOP_PIN=... .venv/bin/python scripts/eop_card_sign.py --sign   # PIN + dialog QPIN
+```
+
+`--probe` přečte ATR, applety, certifikát, QCStatements a mechanismy bez PINu.
+`--sign` otevře kartu (`C_Login(CKU_USER, PIN)`), nechá pyHanko postavit TBS
+a během `C_Sign` zadáš QPIN do dialogu. V headless prostředí (dialog je okno
+ovladače) se spouští přes `xvfb-run` a QPIN se do dialogu vpíše `xdotool`em.
+
+Ověřeno 2026-11-05: PDF podepsané reálným čipem, `valid=True`,
+`intact=True`, `coverage=ENTIRE_FILE`, podepsal `Ing. Marek Palatinus`,
+`adbe.pkcs7.detached`, SHA-256. Po podpisu zůstala počítadla PIN i QPIN na 0/3.

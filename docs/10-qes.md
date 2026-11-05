@@ -13,7 +13,7 @@ Vše níže je **ověřené** (poslední kontrola 2026-10-29), ne odhad.
 | API pro prohlížeč (`/s/:slug/qes_sessions`) | hotové (SPEC § 6); krok `QesStep.vue` po kliknutí rovnou vykreslí QR kód + „Open the app“ (žádná mezistránka) |
 | Hooky do DocuSealu (documents, combined, audit, hodnota pole) | hotové (SPEC § 7.7) |
 | Appka (Expo): vault, podpis, automatická volba podepisujícího | hotové pro klíč (SPEC § 9, `mobile/app`); volba čtečky odložena do dodání hardware |
-| Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); appka ji dnes nezapojuje (QES v appce nedosažitelné). `FakeCardSigner` (test QSCD cert) umí A tok jen v e2e skriptu; zapojení odloženo do dodání hardware |
+| Čtečka (MOI SDK) | **stub** (`StubCardSigner` → `reader_not_found`); appka ji dnes nezapojuje (QES v appce nedosažitelné). `FakeCardSigner` (test QSCD cert) umí A tok jen v e2e skriptu; desktop PKCS#11 protokol ověřen reálným čipem (docs/26 § 7), zapojení do appky (BLE) odloženo do dodání hardware |
 | TSA | DigiCert free (`http://timestamp.digicert.com`, AATL) na stagingu i produkční instanci; RSpec stub (`http://tsa.test`), E2E a negativní scénáře DigiCert free |
 
 ## Konfigurace (ENV)
