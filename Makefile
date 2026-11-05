@@ -3,7 +3,7 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-e2e-card-real qes-e2e-card-apdu qes-app-test qes-app-typecheck hooks push app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
+.PHONY: help venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-image qes-test-system-image qes-test-assets qes-test-qes qes-test-fast qes-test-parallel qes-test-parallel-fast qes-test-parallel-full qes-test-timings qes-test-parallel-selftest qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public apk-fingerprint-test verify fork-setup qes-staging-e2e-pdf qes-e2e-card qes-e2e-card-real qes-e2e-card-real-xvfb qes-e2e-card-apdu qes-app-test qes-app-typecheck hooks push app-deps fork-deps test-check test-check-js test-check-app test-check-python test test-ci test-full test-manual test-prepare test-tools test-help test-staging test-android test-eu-dss test-card test-t0 test-t1 test-t2 test-t3 test-app test-negative test-e2e debug-phone emulator release
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -279,6 +279,10 @@ qes-e2e-card-apdu: ## F4d: přímé APDU — pokusy + cert (bez PINu, bez middle
 qes-e2e-card-real: ## F4d: podpis PDF reálným čipem (PIN + QPIN, docs/26 § 7)
 	@test -n "$$EOP_PIN" || { echo "Použij EOP_PIN=... make qes-e2e-card-real"; exit 1; }
 	.venv/bin/python scripts/eop_card_sign.py --sign
+
+qes-e2e-card-real-xvfb: ## F4d: podpis reálným čipem pod Xvfb (QPIN dialog se vyplní sám)
+	@test -n "$$EOP_PIN" -a -n "$$EOP_QPIN" || { echo "Použij EOP_PIN=... EOP_QPIN=... make qes-e2e-card-real-xvfb"; exit 1; }
+	xvfb-run -a --server-args="-screen 0 1400x1000x24" scripts/eop_card_sign_xvfb.sh
 
 test-tools: ## F5: nástroje a legacy (fixtures, validate, staré negative)
 	$(MAKE) verify apk-fingerprint-test qes-test-parallel-selftest

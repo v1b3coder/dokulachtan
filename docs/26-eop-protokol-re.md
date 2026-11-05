@@ -413,15 +413,22 @@ To je důvod, proč v trace před otevřením dialogu nejsou žádná data
 (`0C 20 00 83 12 8E 10 …` je jen dotaz na počet pokusů) a proč se QPIN
 nedá poslat jako `C_Login`.
 
-### 9.1 Co blokuje dokončení podpisu
+### 9.1 Co blokovalo dokončení podpisu (vyřešeno)
 
-1. **QPIN dialog nejde ovládat syntetickým vstupem.** Dialog je forkovaný
-   `eop2v1czep11 --caller=<pid>` (Qt/X11, `WM_CLASS=Eop2v1czep11`). `xdotool`
-   přes XTEST ani XSendEvent do pole nedostane (ověřeno: pole zůstalo prázdné,
-   `Number of attempts : 3` se nemění). **Zrušení ani timeout počítadlo
-   nesnižuje** — po každém pokusu zůstalo PIN 3/3.
+1. **QPIN dialog jde ovládat — ale jen pod Xvfb.** Dialog je forkovaný
+   `eop2v1czep11 --caller=<pid>` (Qt/X11, `WM_CLASS=Eop2v1czep11`).
+   Na reálné session (`:0`) do něj `xdotool` přes XTEST ani XSendEvent
+   nedostane — window manager (Muffin) brání focus-stealing a pole zůstane
+   prázdné. Pod **`xvfb-run`** (bez WM) dialog dostane fokus sám a `xdotool type`
+   funguje. **Ověřeno 2026-11-05: podpis prošel** (`valid=True`,
+   `intact=True`, `coverage=ENTIRE_FILE`), PIN i QPIN zůstaly 3/3.
+   Recept: `xvfb-run -a --server-args="-screen 0 1400x1000x24"` + skript,
+   který počká na okno `Verification of signature PIN`, udělá
+   `windowactivate --sync` + `windowfocus --sync`, vpíše QPIN, ověří počet
+   teček a odešle `Return`.
 2. **SM klíč** z `EXTERNAL AUTHENTICATE` (80 B = 64 B ECDH veřejný klíč +
-   16 B AES-MAC) není odvozený. Chybí KDF.
+   16 B AES-MAC) není odvozený. Chybí KDF — to je poslední kus pro
+   clean-room implementaci.
 
 ### 9.2 Jak to dokončit
 
@@ -436,3 +443,52 @@ nedá poslat jako `C_Login`.
   `MSE:Set DST` (`00 22 41 A4`) i `MSE:Set AT` (`00 22 C1 A4`) vrací `9000`.
   `MSE:Set AT` ale nechá kartu čekat na `GENERAL AUTHENTICATE`; bez něj
   plaintext příkaz skončí `6B00` a pomůže jen cold reset.
+
+## 10. Kompletní podpisový tok (ověřeno 2026-11-05, reálný podpis)
+
+Referenční trace celého úspěšného podpisu: `docs/26-eop-trace-sign.log`
+(374 APDU, 44 KB, **bez cleartext PINu** — QPIN je v `87` šifrovaný).
+
+### 10.1 Sestavení SM
+
+```
+MSE:Set AT      00 22 C1 A4 09 80 01 8C 83 01 01 95 01 80   -> 9000
+GET CHALLENGE    00 84 00 00 08                                 -> <8 B>
+EXTERNAL AUTH    00 82 00 00 50 <80 B>                            -> 6150
+GET RESPONSE     00 C0 00 00 50                                       -> <80 B>
+```
+
+`EXTERNAL AUTHENTICATE` (plaintext, 80 B) nese ECDH veřejný klíč (64 B)
+a AES-MAC (16 B); odpověď karty je její ECDH veřejný klíč + MAC.
+Z toho obě strany odvodí sdílené tajemství a SM klíč.
+
+### 10.2 Podpis (celé v SM)
+
+```
+VERIFY QPIN    0C 20 00 83 <Lc> 87 11 01 <16 B> 8E 10 <MAC>   -> 6116
+MSE:Set DST    0C 22 41 B6 <Lc> 87 11 01 <16 B> 8E 10 <MAC>   -> 6116
+PSO:Hash       0C 2A 90 A0 <Lc> 87 31 01 <48 B> 8E 10 <MAC>   -> 6149
+PSO:CDS        0C 2A 9E 9A 12 8E 10 <MAC>                        -> 6100
+GET RESPONSE   00 C0 00 00 FF                                          -> 256 B = podpis
+```
+
+`87 <len> 01 <data>` = padding indicator `01` + šifrovaná data (QPIN 6 číslic
+→ 16 B blok; hash → 48 B). `99 02 <SW>` je status word uvnitř SM.
+
+### 10.3 Co z toho plyne pro implementaci
+
+- QPIN **není** `VERIFY` s daty v plaintextu: je to `0C 20 00 83` se
+  šifrovaným QPINem v `87` a MACem v `8E`.
+- `MSE:Set DST` pro podpis má **P1 `0x41`, P2 `0xB6`** (ne `0xA4`);
+  `PSO:Hash` je `0x90 0xA0`, `PSO:CDS` je `0x9E 0x9A`.
+- `00 A6 00 00 12 <8 B> <AID>` je MSE se **session hodnotou** —
+  v rámci jednoho sezení je konstantní (v trace 58× stejná), mezi
+  sezeními jiná. Není to PIN ani klíč v cleartextu.
+- **Riziko PINů:** špatný MAC se odmítne **před** kontrolou PINu, takže
+  chybný SM klíč nespotřebuje pokus. Ověřeno: po celém podpisu PIN 3/3.
+
+### 10.4 Zbývá pro clean-room
+
+Odvodit KDF ze `EXTERNAL AUTHENTICATE` (ECDH → AES klíč + MAC klíč).
+Až to bude, je možné celý tok výše implementovat v appce přes jmrtd
+(`SecureMessagingWrapper`) a `javax.smartcardio` z ACS EVK, bez middleware.
