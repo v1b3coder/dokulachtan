@@ -14,48 +14,60 @@ BlueZ 5.72, `eobcanka 3.5.2`.
 |---|---|---|
 | Čtečka přes USB (CCID) | ✅ funguje | `pcscd` + `libccid`, ATR přečten |
 | Identifikace karty | ✅ eOP vydaná po 7/2018 | ATR v pcsc-tools DB |
-| Kartový APDU protokol | ✅ odposlechnutý (níže) | shim nad `libsa2v1czep11.so` |
+| Kartový APDU protokol | ✅ odposlechnutý (níže, § 2) | shim nad `libeop2v1czep11.so` |
+| Podpisový tok přes SM | ✅ odposlechnutý (níže, § 8) | shim nad `libeop2v1czep11.so` |
 | BLE GATT profil čtečky | ✅ vyenumerovaný (níže) | BlueZ `busctl` nad D-Bus |
 | BLE framing (obal APDU) | ✅ uvnitř ACS EVK | AES-128 + XOR checksum, knihovna dává `javax.smartcardio` |
 | Podpisový protokol | ✅ ověřeno 2026-11-05 | PIN + QPIN dialog, `C_Sign` na DER podepsaných atributů (§ 7) |
 
 ## 2. Kartový APDU protokol
 
-Karta používá **logické kanály** a proprietární třídu `CLA 0x81`. Standardní ISO
-`SELECT MF` (`CLA 0x00`) karta odmítá `6D00`/`6E00` — proto generic OpenSC
-nefunguje.
+Ověřeno 2026-11-05 na kartě `eOP2v1 CZE 210910093` (ATR
+`3B 7E 94 00 00 80 25 D2 03 10 01 00 56 00 00 00 02 02 00`).
 
-**AID je odvozené z ATR**, ne pevná konstanta: IIN z historických bajtů + issuer
-data. Pro tuto kartu:
+### 2.1 Aktivní cesta: standardní ISO 7816-4, AID `A0000000288010370202`
 
-```
-ATR: 3B 7E 94 00 00 80 25 D2 03 10 01 00 56 00 00 00 02 02 00
-AID: D2 03 10 01 00 01 00 02 02   (9 bajtů)
-```
-
-**SELECT appletu** (na logickém kanálu 2, resp. 1, `P2 0x0C` = bez FCI):
+Modul `libeop2v1czep11.so` (ten používá `scripts/eop_card_sign.py`) mluví
+**standardní ISO 7816-4** s `CLA 0x00`. Žádná proprietární třída, žádné logické
+kanály. Karta se hlásí jako **IAS Classic v4** (`GET DATA 7F30`).
 
 ```
-02 A4 04 0C 09 D2 03 10 01 00 01 00 02 02
-01 A4 04 0C 09 D2 03 10 01 00 01 00 02 02
+SELECT AID     00 A4 04 0C 0A A0 00 00 00 28 80 10 37 02 02   -> 9000
+GET DATA 9F7F  00 CA 9F 7F            -> 6C 2D
+               00 CA 9F 7F 2D         -> 9F 7F 2A <card capabilities>
+SELECT DF      00 A4 00 00 02 <fid>    -> 61 xx
+GET RESPONSE   00 C0 00 00 <len>
+SELECT EF      00 A4 02 00 02 <fid>    -> 61 xx
+GET RESPONSE   00 C0 00 00 <len>
+READ BINARY    00 B0 <off hi> <off lo> <len>   (0xDC = 220 B chunků)
 ```
 
-**GET DATA** (`CLA 0x81`, `INS 0xCA`, `P1 0x00`/`0x01`, `P2` = tag):
+Čtení je **plaintext** (žádné secure messaging), takže `READ BINARY` jde
+přímo. Struktura (ověřeno čtením certifikátu, bajtově shodné s middlewarem):
 
-```
-81 CA 00 <tag> <Le>
-81 CA 01 <tag> <Le>
-```
+| DF | název | EF | obsah |
+|---|---|---|---|
+| `0x0202` | `mscp` | `0x0004` | jméno kontejneru (UTF-16) |
+| `0x0202` | `mscp` | `0x000B` | certifikát, **zlib** (`78 9C`) → 2068 B DER |
+| `0x0203` | `mp_p11` | `0x000A` | certifikát |
 
-Karta vrací `6C 01`/`6C 02` („wrong length") — je potřeba poslat znovu
-s přesným `Le`.
+`GET DATA 7F30` → `IAS Classic v4` (card OS). EF `0x0005` nese seznam PIN
+referencí (`0x81`–`0x87`, `0x55`–`0x5C`), EF `0x0007` file layout
+(`mscp`, `mp_p11`, `cardid`, `cardcf`, `cardapps`, `cmapfile`, `NFO`, `rdcf`,
+`cont`, `ksc`).
 
-**Tagy:** `0x01`, `0x81`, `0x82`, `0x83`, `0x84`, `0x87`, `0x89`, `0x8B`,
-`0x8C`, `0x8D`, `0x8E`.
+### 2.2 Starší cesta: `libsa2v1czep11.so`, `CLA 0x81`
 
-Ověřené hodnoty: `81 CA 01 01 09` → ASCII `210910093` (číslo dokladu);
-`81 CA 01 81 04` → `00 00 E4 98`; `81 CA 01 82 01` → `04`;
-`81 CA 01 84 01` → `03`; `81 CA 01 8C 01` → `0A` (a další čítače).
+`libsa2v1czep11.so` (karta „SA 2v1") používá **logické kanály** a
+proprietární třídu `CLA 0x81`; AID je odvozené z ATR
+(`D2 03 10 01 00 01 00 02 02`). Naše karta tuhle cestu nepoužívá —
+proto se `SELECT MF` s `CLA 0x00` **nerozbije** (vrací `9000`, viz § 2.1).
+
+**Bezpečný dotaz na pokusy** (žádné snižování počítadla): `VERIFY` **bez
+dat** (`00 20 00 <P2>`) vrátí `63 Cx`, kde `x` = zbývající pokusy.
+Ověřeno: `P2 0x81` (MRZ) = 2, `0x82` (CAN) = 5, `0x83` (PIN) = 3,
+`0x84`–`0x87` = `6A 88` (neexistuje). `scripts/eop_apdu.py --attempts`
+tenhle dotaz dělá a nikdy neposílá `VERIFY` s daty.
 
 ## 3. BLE GATT profil čtečky
 
@@ -312,9 +324,61 @@ EOP_PIN=... .venv/bin/python scripts/eop_card_sign.py --sign   # PIN + dialog QP
 
 `--probe` přečte ATR, applety, certifikát, QCStatements a mechanismy bez PINu.
 `--sign` otevře kartu (`C_Login(CKU_USER, PIN)`), nechá pyHanko postavit TBS
-a během `C_Sign` zadáš QPIN do dialogu. V headless prostředí (dialog je okno
-ovladače) se spouští přes `xvfb-run` a QPIN se do dialogu vpíše `xdotool`em.
+a během `C_Sign` zadáš QPIN do dialogu. Dialog je **samostatný forkovaný proces**
+`eop2v1czep11 --caller=<pid>` (nativní Qt okno s jedním polem `QPIN`
+a textem `Number of attempts : N`), ne okno `eopcardman`. Na reálné X session se do
+něj `xdotool` nedostane (ověřeno 2026-11-05); **zrušení dialogu počítadlo
+nesnižuje** — po timeoutu zůstalo PIN 3/3.
 
 Ověřeno 2026-11-05: PDF podepsané reálným čipem, `valid=True`,
 `intact=True`, `coverage=ENTIRE_FILE`, podepsal `Ing. Marek Palatinus`,
 `adbe.pkcs7.detached`, SHA-256. Po podpisu zůstala počítadla PIN i QPIN na 0/3.
+
+## 8. Podpisový tok přes secure messaging (odposlechnuto 2026-11-05)
+
+Čtení certifikátu je plaintext (§ 2.1), ale **podpis přepne kartu do secure
+messaging** (ISO 7816-4 SM). To je jediná část, která v čtecí cestě není.
+
+### 8.1 Nastavení SM
+
+```
+MSE:Set AT      00 22 C1 A4 09 80 01 8C 83 01 01 95 01 80      -> 9000
+GET CHALLENGE    00 84 00 00 08                                   -> <8 B>
+EXTERNAL AUTH    00 82 00 00 50 <80 B>                             -> 61 50
+GET RESPONSE     00 C0 00 00 50                                      -> <80 B>
+```
+
+`MSE:Set AT` (`P1 0xC1`, `P2 0xA4`) samo o sobě nechá kartu čekat na
+`GENERAL AUTHENTICATE`; bez něj další plaintext APDU skončí `6B 00` a je
+potřeba cold reset. `MSE:Set DST` (`00 22 41 A4`) je bezpečný.
+
+### 8.2 Formát SM zpráv
+
+Po nastavení SM jdou příkazy i odpovědi obalené:
+
+```
+command   0C <INS> <P1> <P2> <Lc> [87 <len> <encrypted>] 8E 10 <16 B MAC>
+response  99 02 <SW> [87 <len> <encrypted>] 8E 10 <16 B MAC>
+```
+
+`CLA 0x0C` = SM bit; `8E` = MAC (počítá se i přes `87` data); `87` = padding
+pro šifrovaná data; `99` = status word uvnitř SM. Tohle je přesně to, co
+implementuje jmrtd (`SecureMessagingWrapper`) nad `javax.smartcardio` z ACS EVK.
+
+### 8.3 Podpis
+
+```
+VERIFY QPIN   0C 20 00 83 <Lc> [87 <len> <encrypted QPIN>] 8E 10 <MAC>
+PSO:CDS       0C 2A 9E 9A <Lc> [87 <len> <encrypted digest>] 8E 10 <MAC>
+```
+
+`PSO:Compute Digital Signature` je `00 2A 9E 9A` — karta ho zná (bez PINu vrátí
+`69 85`, „conditions of use not satisfied“), takže struktura příkazu je ověřená
+bez rizika pokusů.
+
+### 8.4 Co zůstává
+
+Odvození SM klíče (ECDH + KDF) z `EXTERNAL AUTHENTICATE` je poslední
+card-specific část; `MSE:Set AT` data i formát zpráv jsou výše. Do té doby je
+jediná funkční cesta na desktopu middleware (`scripts/eop_card_sign.py --sign`)
+a na Androidu jmrtd + ACS EVK.

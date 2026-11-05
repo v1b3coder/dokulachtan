@@ -32,6 +32,7 @@ Přeskočení: `SKIP_QES_HOOK=1 git push`.
 | **F4b** | `make test-android` | APK + emulátor/instrumentace | SDK, KVM | ~15–30 min | po buildu APK, lokálně |
 | **F4c** | `make test-eu-dss` | EU DSS | externí API, PDF opouští stroj | ~1,5 min | ručně, nikdy v CI |
 | **F4d** | `make test-card` | reálná čtečka: průzkum čipu (bez PINu) | hardware | — | čip ověřen 2026-11-05, podpis `make qes-e2e-card-real` (docs/26 § 7) |
+| **F4d** | `make qes-e2e-card-apdu` | přímé APDU: pokusy + cert (bez PINu, bez middleware) | hardware | — | cert bajtově shodný s middlewarem (docs/26 § 2.1) |
 | **F5** | `make test-tools` | fixtures, validate, staré negative, APK fingerprint, parallel selftest | lokální nástroje | ~1,5 min | při změně harnessu/legacy |
 
 `make test-manual` = F4a + F4c, vyžaduje `ALLOW_EXTERNAL=1`.
