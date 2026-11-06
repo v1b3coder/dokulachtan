@@ -593,11 +593,11 @@ K_enc/K_mac. Ověřit to jde na kartě bez rizika: špatný MAC karta odmítne
 
 Statická analýza `mse_set_mutual_auth` (`FUN_00210ff8`) a `get_reset_select_info`
 (`FUN_0020248c`) konečně vysvětlila 18bajtový vstup `MSE:Set DST`. Není to
-zápis náhodného čísla, ale **čtení karty**:
+zápis, ale **čtení karty** (Case 2, `Le=0x12`):
 
 ```
 00 A6 00 00        -> 6C 12            (Case 1, karta hlásí délku 18)
-00 A6 00 00 12     -> <18 B> 9000       (Case 2, Le=0x12; 4 B + 4 B + 10 B AID)
+00 A6 00 00 12     -> <18 B> 9000       (4 B + 4 B + 10 B AID)
 ```
 
 `get_reset_select_info()` rozpadá odpověď takto:
@@ -608,20 +608,28 @@ zápis náhodného čísla, ale **čtení karty**:
 | 4 | 4 B | druhá polovina (dohromady 8 B **SSC**) |
 | 8 | 10 B | AID appletu (`A0000000288010370202`) |
 
-Teprve potom middleware pošle `MSE:Set DST` **s tímto SSC** znovu jako data
-(`00 A6 00 00 12 <8 B SSC> <10 B AID>`), což karta přijme (`9000`). Pozorování:
+Ověřeno na kartě 2026-11-05: každé `00 A6 00 00 12` vrátí **čerstvé** 8B SSC
+(např. `4806B0630A419014`, `E94F247A9D9738AD`); middleware ho jen čte a používá
+pro SM. Žádný zápis SSC se neposílá — náš pokus poslat ho zpět v `MSE:Set DST`
+kartu vždy zablokoval (`SCARD_E_NOT_TRANSACTED`). **SSC se tedy negenereuje
+ani nezapisuje, ale čte.**
 
-- middleware má v rámci jednoho procesu SSC konstantní (`3B9166EA8B24197D`
-  6× v jednom probe, `16693840…` v trace) a mezi procesy jiný — hodnota je tedy
-generovaná/uložená na kartě, ne v middleware,
-- náš pokus poslat náhodné 8B (`--ssc <random>`) karta odmítla
-  (`SCARD_E_NOT_TRANSACTED`) a zůstala ve stavu, který vyžaduje cold reset
-  (§ 14.1); tím se potvrdilo, že SSC se musí **číst**, ne hádat,
-- ověřit, zda karta SSC jen ukládá, nebo i validuje, už nešlo, protože karta
-  byla zablokovaná (§ 14.1).
+**Důsledek pro clean-room implementaci:** SSC = odpověď `00 A6 00 00 12`
+(prvních 8 B). Tím odpadá poslední nejistota v `MSE:Set DST`.
 
-**Důsledek pro clean-room implementaci:** SSC se **negeneruje**, ale **čte**
-`00 A6 00 00 12` z karty. Tím odpadá poslední nejistota v `MSE:Set DST`.
+### 13.1 EXTERNAL AUTHENTICATE (stav 2026-11-05)
+
+Po `MSE:Set AT` (`00 22 C1 A4 09 80 01 8C 83 01 01 95 01 80` → `9000`) a
+`GET CHALLENGE` (`00 84 00 00 08` → 8 B) karta přijme EXTERNAL AUTHENTICATE
+`00 82 00 00 50 <8 B> <64 B pubkey> <8 B MAC>`. Se **správným** MAC odpoví
+`6150` + 80 B (její efemérní pubkey + MAC); se špatným `63 Cx`, kde `x` je počet
+zbývajících pokusů (start 15, cold reset je obnoví). Karta se po špatném MAC
+**neresetuje** — na rozdíl od zápisu SSC se dá zkoušet dál.
+
+Ověřeno 2026-11-05: `8 B = 0`, `8 B = SSC`, `8 B = challenge`, `8 B = reverse(SSC)`
+i `CMAC`/`AES-CBC` z SSC jako klíče karta odmítla (`63CE`…`63C1`). **8B MAC je
+tedy poslední neznámá** — počítá se z (challenge, náš efemérní pubkey) klíčem,
+který má karta předem (statický SM klíč, ref. 1 z `MSE:Set AT`).
 
 ## 14. Odposlech SM klíčů přes GDB (2026-11-05)
 
@@ -662,8 +670,23 @@ PIN ciphertext: 75ceefcbb9c96ec95f14dd70c25b8cc4
 
 ### 14.1 Blokace hardware (2026-11-05)
 
-Při pokusech s náhodným SSC karta přešla do stavu `SCARD_E_NOT_TRANSACTED`
-a odmítá i `SELECT AID`. ATR jde přečíst, ale `SCardTransmit` vrací
-`0x80100016`; `SCardReconnect(RESET/UNPOWER)` ani `SCardControl` nepomohou.
-Kartu je potřeba **fyzicky vyresetovat** (vyndat/zandat, případně restart
-`pcscd`), což agent neumí. Do té doby nelze na kartě nic dalšího testovat.
+Při pokusech s náhodným MAC v `EXTERNAL AUTHENTICATE` karta snižovala
+samostatné počítadlo „external auth“ (start 15, `63 CF`), až došla na 0
+(`63 C0`). Pak karta **invalidovala applet**: `SELECT AID` vrací `62 83`,
+většina APDU `6D 00`; čitelné zůstaly jen `GET DATA 9F7F` a `DF 35`
+(`7F FF`). Cold reset (`opensc-tool --reader 0 --reset cold`), warm reset,
+`SCardDisconnect(UNPOWER)` i 60s bez napájení stav nezměnily.
+
+To je **blokace appletu, ne PINu**: PIN i QPIN zůstaly na 3/3. Počítadlo
+external auth je volatilní (cold reset ho vrátí na 15), ale po dosažení 0 už
+applet zůstává invalidovaný i po resetu — pravděpodobně zámek v NVM.
+
+**Co to znamená:** bez „unblock“ příkazu (který middleware nezná) nebo
+re-personalizace karty se signing flow na této kartě už nerozjede. Pro další
+pokusy je potřeba jiná karta, nebo obnovit applet z vendor toolu.
+
+### 14.2 Poučení pro příště
+
+`EXTERNAL AUTHENTICATE` **není** bezpečný orákulum pro KDF: každý špatný MAC
+spotřebuje pokus a po 15 pokusech applet zablokuje. KDF je potřeba ověřit
+**offline** proti dvojici plaintext/ciphertext PINu z § 14, ne na kartě.
