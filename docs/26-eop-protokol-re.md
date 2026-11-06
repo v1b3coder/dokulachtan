@@ -710,3 +710,51 @@ Nový `libeop2v1czep11.so` vidí `(empty)`. `SELECT` staršího AID
 **Závěr:** kartu je potřeba obnovit vendor nástrojem (nebo jinou kartou);
 bez Admin PINu a bez znalosti unblock příkazu se signing flow na této kartě
 nerozjede.
+
+## 15. KDF a MAC: karta je IAS/ECC, standard CWA 14890 (2026-11-05)
+
+Karta se hlásí jako **IAS Classic v4** a middleware používá `c_ias_applet::mutual_authenticate`.
+To je přesně **IAS/ECC** — karetní rodina, pro kterou má OpenSC driver
+`card-iasecc.c` + `iasecc-sm.c` + `cwa14890.c`. Není to tedy proprietární
+protokol Monet+; je to **CWA 14890-1** („Application Interface for smart cards
+used as Secure Signature Creation Devices“). Z toho plyne:
+
+### 15.1 KDF (CWA 14890-1 § 8.7.2–8.8)
+
+```c
+kseed  = kifd XOR kicc;                  // 32 B každý
+K_enc  = SHA1(kseed || 00 00 00 01)[0:16];  // 16 FS SHA-1
+K_mac  = SHA1(kseed || 00 00 00 02)[0:16];
+SSC    = rndicc[4:8] || rndifd[4:8];      // 4+4 B, ISO 7816-4 § 9.6
+```
+
+`kifd`/`kicc` jsou 32bajtové náhodné hodnoty z `EXTERNAL AUTHENTICATE`
+(terminal) a z odpovědi karty. `rndifd`/`rndicc` jsou jejich 8bajtové prefixy.
+
+### 15.2 MAC (CWA 14890-1 § 8.9)
+
+MAC se počítá nad `SSC || CLA|0x0C || INS || P1 || P2 || Lc || DO'87 || DO'97`
+s paddingem ISO 9797-1 method 2 (`0x80` + nuly), klíčem `K_mac`; CWA 14890
+používá retail MAC a bere 8 B, naše karta posílá **16 B** (`8E 10`), takže jde
+o **AES-CMAC** se stejným klíčem a stejnou strukturou.
+
+### 15.3 Šifrování
+
+`87 <len> 01 <ciphertext>` = **AES-CBC** s `K_enc` a IV = `SSC` (16 B, doplněný
+nulami); `99 02 <SW>` je status uvnitř SM, `8E 10 <MAC>` je MAC.
+
+### 15.4 Co z toho plyne pro ověření
+
+Z GDB odposlechu (§ 14) máme `kifd XOR kicc` = 64B ECDH výstup a 16B SSC,
+ale **nemáme** `kifd`/`kicc` samostatně — a KDF je potřebuje. Pro ověření
+stačí jeden další GDB záznam, který u `mutual_authenticate` vypíše i
+`EXTERNAL AUTHENTICATE` data (80 B) a odpověď (80 B). Pak:
+
+```
+kifd = cmd[8:40]; kicc = resp[8:40]
+SSC  = resp[4:8] || cmd[4:8]
+K_enc = SHA1((kifd^kicc) || 00000001)[:16]
+ct    = AES-CBC(K_enc, SSC||0*8, pad(PIN))
+```
+
+To je celý KDF/MAC — žádná další neznámá.
