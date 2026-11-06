@@ -690,3 +690,23 @@ pokusy je potřeba jiná karta, nebo obnovit applet z vendor toolu.
 `EXTERNAL AUTHENTICATE` **není** bezpečný orákulum pro KDF: každý špatný MAC
 spotřebuje pokus a po 15 pokusech applet zablokuje. KDF je potřeba ověřit
 **offline** proti dvojici plaintext/ciphertext PINu z § 14, ne na kartě.
+
+### 14.3 Admin applet je po blokaci pořád vidět, ale neovladatelný
+
+Po blokaci uživatelského appletu (`62 83`) starší middleware
+`libsa2v1czep11.so` pořád vidí **Admin** token:
+
+```
+token label        : eOP2v1 CZE 210910093 Admin
+token flags        : login required, token initialized, PIN initialized, readonly
+pin min/max        : 4/10
+```
+
+Nový `libeop2v1czep11.so` vidí `(empty)`. `SELECT` staršího AID
+`D20310010001000202` sice vrátí `9000`, ale `CLA 0x81` na něm odpovídá
+`6B 00` (špatné parametry) a `81 CA 00 00 02` jen `00 00`. Admin PIN (IOK,
+4–10 číslic) neznáme, takže applet zablokovaný zůstává.
+
+**Závěr:** kartu je potřeba obnovit vendor nástrojem (nebo jinou kartou);
+bez Admin PINu a bez znalosti unblock příkazu se signing flow na této kartě
+nerozjede.
