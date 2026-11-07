@@ -650,10 +650,13 @@ vtable se nastaví breakpointy na `+0x48` (init), `+0x50` (feed), `+0x58`
 ECDH init(1), feed 8+8+8+8+32 B, derive -> 64 B:
   <REDACTED: 32 B>
   <REDACTED: 32 B>
-SSC (16 B, roste po 1): <REDACTED: 16 B> …2a
-PIN plaintext: <PIN> ff ff ff ff ff ff ff 80   ("<PIN-REDACTED>" + 0xFF×7 + 0x80)
+SSC (16 B, roste po 1): <REDACTED: 16 B>
+PIN plaintext: <PIN> ff ff ff ff ff ff ff 80   (tvar PIN || 0xFF×7 || 0x80)
 PIN ciphertext: <REDACTED: 16 B>
 ```
+
+> Konkrétní hodnoty z odposlechu v repu nejsou: obsahují PIN. Pro ověření KDF
+> proti dvojici plaintext/ciphertext je potřeba nový odposlech s jiným PINem.
 
 **Co to znamená:**
 
@@ -666,7 +669,7 @@ PIN ciphertext: <REDACTED: 16 B>
   ale s 0xFF místo 0x00; to je potřeba ověřit proti KDF.
 - **KDF zůstává jediná neznámá**: ze 64B ECDH výstupu a 16B SSC vzniká
   16B klíč. Kandidáti (SHA-256(secret||counter), AES-CMAC, …) se dají ověřit
-  offline proti dvojici plaintext/ciphertext PINu výše, bez karty.
+  offline proti dvojici plaintext/ciphertext PINu z odposlechu (mimo repo), bez karty.
 
 ### 14.1 Blokace hardware (2026-11-05)
 
@@ -689,7 +692,7 @@ pokusy je potřeba jiná karta, nebo obnovit applet z vendor toolu.
 
 `EXTERNAL AUTHENTICATE` **není** bezpečný orákulum pro KDF: každý špatný MAC
 spotřebuje pokus a po 15 pokusech applet zablokuje. KDF je potřeba ověřit
-**offline** proti dvojici plaintext/ciphertext PINu z § 14, ne na kartě.
+**offline** proti dvojici plaintext/ciphertext PINu (mimo repo), ne na kartě.
 
 ### 14.3 Admin applet je po blokaci pořád vidět, ale neovladatelný
 
