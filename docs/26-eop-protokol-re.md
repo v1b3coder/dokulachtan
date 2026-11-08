@@ -688,6 +688,18 @@ applet zůstává invalidovaný i po resetu — pravděpodobně zámek v NVM.
 re-personalizace karty se signing flow na této kartě už nerozjede. Pro další
 pokusy je potřeba jiná karta, nebo obnovit applet z vendor toolu.
 
+**Stav 2026-11-08 (po opravě launcheru, § 16):** proxy naběhne, 1 čtečka,
+`card present : yes`, ale `containers : 0x00000000` a `root certificates : 0`.
+Bezpečné APDU (jen `SELECT`, žádný `VERIFY` s daty):
+`SELECT A0000000288010370202` → `62 83`, `SELECT D20310010001000202` →
+`6D00`, `GET DATA 7F30` → `6C1C` (karta a její OS žijí).
+
+Poslední dobrý stav (2026-11-05 08:56, před blokací) měl **2 čtečky**:
+ druhý slot byl tentýž eOP přes `libsa2v1czep11.so` s **16 kontejnery /
+8 podpisovými**. Dnes ten slot zmizel — Admin applet na `SELECT`
+neodpovídá, takže middleware nemá co vypsat a GUI Správce karty je
+prázdné.
+
 ### 14.2 Poučení pro příště
 
 `EXTERNAL AUTHENTICATE` **není** bezpečný orákulum pro KDF: každý špatný MAC
