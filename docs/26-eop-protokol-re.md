@@ -761,3 +761,32 @@ ct    = AES-CBC(K_enc, SSC||0*8, pad(PIN))
 ```
 
 To je celý KDF/MAC — žádná další neznámá.
+
+## 16. Provoz middlewaru: `%u` v `.desktop` rozbije Správce karty
+
+**Symptom:** Správce karty hlásí „karta není vložena“, i když diagnostika vidí
+čtečku i ATR karty (`SCardListReaders` / `SCardGetStatusChange` = 0).
+
+**Příčina:** `eopcardman` bere **`argv[1]` jako cestu k PKCS#11 proxy modulu**.
+`.desktop` má `Exec=…/eopcardman.sh %u`; `%u` je field code, který launcher
+bez URL expanduje na *nic*, ale při ručním opsání řádku do shellu se předá
+**literálně**. V `~/.eObcanka_logs/cardman.log` pak je:
+
+```
+error Provider module '%u' not exists!
+info  Module :
+error Module signature invalid ( 0x00000020 )
+error C_GetSlotList ( 0x00000190 )      ← CKR_CRYPTOKI_NOT_INITIALIZED
+```
+
+Proxy se nenainicializuje → 0 slotů → 0 čteček → „karta není vložena“.
+Diagnostika jde přes `winscard` mimo PKCS#11, takže kartu vidí.
+
+**Řešení:** spouštět **bez argumentu** — `/opt/eObcanka/SpravceKarty/eopcardman.sh`,
+nebo z menu (`gtk-launch eopcardman` field code expanduje správně). Správný start
+má v logu `Module : /usr/lib/x86_64-linux-gnu/libeopproxyp11.so`, `Number of
+readers : 1`, `card present : yes`, `card name : eOP CZE v2.1`.
+
+Proxy (`libeopproxyp11.so`) si pak podle `/usr/local/etc/crplus/eopproxy.x64.cfg`
+načte `Module1..3` (`libsa2v1czep11.so`, `libeopczep11.so`, `libeop2v1czep11.so`)
+a vybere ten, který odpovídá kartě (pro eOP2v1 je to `Module3`).
