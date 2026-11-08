@@ -802,3 +802,31 @@ readers : 1`, `card present : yes`, `card name : eOP CZE v2.1`.
 Proxy (`libeopproxyp11.so`) si pak podle `/usr/local/etc/crplus/eopproxy.x64.cfg`
 načte `Module1..3` (`libsa2v1czep11.so`, `libeopczep11.so`, `libeop2v1czep11.so`)
 a vybere ten, který odpovídá kartě (pro eOP2v1 je to `Module3`).
+
+## 17. Obnova invalidovaného appletu (2026-11-08)
+
+`62 83` je ISO 7816-4 „selected file invalidated“ — karta hlásí, že applet/DF
+je *disabled*. Ověřené pokusy o obnovu (jen `SELECT` a `ACTIVATE FILE`, žádný
+`VERIFY` s daty):
+
+| APDU | Odpověď | Význam |
+|---|---|---|
+| `SELECT A0000000288010370202` | `62 83` | applet je vybraný, ale invalidovaný |
+| `ACTIVATE FILE` (`00 44 00 00`) | `6D 00` | INS není podporován → neobnoví |
+| `SELECT D20310010001000202` (Admin) | `6D 00` | Admin applet už není |
+| `SELECT A000000003000000` (GP ISD) | `6D 00` | karta není GlobalPlatform |
+| `GET DATA 7F30` | `6C 1C` | card OS žije |
+
+**Proč to nejde z PC:** IAS Classic (applet `IAS Classic V4.x` v IDPrime MD,
+IDEMIA/Thales) má životní cyklus ve čtyřech fázích. Do fáze *usage* se přechází
+v *personalization* fázi, kterou autentizuje **Personalization Agent** vlastním
+párem klíčů. `SET STATUS` v Card Manageru umí změnit life cycle appletu, ale až po
+autentizaci SD klíči (SCP02/SCP03) — ty má vydavatel, ne držitel. `ACTIVATE FILE`
+by deaktivovaný DF reaktivoval, ale na téhle kartě vrací `6D00` (applet je
+invalidovaný v JCRE, ne jen deaktivovaný DF).
+
+**Prakticky:** obnova není uživatelsky možná. Jediné cesty jsou výměna OP
+(poškození čipu, 100 Kč) nebo nový OP; případně se zeptat DIA podpory
+(+420 227 023 444, identitaobcana@dia.gov.cz), jestli mají re-personalizační
+nástroj — oficiálně po zablokování elektronických funkcí „není možné funkce znovu
+aktivovat a je nutné požádat o nový občanský průkaz“.
