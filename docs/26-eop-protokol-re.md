@@ -705,6 +705,8 @@ prázdné.
 `EXTERNAL AUTHENTICATE` **není** bezpečný orákulum pro KDF: každý špatný MAC
 spotřebuje pokus a po 15 pokusech applet zablokuje. KDF je potřeba ověřit
 **offline** proti dvojici plaintext/ciphertext PINu (mimo repo), ne na kartě.
+`scripts/eop_sm_probe.py` proto `EXTERNAL AUTHENTICATE` bez
+`--allow-external-auth` vůbec nepošle.
 
 ### 14.3 Admin applet je po blokaci pořád vidět, ale neovladatelný
 

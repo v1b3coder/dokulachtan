@@ -11,12 +11,17 @@ Pak se stejný SSC pošle zpět v `MSE:Set DST`:
   00 A6 00 00 12 <8 B SSC> <10 B AID>  -> 9000
 
 Následuje `MSE:Set AT` a `GET CHALLENGE`; teprve pak se posílá
-`EXTERNAL AUTHENTICATE`. Skript nic z toho neposílá jako PIN, takže
-nespotřebuje žádný pokus (chybný MAC karta odmítne před kontrolou PINu).
+`EXTERNAL AUTHENTICATE`. Skript nic z toho neposílá jako PIN, ale každý
+`EXTERNAL AUTHENTICATE` **spotřebuje jeden pokus z interního counteru na
+kartě** (start 15, `63 CF` → `63 C0`); po 15. pokusu karta applet
+invaliduje (`62 83`) a obnovit ho z PC nelze (docs/26 § 14.1, § 17).
+Proto je `EXTERNAL AUTHENTICATE` ve výchozím stavu vypnutý a pouští se
+jen s `--allow-external-auth`.
 
 Použití:
   .venv/bin/python scripts/eop_sm_probe.py
   .venv/bin/python scripts/eop_sm_probe.py --ssc 3B9166EA8B24197D
+  .venv/bin/python scripts/eop_sm_probe.py --allow-external-auth
 
 Poznámka: middleware drží kartu po chybném APDU ve stavu
 `SCARD_E_NOT_TRANSACTED`; pomůže jen fyzický cold reset (docs/26 § 14.1).
@@ -51,6 +56,9 @@ def get_data(card: Pcsc, ins: int, p1: int, p2: int) -> bytes:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--ssc', help='vynutit 8B SSC (hex); jinak se přečte z karty')
+    ap.add_argument('--allow-external-auth', action='store_true',
+                    help='povolí EXTERNAL AUTHENTICATE; každý pokus sníží interní '
+                         'counter karty a po 15 applet invaliduje (docs/26 § 14.1, § 17)')
     args = ap.parse_args()
 
     card = Pcsc()
@@ -85,6 +93,10 @@ def main() -> int:
         print(f'náš pubkey: {pub.hex().upper()}')
 
         # 4) EXTERNAL AUTHENTICATE: 8 B + 64 B pubkey + 8 B (MAC zatím neznámý).
+        if not args.allow_external_auth:
+            print('EXTERNAL AUTHENTICATE přeskočen: bez --allow-external-auth '
+                  'by spotřeboval pokus z interního counteru karty (15 → 0 = invalidace appletu).')
+            return 0
         ext = challenge + pub + bytes(8)
         r = show(card, 'EXTERNAL AUTH', apdu(0x82, 0x00, 0x00, ext))
         if (sw(r) >> 8) == 0x61:
