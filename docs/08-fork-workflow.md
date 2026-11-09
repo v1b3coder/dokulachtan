@@ -25,6 +25,17 @@ souborech, každý zásah do upstreamu malý a zdůvodněný. Žádné merge com
 - Pro push do Gitea musí být klon **úplný** (`git fetch --unshallow upstream`), jinak server
   odmítne shallow update. Pro další rebase: `git push --force-with-lease origin dokulachtan`.
 
+### `db/schema.rb` po rebase
+
+`db/schema.rb` je **generovaný artefakt**, ne ručně slučovaný soubor. Konflikt se proto neřeší
+ručně: vezme se upstream strana (`git checkout --ours db/schema.rb` v rebase, fork delta se zahodí,
+migrace zůstávají) a po rebase se schéma vygeneruje z migrací na Postgresu 18
+(`scripts/qes-schema-regen.sh <klon forku>`, `rake db:migrate` s `SCHEMA=db/schema.rb`). Když se obsah
+schématu změnil, skript přidá no-op migraci s verzí o jedna vyšší, aby se na existujícím deploymentu
+provedla migrace a `schema_migrations` se srovnalo se schématem (boot běží `DatabaseTasks.migrate`
+v `config/initializers/migrate.rb`). Tím se zároveň opraví drift, kdy commitnuté schéma zaostává za
+migracemi — testy to neodhalí, protože jedou `db:migrate`, ne `db:schema:load`.
+
 **Ve forku není dokumentace ani konfigurace prostředí** — jen kód patche. Všechno ostatní
 (docs, mobilní appka, skripty, testy, Fly konfigurace) žije v parent repu `dokulachtan`.
 Kdo otevře fork repo, najde jen DocuSeal + QES vrstvu; kontext je v tomto repu.
