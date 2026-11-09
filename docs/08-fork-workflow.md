@@ -20,7 +20,8 @@ souborech, každý zásah do upstreamu malý a zdůvodněný. Žádné merge com
   default branch forku s `master` upstreamu, takže nabídne merge upstream masteru do našeho squashe —
   nesyncovat, rebase dělat jen ručně (viz níže). Tracking zůstává na `origin`.
 - Lokální klon je `vendor/docuseal/` (gitignored v parent repu); inicializaci dělá
-  `scripts/fork-setup.sh`, pin = **HEAD forku** v `vendor/docuseal.rev` (ne upstream base).
+  `scripts/fork-setup.sh`, pin = **HEAD forku** jako short SHA (`rev-parse --short=8`)
+  v `vendor/docuseal.rev` (ne upstream base).
 - Pro push do Gitea musí být klon **úplný** (`git fetch --unshallow upstream`), jinak server
   odmítne shallow update. Pro další rebase: `git push --force-with-lease origin dokulachtan`.
 

@@ -57,7 +57,7 @@ if [ "$need_qes" = 1 ]; then
   pin=$(cat vendor/docuseal.rev)
   [ "$(git -C vendor/docuseal rev-parse HEAD)" = "$(git -C vendor/docuseal rev-parse "$pin")" ] || {
     echo "pre-push: vendor/docuseal.rev ($pin) nesedí na HEAD forku" >&2
-    echo "  → git -C vendor/docuseal rev-parse --short HEAD > vendor/docuseal.rev" >&2
+    echo "  → git -C vendor/docuseal rev-parse --short=8 HEAD > vendor/docuseal.rev" >&2
     exit 1; }
   qes_db="qes-hook-$$.sqlite3"
   qes_schema="qes-hook-$$.rb"

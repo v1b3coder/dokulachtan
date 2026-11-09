@@ -54,7 +54,7 @@ opustil zařízení.
 Cíl: mít místo, kde se dá bezpečně vyvíjet — fork je synchronizovaný, testy běží, fixtures existují.
 
 - [ ] 0.1 `make fork-setup` + kontrola `vendor/docuseal` na větvi `dokulachtan`, `git status` čistý
-      → verify: `git -C vendor/docuseal rev-parse HEAD` == `vendor/docuseal.rev` (pin = HEAD forku)
+      → verify: `git -C vendor/docuseal rev-parse --short=8 HEAD` == `vendor/docuseal.rev` (pin = HEAD forku)
 - [ ] 0.2 Připravit reálný test harness na **SQLite** (parita se stagingem, DB-agnostický kód dle § 22):
       test image `test/qes/Dockerfile` (`docuseal:latest` + dev/test gemy; Ruby 4.0.5 i `libpdfium.so`
       už v image jsou) a system image `test/qes/Dockerfile.system` (+ `chromium`); `PRIMARY_DATABASE_URL=sqlite3:db/qes-test.sqlite3`
