@@ -4,6 +4,9 @@
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+# Git nastavuje GIT_DIR pro hooky; bez tohoto by `git -C vendor/docuseal` viděl index
+# parent repa (259 změn) a kontrola čistoty forku by vždy selhala.
+unset GIT_DIR GIT_WORK_TREE
 
 if [ "${SKIP_QES_HOOK:-0}" = 1 ]; then
   echo "pre-push: přeskočeno (SKIP_QES_HOOK=1)" >&2
